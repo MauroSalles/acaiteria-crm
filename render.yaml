@@ -8,7 +8,7 @@ services:
   - type: web
     name: acaiteria-crm
     runtime: docker
-    repo: https://github.com/SEU-USUARIO/AcaiteriaCRM  # ← Altere para seu repositório
+    repo: https://github.com/MauroSalles/acaiteria-crm
     plan: free
     region: oregon
     branch: main
