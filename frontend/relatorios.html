@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Relatórios - Açaiteria CRM</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- Navbar -->
+        <nav class="navbar">
+            <div class="navbar-brand">
+                � <strong>Açaiteria CRM</strong> — Combina Açaí
+            </div>
+            <button class="navbar-toggle" onclick="document.querySelector('.navbar-menu').classList.toggle('open')" aria-label="Menu">☰</button>
+            <ul class="navbar-menu">
+                <li><a href="/">Dashboard</a></li>
+                <li><a href="/nova-venda">Nova Venda</a></li>
+                <li><a href="/cadastro-cliente">Cadastro</a></li>
+                <li><a href="/clientes">Clientes</a></li>
+                <li><a href="/produtos">Produtos</a></li>
+                <li><a href="/relatorios" class="active">Relatórios</a></li>
+                <li><a href="/fechamento">Fechamento</a></li>
+            </ul>
+        </nav>
+
+        <main class="content">
+            <h1>📊 Relatórios e Análises</h1>
+            <p class="subtitle">Visualize dados importantes sobre clientes, vendas e faturamento</p>
+
+            <!-- Relatório do Dia Atual -->
+            <section>
+                <div class="card">
+                    <h2>📅 Vendas de Hoje</h2>
+                    <div id="relatorio-dia" class="relatorio-grid">
+                        <p>Carregando...</p>
+                    </div>
+                    <button id="btn-exportar-dia" class="btn btn-info" style="margin-top: 15px;">
+                        💾 Exportar Relatório de Hoje
+                    </button>
+                </div>
+            </section>
+
+            <!-- Clientes Mais Frequentes -->
+            <section>
+                <div class="card">
+                    <h2>👥 Clientes Mais Frequentes (Últimos 30 dias)</h2>
+                    <div class="table-responsive">
+                        <table class="table" id="tabela-clientes">
+                            <thead>
+                                <tr>
+                                    <th>Nome</th>
+                                    <th>Telefone</th>
+                                    <th>Total de Compras</th>
+                                    <th>Faturamento</th>
+                                    <th>Última Compra</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td colspan="5">Carregando...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <button id="btn-exportar-clientes" class="btn btn-success" style="margin-top: 15px;">
+                        📥 Exportar Lista de Clientes (CSV)
+                    </button>
+                </div>
+            </section>
+
+            <!-- Produtos Mais Vendidos -->
+            <section>
+                <div class="card">
+                    <h2>🏆 Produtos Mais Vendidos</h2>
+                    <div class="table-responsive">
+                        <table class="table" id="tabela-produtos">
+                            <thead>
+                                <tr>
+                                    <th>Produto</th>
+                                    <th>Quantidade Vendida</th>
+                                    <th>Faturamento</th>
+                                    <th>Ticket Médio</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td colspan="4">Carregando...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Mensagem -->
+            <div id="mensagem" class="alert" style="display: none; margin-top: 20px;"></div>
+        </main>
+
+        <footer class="footer">
+            <p>© 2026 - Projeto Integrador UNIVESP | Grupo 22 | Polo Lorena/SP</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        // Carregar relatório do dia atual
+        async function carregarRelatorioDia() {
+            try {
+                const resposta = await fetch('/api/relatorios/dia-atual');
+                if (!resposta.ok) throw new Error('Erro ao carregar relatório');
+                
+                const dados = await resposta.json();
+                const div = document.getElementById('relatorio-dia');
+                
+                let html = `
+                    <div class="stat-box">
+                        <span class="label">Total de Vendas:</span>
+                        <span class="value">${dados.total_vendas}</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="label">Faturamento:</span>
+                        <span class="value">R$ ${dados.faturamento_total.toFixed(2)}</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="label">Ticket Médio:</span>
+                        <span class="value">R$ ${dados.ticket_medio.toFixed(2)}</span>
+                    </div>
+                `;
+                
+                // Formas de pagamento
+                if (Object.keys(dados.por_forma_pagamento).length > 0) {
+                    html += '<h3>Por Forma de Pagamento:</h3>';
+                    for (const [forma, valor] of Object.entries(dados.por_forma_pagamento)) {
+                        html += `
+                            <div class="pagamento-item">
+                                <span>${forma}:</span>
+                                <span>R$ ${valor.toFixed(2)}</span>
+                            </div>
+                        `;
+                    }
+                }
+                
+                div.innerHTML = html;
+            } catch (erro) {
+                document.getElementById('relatorio-dia').innerHTML = `<p style="color: red;">❌ Erro: ${erro.message}</p>`;
+            }
+        }
+
+        // Carregar clientes frequentes
+        async function carregarClientesFrequentes() {
+            try {
+                const resposta = await fetch('/api/relatorios/clientes-frequentes');
+                if (!resposta.ok) throw new Error('Erro ao carregar clientes');
+                
+                const clientes = await resposta.json();
+                const tbody = document.querySelector('#tabela-clientes tbody');
+                
+                if (clientes.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="text-center">Sem dados</td></tr>';
+                    return;
+                }
+                
+                tbody.innerHTML = clientes.map(c => `
+                    <tr>
+                        <td><strong>${c.nome}</strong></td>
+                        <td>${c.telefone || '-'}</td>
+                        <td>${c.total_compras}</td>
+                        <td>R$ ${c.faturamento.toFixed(2)}</td>
+                        <td>${new Date(c.ultima_compra).toLocaleDateString('pt-BR') || '-'}</td>
+                    </tr>
+                `).join('');
+            } catch (erro) {
+                console.error('Erro:', erro);
+            }
+        }
+
+        // Carregar produtos ranking
+        async function carregarProdutosRanking() {
+            try {
+                const resposta = await fetch('/api/relatorios/produtos-ranking');
+                if (!resposta.ok) throw new Error('Erro ao carregar produtos');
+                
+                const produtos = await resposta.json();
+                const tbody = document.querySelector('#tabela-produtos tbody');
+                
+                if (produtos.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="text-center">Sem dados</td></tr>';
+                    return;
+                }
+                
+                tbody.innerHTML = produtos.map(p => `
+                    <tr>
+                        <td><strong>${p.nome_produto}</strong></td>
+                        <td>${p.quantidade_vendida}</td>
+                        <td>R$ ${p.faturamento.toFixed(2)}</td>
+                        <td>R$ ${(p.faturamento / p.quantidade_vendida).toFixed(2)}</td>
+                    </tr>
+                `).join('');
+            } catch (erro) {
+                console.error('Erro:', erro);
+            }
+        }
+
+        // Exportar clientes em CSV
+        document.getElementById('btn-exportar-clientes').addEventListener('click', async () => {
+            try {
+                const resposta = await fetch('/api/exportar/clientes-csv');
+                if (!resposta.ok) throw new Error('Erro ao exportar');
+                
+                const blob = await resposta.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `clientes_${new Date().toISOString().split('T')[0]}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+            } catch (erro) {
+                alert('❌ Erro ao exportar: ' + erro.message);
+            }
+        });
+
+        // Carregar tudo ao iniciar
+        window.addEventListener('load', () => {
+            carregarRelatorioDia();
+            carregarClientesFrequentes();
+            carregarProdutosRanking();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,41 @@
+# =============================================================================
+# docker-compose.yml — AcaiteriaCRM (Desenvolvimento Local com Docker)
+# Sobe a aplicação Flask + PostgreSQL para testes locais
+# =============================================================================
+
+services:
+  # ---------- Banco de dados PostgreSQL ----------
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: acaiteria
+      POSTGRES_PASSWORD: acaiteria123
+      POSTGRES_DB: acaiteria_crm
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U acaiteria -d acaiteria_crm"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ---------- Aplicação Flask ----------
+  web:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - DATABASE_URL=postgresql://acaiteria:acaiteria123@db:5432/acaiteria_crm
+      - SECRET_KEY=docker-dev-secret-key-mude-em-producao
+      - PORT=5000
+      - FLASK_ENV=development
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cadastro de Cliente - Açaiteria CRM</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- Navbar -->
+        <nav class="navbar">
+            <div class="navbar-brand">
+                � <strong>Açaiteria CRM</strong> — Combina Açaí
+            </div>
+            <button class="navbar-toggle" onclick="document.querySelector('.navbar-menu').classList.toggle('open')" aria-label="Menu">☰</button>
+            <ul class="navbar-menu">
+                <li><a href="/">Dashboard</a></li>
+                <li><a href="/nova-venda">Nova Venda</a></li>
+                <li><a href="/cadastro-cliente" class="active">Cadastro</a></li>
+                <li><a href="/clientes">Clientes</a></li>
+                <li><a href="/produtos">Produtos</a></li>
+                <li><a href="/relatorios">Relatórios</a></li>
+                <li><a href="/fechamento">Fechamento</a></li>
+            </ul>
+        </nav>
+
+        <main class="content">
+            <section class="form-section">
+                <h1>👤 Cadastro de Novo Cliente</h1>
+                <p class="subtitle">Preencha os dados para registrar um novo cliente na açaiteria</p>
+
+                <!-- Aviso LGPD -->
+                <div class="alert alert-info">
+                    <strong>🔐 Proteção de Dados:</strong> Seus dados pessoais serão coletados e armazenados conforme a Lei Geral de Proteção de Dados (LGPD). 
+                    Você tem direito de acessar, corrigir ou solicitar a exclusão de seus dados a qualquer momento.
+                    <a href="/politica-privacidade" target="_blank">Clique aqui</a> para ler nossa política de privacidade.
+                </div>
+
+                <form id="formulario-cliente" class="form">
+                    <div class="form-group">
+                        <label for="nome">
+                            <strong>Nome Completo *</strong>
+                        </label>
+                        <input 
+                            type="text" 
+                            id="nome" 
+                            name="nome" 
+                            class="form-control"
+                            placeholder="Ex: Maria Silva"
+                            required
+                        >
+                        <small>Campo obrigatório</small>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="telefone">
+                                <strong>Telefone / WhatsApp</strong>
+                            </label>
+                            <input 
+                                type="tel" 
+                                id="telefone" 
+                                name="telefone" 
+                                class="form-control"
+                                placeholder="(12) 99999-9999"
+                            >
+                        </div>
+
+                        <div class="form-group">
+                            <label for="email">
+                                <strong>E-mail</strong>
+                            </label>
+                            <input 
+                                type="email" 
+                                id="email" 
+                                name="email" 
+                                class="form-control"
+                                placeholder="email@exemplo.com"
+                            >
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="observacoes">
+                            <strong>Observações / Preferências</strong>
+                        </label>
+                        <textarea 
+                            id="observacoes" 
+                            name="observacoes" 
+                            class="form-control"
+                            rows="4"
+                            placeholder="Ex: Prefere açaí com granola, alérgico a amendoim, etc."
+                        ></textarea>
+                    </div>
+
+                    <!-- Consentimento LGPD -->
+                    <div class="lgpd-consent">
+                        <h3>📋 Consentimento para Coleta de Dados (LGPD)</h3>
+                        <div class="checkbox-group">
+                            <label class="checkbox-label">
+                                <input 
+                                    type="checkbox" 
+                                    id="consentimento" 
+                                    name="consentimento_lgpd"
+                                    required
+                                >
+                                <span>
+                                    Declaro que li e aceito a 
+                                    <strong><a href="/politica-privacidade" target="_blank">Política de Privacidade</a></strong>
+                                    e autorizo a coleta de meus dados conforme a Lei Geral de Proteção de Dados (LGPD)
+                                </span>
+                            </label>
+                        </div>
+                        <div class="consent-info">
+                            <p>Seus dados serão usados para:</p>
+                            <ul>
+                                <li>✅ Registrar histórico de compras</li>
+                                <li>✅ Enviar promoções direcionadas</li>
+                                <li>✅ Melhorar nossa relação com você</li>
+                            </ul>
+                            <p><strong>Seus dados NÃO serão:</strong></p>
+                            <ul>
+                                <li>❌ Compartilhados com terceiros</li>
+                                <li>❌ Usados para outros fins</li>
+                                <li>❌ Retidos após sua solicitação de exclusão</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Botões de Ação -->
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary btn-large">
+                            ✅ Cadastrar Cliente
+                        </button>
+                        <a href="/" class="btn btn-secondary btn-large">
+                            ❌ Cancelar
+                        </a>
+                    </div>
+                </form>
+
+                <!-- Mensagens de Sucesso/Erro -->
+                <div id="mensagem" class="alert" style="display: none; margin-top: 20px;"></div>
+            </section>
+
+            <!-- Informações Adicionais -->
+            <section class="info-section">
+                <div class="card">
+                    <h2>❓ Por que precisamos desses dados?</h2>
+                    <p><strong>Nome:</strong> Para identificar você em nossas transações e criar um histórico personalizado.</p>
+                    <p><strong>Telefone:</strong> Para manter contato sobre promoções e ofertas especiais (apenas com consentimento).</p>
+                    <p><strong>E-mail:</strong> Para enviar recibos digitais e informações importantes.</p>
+                    <p><strong>Preferências:</strong> Para oferecer um serviço melhor e personalizado.</p>
+
+                    <h3 style="margin-top: 20px;">🔐 Segurança de Dados</h3>
+                    <p>Seus dados são armazenados de forma segura e protegida. Alinhamos nossas práticas com os requisitos da LGPD para garantir sua privacidade.</p>
+                </div>
+            </section>
+        </main>
+
+        <footer class="footer">
+            <p>© 2026 - Projeto Integrador UNIVESP | Grupo 22 | Polo Lorena/SP</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        // Manipulador de formulário de cadastro de cliente
+        document.getElementById('formulario-cliente').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            // Validar consentimento
+            if (!document.getElementById('consentimento').checked) {
+                mostrarAlerta('Você deve aceitar a política de privacidade para continuar', 'erro');
+                return;
+            }
+
+            // Coletar dados
+            const dados = {
+                nome: document.getElementById('nome').value,
+                telefone: document.getElementById('telefone').value || null,
+                email: document.getElementById('email').value || null,
+                observacoes: document.getElementById('observacoes').value || null,
+                consentimento_lgpd: document.getElementById('consentimento').checked
+            };
+
+            try {
+                const resposta = await fetch('/api/clientes', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(dados)
+                });
+
+                if (!resposta.ok) {
+                    const erro = await resposta.json();
+                    throw new Error(erro.erro || 'Erro ao cadastrar cliente');
+                }
+
+                const cliente = await resposta.json();
+                mostrarAlerta(`Cliente "${cliente.nome}" cadastrado com sucesso!`, 'sucesso');
+                
+                // Limpar formulário
+                document.getElementById('formulario-cliente').reset();
+                
+                // Redirecionar após 2 segundos
+                setTimeout(() => {
+                    window.location.href = '/nova-venda';
+                }, 2000);
+            } catch (erro) {
+                mostrarAlerta(`Erro: ${erro.message}`, 'erro');
+            }
+        });
+    </script>
+</body>
+</html>

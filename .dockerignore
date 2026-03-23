@@ -1,0 +1,63 @@
+# =============================================================================
+# .dockerignore — AcaiteriaCRM
+# Exclui arquivos desnecessários do build Docker
+# =============================================================================
+
+# Ambientes virtuais Python
+venv/
+venv313/
+env/
+ENV/
+.Python
+
+# Cache Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Banco de dados local
+*.db
+*.sqlite
+*.sqlite3
+instance/
+
+# Variáveis de ambiente (nunca enviar para o container)
+.env
+.env.local
+.env.*.local
+
+# Git
+.git/
+.gitignore
+
+# Documentação (não necessária em produção)
+*.md
+docs/
+LICENSE
+
+# Testes (não necessários em produção)
+tests/
+
+# Arquivos temporários
+*.log
+*.tmp
+*.temp
+.cache/
+
+# Scripts de desenvolvimento
+load_test_data.py
+export_json.py
+INIT_GIT.sh
+
+# Docker (evitar recursão)
+Dockerfile
+docker-compose.yml
+.dockerignore

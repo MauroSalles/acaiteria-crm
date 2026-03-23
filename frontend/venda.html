@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nova Venda - Açaiteria CRM</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- Navbar -->
+        <nav class="navbar">
+            <div class="navbar-brand">
+                � <strong>Açaiteria CRM</strong> — Combina Açaí
+            </div>
+            <button class="navbar-toggle" onclick="document.querySelector('.navbar-menu').classList.toggle('open')" aria-label="Menu">☰</button>
+            <ul class="navbar-menu">
+                <li><a href="/">Dashboard</a></li>
+                <li><a href="/nova-venda" class="active">Nova Venda</a></li>
+                <li><a href="/cadastro-cliente">Cadastro</a></li>
+                <li><a href="/clientes">Clientes</a></li>
+                <li><a href="/produtos">Produtos</a></li>
+                <li><a href="/relatorios">Relatórios</a></li>
+                <li><a href="/fechamento">Fechamento</a></li>
+            </ul>
+        </nav>
+
+        <main class="content">
+            <section>
+                <h1>🛒 Registrar Nova Venda</h1>
+                <p class="subtitle">Interface rápida para balcão - Adicione cliente, produtos e finalize a venda</p>
+            </section>
+
+            <div class="venda-container">
+                <!-- Lado Esquerdo: Seleção de Cliente e Produtos -->
+                <div class="venda-form">
+                    <!-- Seleção de Cliente -->
+                    <div class="card">
+                        <h2>👤 Selecione o Cliente</h2>
+                        <div class="form-group">
+                            <label for="cliente-select">Cliente:</label>
+                            <select id="cliente-select" class="form-control">
+                                <option value="">-- Selecione um cliente --</option>
+                            </select>
+                        </div>
+                        <p class="small-text">Ou <a href="/cadastro-cliente">clique aqui para cadastrar um novo cliente</a></p>
+                    </div>
+
+                    <!-- Seleção de Produtos -->
+                    <div class="card">
+                        <h2>🍓 Adicione Produtos</h2>
+                        <div class="form-group">
+                            <label for="produto-select">Produtos Disponíveis:</label>
+                            <select id="produto-select" class="form-control">
+                                <option value="">-- Selecione um produto --</option>
+                            </select>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="quantidade">Quantidade:</label>
+                                <input 
+                                    type="number" 
+                                    id="quantidade" 
+                                    class="form-control" 
+                                    value="1" 
+                                    min="1"
+                                >
+                            </div>
+                            <div class="form-group">
+                                <button type="button" id="btn-adicionar" class="btn btn-success">
+                                    ➕ Adicionar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Forma de Pagamento -->
+                    <div class="card">
+                        <h2>💳 Forma de Pagamento</h2>
+                        <div class="form-group">
+                            <label for="forma-pagamento">Escolha a forma:</label>
+                            <select id="forma-pagamento" class="form-control">
+                                <option value="Dinheiro">💵 Dinheiro</option>
+                                <option value="Débito">🏦 Débito</option>
+                                <option value="Crédito">💳 Crédito</option>
+                                <option value="PIX">📱 PIX</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Lado Direito: Resumo da Venda -->
+                <div class="venda-resumo">
+                    <div class="card resumo-card">
+                        <h2>📋 Itens da Venda</h2>
+                        
+                        <div id="itens-lista" class="itens-lista">
+                            <p class="placeholder">Nenhum item adicionado ainda...</p>
+                        </div>
+
+                        <!-- Totalizadores -->
+                        <div class="resumo-totais">
+                            <div class="total-line">
+                                <span>Subtotal:</span>
+                                <span id="subtotal">R$ 0,00</span>
+                            </div>
+                            <div class="total-line">
+                                <span>Desconto (%):</span>
+                                <input type="number" id="desconto-perc" class="form-control-inline" value="0" min="0" max="100">
+                                <span id="desconto-valor">R$ 0,00</span>
+                            </div>
+                            <div class="total-line">
+                                <span>Taxa/Serviço:</span>
+                                <input type="number" id="taxa" class="form-control-inline" value="0" min="0">
+                            </div>
+                            <hr>
+                            <div class="total-line total-final">
+                                <span><strong>TOTAL:</strong></span>
+                                <span id="total-final"><strong>R$ 0,00</strong></span>
+                            </div>
+                        </div>
+
+                        <!-- Observações -->
+                        <div class="form-group">
+                            <label for="observacoes">Observações (opcional):</label>
+                            <textarea 
+                                id="observacoes" 
+                                class="form-control"
+                                rows="3"
+                                placeholder="Ex: Sem granola, gelado extra, etc."
+                            ></textarea>
+                        </div>
+
+                        <!-- Botões de Ação -->
+                        <div class="resumo-buttons">
+                            <button id="btn-finalizar" class="btn btn-primary btn-block">
+                                ✅ Finalizar Venda
+                            </button>
+                            <button id="btn-cancelar" class="btn btn-secondary btn-block">
+                                ❌ Cancelar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mensagens -->
+            <div id="mensagem" class="alert" style="display: none; margin-top: 20px;"></div>
+        </main>
+
+        <footer class="footer">
+            <p>© 2026 - Projeto Integrador UNIVESP | Grupo 22 | Polo Lorena/SP</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='script_venda.js') }}"></script>
+</body>
+</html>

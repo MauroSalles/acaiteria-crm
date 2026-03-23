@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Açaiteria CRM - Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- Navbar/Header -->
+        <nav class="navbar">
+            <div class="navbar-brand">
+                � <strong>Açaiteria CRM</strong> — Combina Açaí
+            </div>
+            <button class="navbar-toggle" onclick="document.querySelector('.navbar-menu').classList.toggle('open')" aria-label="Menu">☰</button>
+            <ul class="navbar-menu">
+                <li><a href="/" class="active">Dashboard</a></li>
+                <li><a href="/nova-venda">Nova Venda</a></li>
+                <li><a href="/cadastro-cliente">Cadastro</a></li>
+                <li><a href="/clientes">Clientes</a></li>
+                <li><a href="/produtos">Produtos</a></li>
+                <li><a href="/relatorios">Relatórios</a></li>
+                <li><a href="/fechamento">Fechamento</a></li>
+            </ul>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="content">
+            <section class="hero">
+                <h1>Dashboard - Painel de Controle</h1>
+                <p>Bem-vindo ao CRM da Açaiteria Combina Açaí</p>
+                <p class="subtitle">Gerenciamento de clientes e vendas integrado</p>
+            </section>
+
+            <!-- Cards de Estatísticas -->
+            <div class="stats-grid">
+                <div class="card stats-card">
+                    <div class="card-icon">👥</div>
+                    <div class="card-content">
+                        <h3>Total de Clientes</h3>
+                        <p class="stat-number">{{ stats.total_clientes }}</p>
+                        <small>Clientes cadastrados</small>
+                    </div>
+                </div>
+
+                <div class="card stats-card">
+                    <div class="card-icon">💰</div>
+                    <div class="card-content">
+                        <h3>Faturamento Total</h3>
+                        <p class="stat-number">R$ {{ "%.2f"|format(stats.faturamento_total) }}</p>
+                        <small>Todas as vendas</small>
+                    </div>
+                </div>
+
+                <div class="card stats-card">
+                    <div class="card-icon">🛒</div>
+                    <div class="card-content">
+                        <h3>Total de Vendas</h3>
+                        <p class="stat-number">{{ stats.total_vendas }}</p>
+                        <small>Transações registradas</small>
+                    </div>
+                </div>
+
+                <div class="card stats-card">
+                    <div class="card-icon">📊</div>
+                    <div class="card-content">
+                        <h3>Vendas esta Semana</h3>
+                        <p class="stat-number">{{ stats.vendas_semana }}</p>
+                        <small>Últimos 7 dias</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- LGPD Compliance Stats -->
+            <section class="lgpd-section">
+                <div class="card">
+                    <h2>📋 Conformidade LGPD</h2>
+                    <div class="lgpd-stats">
+                        <div class="lgpd-item">
+                            <span class="label">Clientes com Consentimento:</span>
+                            <span class="value">{{ stats.clientes_consentimento }} / {{ stats.total_clientes }}</span>
+                        </div>
+                        <div class="lgpd-item">
+                            <span class="label">Taxa de Consentimento:</span>
+                            <span class="value">{{ stats.taxa_consentimento }}%</span>
+                        </div>
+                    </div>
+                    <p class="info-text">
+                        ✅ Todos os dados coletados seguem a Lei Geral de Proteção de Dados (LGPD)<br>
+                        🔒 Clientes têm direito ao esquecimento e acesso aos dados
+                    </p>
+                </div>
+            </section>
+
+            <!-- Quick Actions -->
+            <section class="quick-actions">
+                <h2>Ações Rápidas</h2>
+                <div class="action-buttons">
+                    <a href="/nova-venda" class="btn btn-primary">
+                        ➕ Nova Venda
+                    </a>
+                    <a href="/cadastro-cliente" class="btn btn-success">
+                        👤 Novo Cliente
+                    </a>
+                    <a href="/relatorios" class="btn btn-info">
+                        📊 Ver Relatórios
+                    </a>
+                    <a href="/fechamento" class="btn btn-warning">
+                        🔐 Fechar Caixa
+                    </a>
+                    <a href="/politica-privacidade" class="btn btn-secondary">
+                        🔒 Política de Privacidade
+                    </a>
+                </div>
+            </section>
+
+            <!-- Informações do Projeto -->
+            <section class="project-info">
+                <div class="card">
+                    <h2>ℹ️ Sobre o Projeto</h2>
+                    <p><strong>Título:</strong> CRM Simples – Sistema Web de Gestão de Clientes e Vendas para Açaiteria</p>
+                    <p><strong>Instituição:</strong> Universidade Virtual do Estado de São Paulo (UNIVESP)</p>
+                    <p><strong>Disciplina:</strong> PJI110 – Projeto Integrador em Computação I</p>
+                    <p><strong>Polo:</strong> Lorena – SP</p>
+                    <p><strong>Grupo:</strong> 22 (7 integrantes)</p>
+                    <p><strong>Tutoria:</strong> Sra. Valdeth S. De Souza</p>
+                    
+                    <h3 style="margin-top: 20px;">🎯 Objetivos do Sistema</h3>
+                    <ul>
+                        <li>Centralizar registro de vendas e cadastro de clientes</li>
+                        <li>Habilitar gestão de relacionamento com clientes (CRM)</li>
+                        <li>Permitir análise de recorrência de clientes</li>
+                        <li>Facilitar campanhas segmentadas de marketing</li>
+                        <li>Integrar fechamento de caixa diário</li>
+                        <li>Assegurar conformidade com LGPD</li>
+                    </ul>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>© 2026 - Projeto Integrador UNIVESP | Grupo 22 | Polo Lorena/SP</p>
+            <p>Desenvolvido com ❤️ por uma equipe de estudantes de Computação</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

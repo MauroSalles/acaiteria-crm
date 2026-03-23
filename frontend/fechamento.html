@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fechamento Diário - Açaiteria CRM</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- Navbar -->
+        <nav class="navbar">
+            <div class="navbar-brand">
+                � <strong>Açaiteria CRM</strong> — Combina Açaí
+            </div>
+            <button class="navbar-toggle" onclick="document.querySelector('.navbar-menu').classList.toggle('open')" aria-label="Menu">☰</button>
+            <ul class="navbar-menu">
+                <li><a href="/">Dashboard</a></li>
+                <li><a href="/nova-venda">Nova Venda</a></li>
+                <li><a href="/cadastro-cliente">Cadastro</a></li>
+                <li><a href="/clientes">Clientes</a></li>
+                <li><a href="/produtos">Produtos</a></li>
+                <li><a href="/relatorios">Relatórios</a></li>
+                <li><a href="/fechamento" class="active">Fechamento</a></li>
+            </ul>
+        </nav>
+
+        <main class="content">
+            <h1>🔐 Fechamento Diário de Caixa</h1>
+            <p class="subtitle">Consolide e confirme as vendas do dia antes de encerrar</p>
+
+            <!-- Informa de Data -->
+            <div class="card">
+                <h2>📅 Data do Fechamento</h2>
+                <input type="date" id="data-fechamento" class="form-control" style="max-width: 200px;">
+                <button id="btn-carregar" class="btn btn-primary" style="margin-top: 1rem;">🔄 Carregar</button>
+            </div>
+
+            <!-- Resumo do Dia -->
+            <div class="card">
+                <h2>📊 Resumo do Dia</h2>
+                <div id="resumo-dia" class="relatorio-grid">
+                    <p>Selecione uma data e clique em "Carregar"</p>
+                </div>
+            </div>
+
+            <!-- Vendas do Dia -->
+            <div class="card">
+                <h2>💰 Formas de Pagamento</h2>
+                <div class="table-responsive">
+                    <table class="table" id="tabela-pagamentos">
+                        <thead>
+                            <tr>
+                                <th>Forma</th>
+                                <th>Quantidade</th>
+                                <th>Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td colspan="3" class="text-center">Selecione uma data</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Ações de Fechamento -->
+            <div class="card">
+                <h2>🔐 Ações de Fechamento</h2>
+                <div class="action-buttons">
+                    <button id="btn-confirmar" class="btn btn-success" disabled>✅ Confirmar Fechamento</button>
+                    <button id="btn-imprimir" class="btn btn-info" disabled>🖨️ Imprimir Recibo</button>
+                    <a href="/relatorios" class="btn btn-secondary">📊 Ver Relatórios</a>
+                </div>
+            </div>
+
+            <div id="mensagem" class="alert" style="display: none; margin-top: 20px;"></div>
+        </main>
+
+        <footer class="footer">
+            <p>© 2026 - Projeto Integrador UNIVESP | Grupo 22 | Polo Lorena/SP</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        // Inicializar com data de hoje
+        document.addEventListener('DOMContentLoaded', () => {
+            const dataInput = document.getElementById('data-fechamento');
+            dataInput.valueAsDate = new Date();
+        });
+
+        document.getElementById('btn-carregar').addEventListener('click', carregarFechamento);
+
+        async function carregarFechamento() {
+            const data = document.getElementById('data-fechamento').value;
+            if (!data) {
+                mostrarAlerta('Selecione uma data', 'aviso');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/relatorios/dia-atual');
+                const dados = await res.json();
+
+                const resumo = document.getElementById('resumo-dia');
+                resumo.innerHTML = `
+                    <div class="stat-box">
+                        <span class="label">Total de Vendas:</span>
+                        <span class="value">${dados.total_vendas}</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="label">Faturamento:</span>
+                        <span class="value">R$ ${dados.faturamento_total.toFixed(2)}</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="label">Ticket Médio:</span>
+                        <span class="value">R$ ${dados.ticket_medio.toFixed(2)}</span>
+                    </div>
+                `;
+
+                const tbody = document.querySelector('#tabela-pagamentos tbody');
+                let html = '';
+                let totalGeral = 0;
+
+                for (const [forma, valor] of Object.entries(dados.por_forma_pagamento)) {
+                    html += `
+                        <tr>
+                            <td><strong>${forma}</strong></td>
+                            <td>-</td>
+                            <td>R$ ${valor.toFixed(2)}</td>
+                        </tr>
+                    `;
+                    totalGeral += valor;
+                }
+
+                html += `
+                    <tr style="background-color: #f0f0f0; font-weight: bold;">
+                        <td>TOTAL</td>
+                        <td>${dados.total_vendas}</td>
+                        <td>R$ ${totalGeral.toFixed(2)}</td>
+                    </tr>
+                `;
+
+                tbody.innerHTML = html;
+                document.getElementById('btn-confirmar').disabled = false;
+                document.getElementById('btn-imprimir').disabled = false;
+                
+                mostrarAlerta('Fechamento carregado com sucesso', 'sucesso');
+            } catch (erro) {
+                mostrarAlerta('Erro: ' + erro.message, 'erro');
+            }
+        }
+
+        document.getElementById('btn-confirmar').addEventListener('click', () => {
+            if (confirm('Confirmar fechamento de caixa? Esta acao nao pode ser desfeita.')) {
+                mostrarAlerta('Fechamento confirmado! Caixa encerrado com sucesso.', 'sucesso');
+                document.getElementById('btn-confirmar').disabled = true;
+            }
+        });
+
+        document.getElementById('btn-imprimir').addEventListener('click', () => {
+            window.print();
+        });
+    </script>
+</body>
+</html>

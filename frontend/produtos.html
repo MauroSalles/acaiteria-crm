@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Produtos - Açaiteria CRM</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- Navbar -->
+        <nav class="navbar">
+            <div class="navbar-brand">
+                � <strong>Açaiteria CRM</strong> — Combina Açaí
+            </div>
+            <button class="navbar-toggle" onclick="document.querySelector('.navbar-menu').classList.toggle('open')" aria-label="Menu">☰</button>
+            <ul class="navbar-menu">
+                <li><a href="/">Dashboard</a></li>
+                <li><a href="/nova-venda">Nova Venda</a></li>
+                <li><a href="/cadastro-cliente">Cadastro</a></li>
+                <li><a href="/clientes">Clientes</a></li>
+                <li><a href="/produtos" class="active">Produtos</a></li>
+                <li><a href="/relatorios">Relatórios</a></li>
+                <li><a href="/fechamento">Fechamento</a></li>
+            </ul>
+        </nav>
+
+        <main class="content">
+            <h1>🍨 Gerenciamento de Produtos</h1>
+            <p class="subtitle">Cadastre e visualize os produtos disponíveis na açaiteria</p>
+
+            <!-- Formulário de cadastro -->
+            <div class="card">
+                <h2>Cadastrar Novo Produto</h2>
+                <form id="form-produto">
+                    <div class="form-group">
+                        <label for="nome_produto">Nome do Produto *</label>
+                        <input type="text" id="nome_produto" name="nome_produto" required
+                               placeholder="Ex: Açaí 500ml, Cupuaçu com granola...">
+                    </div>
+                    <div class="form-group">
+                        <label for="preco">Preço (R$) *</label>
+                        <input type="number" id="preco" name="preco" step="0.01" min="0.01" required
+                               placeholder="Ex: 15.00">
+                    </div>
+                    <div class="form-group">
+                        <label for="categoria">Categoria</label>
+                        <select id="categoria" name="categoria">
+                            <option value="">Selecionar...</option>
+                            <option value="Açaí">Açaí</option>
+                            <option value="Complemento">Complemento</option>
+                            <option value="Bebida">Bebida</option>
+                            <option value="Sobremesa">Sobremesa</option>
+                            <option value="Outro">Outro</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="descricao">Descrição</label>
+                        <textarea id="descricao" name="descricao" rows="2"
+                                  placeholder="Descrição opcional do produto"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Cadastrar Produto</button>
+                </form>
+            </div>
+
+            <!-- Lista de produtos -->
+            <div class="card" style="margin-top: 2rem;">
+                <h2>Produtos Cadastrados</h2>
+                <button id="btn-atualizar" class="btn btn-info" style="margin-bottom: 1rem;">🔄 Atualizar Lista</button>
+
+                <div class="table-responsive">
+                    <table class="table" id="tabela-produtos">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Nome</th>
+                                <th>Preço</th>
+                                <th>Categoria</th>
+                                <th>Descrição</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td colspan="5" class="text-center">⏳ Carregando...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="mensagem" class="alert" style="display: none; margin-top: 20px;"></div>
+        </main>
+
+        <footer class="footer">
+            <p>&copy; 2026 - Projeto Integrador UNIVESP | Grupo 22 | Polo Lorena/SP</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            carregarProdutos();
+        });
+
+        document.getElementById('btn-atualizar').addEventListener('click', carregarProdutos);
+
+        document.getElementById('form-produto').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const dados = {
+                nome_produto: document.getElementById('nome_produto').value.trim(),
+                preco: parseFloat(document.getElementById('preco').value),
+                categoria: document.getElementById('categoria').value || undefined,
+                descricao: document.getElementById('descricao').value.trim() || undefined
+            };
+
+            if (!dados.nome_produto || !dados.preco) {
+                mostrarAlerta('Preencha nome e preço do produto.', 'erro');
+                return;
+            }
+
+            try {
+                await requisicao('/api/produtos', {
+                    method: 'POST',
+                    body: JSON.stringify(dados)
+                });
+                mostrarAlerta('Produto cadastrado com sucesso!', 'sucesso');
+                document.getElementById('form-produto').reset();
+                carregarProdutos();
+            } catch (erro) {
+                mostrarAlerta(`Erro ao cadastrar: ${erro.message}`, 'erro');
+            }
+        });
+
+        async function carregarProdutos() {
+            const tbody = document.querySelector('#tabela-produtos tbody');
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center">⏳ Carregando...</td></tr>';
+
+            try {
+                const produtos = await requisicao('/api/produtos');
+                if (produtos.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="text-center">Nenhum produto cadastrado</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = produtos.map(p => `
+                    <tr>
+                        <td>${p.id_produto}</td>
+                        <td>${p.nome_produto}</td>
+                        <td>${formatarMoeda(p.preco)}</td>
+                        <td>${p.categoria || '-'}</td>
+                        <td>${p.descricao || '-'}</td>
+                    </tr>
+                `).join('');
+            } catch (erro) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center">Erro ao carregar produtos</td></tr>';
+                mostrarAlerta(`Erro: ${erro.message}`, 'erro');
+            }
+        }
+    </script>
+</body>
+</html>

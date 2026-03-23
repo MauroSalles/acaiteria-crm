@@ -1,0 +1,33 @@
+# =============================================================================
+# render.yaml — Blueprint para deploy no Render.com (GRATUITO)
+# Um clique para subir a aplicação + banco PostgreSQL
+# Docs: https://docs.render.com/blueprint-spec
+# =============================================================================
+
+services:
+  - type: web
+    name: acaiteria-crm
+    runtime: docker
+    repo: https://github.com/SEU-USUARIO/AcaiteriaCRM  # ← Altere para seu repositório
+    plan: free
+    region: oregon
+    branch: main
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: acaiteria-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: FLASK_ENV
+        value: production
+      - key: PORT
+        value: 5000
+
+databases:
+  - name: acaiteria-db
+    plan: free
+    databaseName: acaiteria_crm
+    user: acaiteria
+    region: oregon

@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clientes - Açaiteria CRM</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- Navbar -->
+        <nav class="navbar">
+            <div class="navbar-brand">
+                � <strong>Açaiteria CRM</strong> — Combina Açaí
+            </div>
+            <button class="navbar-toggle" onclick="document.querySelector('.navbar-menu').classList.toggle('open')" aria-label="Menu">☰</button>
+            <ul class="navbar-menu">
+                <li><a href="/">Dashboard</a></li>
+                <li><a href="/nova-venda">Nova Venda</a></li>
+                <li><a href="/cadastro-cliente">Cadastro</a></li>
+                <li><a href="/clientes" class="active">Clientes</a></li>
+                <li><a href="/produtos">Produtos</a></li>
+                <li><a href="/relatorios">Relatórios</a></li>
+                <li><a href="/fechamento">Fechamento</a></li>
+            </ul>
+        </nav>
+
+        <main class="content">
+            <h1>👥 Gerenciamento de Clientes</h1>
+            <p class="subtitle">Visualize, edite e gerencie informações dos clientes cadastrados</p>
+
+            <div class="card">
+                <div class="action-buttons" style="margin-bottom: 2rem;">
+                    <a href="/cadastro-cliente" class="btn btn-primary">➕ Novo Cliente</a>
+                    <button id="btn-atualizar" class="btn btn-info">🔄 Atualizar</button>
+                    <button id="btn-exportar" class="btn btn-success">💾 Exportar CSV</button>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table" id="tabela-clientes">
+                        <thead>
+                            <tr>
+                                <th>Nome</th>
+                                <th>Telefone</th>
+                                <th>Email</th>
+                                <th>Vendas</th>
+                                <th>LGPD</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td colspan="6" class="text-center">⏳ Carregando...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="mensagem" class="alert" style="display: none; margin-top: 20px;"></div>
+        </main>
+
+        <footer class="footer">
+            <p>© 2026 - Projeto Integrador UNIVESP | Grupo 22 | Polo Lorena/SP</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        async function carregarClientes() {
+            try {
+                const resposta = await fetch('/api/clientes');
+                const clientes = await resposta.json();
+                const tbody = document.querySelector('#tabela-clientes tbody');
+
+                if (!resposta.ok) throw new Error('Erro ao carregar');
+
+                if (clientes.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="text-center">Nenhum cliente cadastrado</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = clientes.map(c => `
+                    <tr>
+                        <td><strong>${c.nome}</strong></td>
+                        <td>${c.telefone || '-'}</td>
+                        <td>${c.email || '-'}</td>
+                        <td><a href="/relatorios">${c.id_cliente}</a></td>
+                        <td>${c.consentimento_lgpd ? '✅' : '⚠️'}</td>
+                        <td>
+                            <a href="/relatorios" class="btn" style="font-size: 0.8rem; padding: 0.5rem;">📊 Ver</a>
+                            <button onclick="deletarCliente(${c.id_cliente})" class="btn-remover" style="font-size: 0.8rem;">🗑️</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (erro) {
+                document.querySelector('#tabela-clientes tbody').innerHTML = 
+                    `<tr><td colspan="6" class="text-center" style="color: red;">❌ ${erro.message}</td></tr>`;
+            }
+        }
+
+        async function deletarCliente(id) {
+            if (!confirm('⚠️ Tem certeza? O cliente será anonimizado conforme LGPD.')) return;
+
+            try {
+                const res = await fetch(`/api/clientes/${id}`, { method: 'DELETE' });
+                if (res.ok) {
+                    mostrarAlerta('✅ Cliente anonimizado conforme LGPD', 'sucesso');
+                    carregarClientes();
+                }
+            } catch (e) {
+                mostrarAlerta('❌ Erro: ' + e.message, 'erro');
+            }
+        }
+
+        document.getElementById('btn-atualizar').addEventListener('click', carregarClientes);
+        document.getElementById('btn-exportar').addEventListener('click', () => {
+            window.location.href = '/api/exportar/clientes-csv';
+        });
+
+        window.addEventListener('load', carregarClientes);
+    </script>
+</body>
+</html>
