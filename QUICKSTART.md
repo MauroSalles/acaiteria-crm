@@ -1,113 +1,118 @@
-# 🎉 SEU PROJETO CRM FOI CRIADO!
+# SEU PROJETO CRM FOI CRIADO
 
-## ⚡ Comece em 3 Passos
+## Comece em 3 Passos
 
-### 1️⃣ Instale as Dependências
+### 1 Instale as Dependencias
+
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2️⃣ Inicie o Servidor
+### 2 Inicie o Servidor
+
 ```bash
 python run.py
 ```
 
-### 3️⃣ Abra no Navegador
-```
+### 3 Abra no Navegador
+
+```text
 http://localhost:5000
 ```
 
 ---
 
-## 📂 O Que Você tem Agora?
+## O Que Voce tem Agora
 
-| Pasta | O que tem | Linhas |
-|-------|-----------|--------|
-| **backend/** | API Flask com 20+ endpoints | ~1150 |
-| **frontend/** | 7 páginas HTML + CSS + JS | ~2000 |
-| **database/** | Schema SQL + dados de teste | ~250 |
-| **docs/** | Documentação técnica completa | ~1500 |
-| **root/** | Scripts, configuração, Git | ~100 |
+| Pasta          | O que tem                     | Linhas |
+| -------------- | ----------------------------- | ------ |
+| **backend/**   | API Flask com 20+ endpoints   | ~1150  |
+| **frontend/**  | 7 paginas HTML + CSS + JS     | ~2000  |
+| **database/**  | Schema SQL + dados de teste   | ~250   |
+| **docs/**      | Documentacao tecnica completa | ~1500  |
+| **root/**      | Scripts, configuracao, Git    | ~100   |
 
-**Total:** 28 arquivos, ~7000 linhas de código pronto para usar!
-
----
-
-## 🎯 Páginas Principais
-
-| Página | URL | O que faz |
-|--------|-----|----------|
-| Dashboard | `/` | Visão geral com estatísticas |
-| Cadastro Cliente | `/cadastro-cliente` | Registra novo cliente com LGPD |
-| Nova Venda | `/nova-venda` | Registra uma venda (carrinho, totais) |
-| Clientes | `/clientes` | Gerencia clientes (ver, deletar) |
-| Produtos | `/produtos` | Gerencia produtos da açaiteria |
-| Relatórios | `/relatorios` | Análise de vendas e top clientes |
-| Fechamento | `/fechamento` | Encerramento do caixa diário |
-| Política de Privacidade | `/politica-privacidade` | Texto LGPD (Lei 13.709/2018) |
+**Total:** 28 arquivos, ~7000 linhas de codigo pronto para usar.
 
 ---
 
-## 🔌 API Endpoints (Principais)
+## Paginas Principais
 
+| Pagina                   | URL                      | O que faz                         |
+| ------------------------ | ------------------------ | --------------------------------- |
+| Dashboard                | `/`                      | Visao geral com estatisticas      |
+| Cadastro Cliente         | `/cadastro-cliente`      | Registra novo cliente com LGPD    |
+| Nova Venda               | `/nova-venda`            | Registra uma venda (carrinho)     |
+| Clientes                 | `/clientes`              | Gerencia clientes (ver, deletar)  |
+| Produtos                 | `/produtos`              | Gerencia produtos da acaiteria    |
+| Relatorios               | `/relatorios`            | Analise de vendas e top clientes  |
+| Fechamento               | `/fechamento`            | Encerramento do caixa diario      |
+| Politica de Privacidade  | `/politica-privacidade`  | Texto LGPD (Lei 13.709/2018)      |
+
+---
+
+## API Endpoints (Principais)
+
+```text
+GET  /api/clientes              -> Lista clientes
+POST /api/clientes              -> Cria cliente
+GET  /api/produtos              -> Lista produtos
+POST /api/vendas                -> Registra venda
+GET  /api/relatorios/dia-atual  -> Vendas do dia
+GET  /api/relatorios/clientes-frequentes  -> Top 10 clientes
+GET  /api/exportar/clientes-csv -> Download CSV
 ```
-GET  /api/clientes              → Lista clientes
-POST /api/clientes              → Cria cliente
-GET  /api/produtos              → Lista produtos
-POST /api/vendas                → Registra venda
-GET  /api/relatorios/dia-atual  → Vendas do dia
-GET  /api/relatorios/clientes-frequentes  → Top 10 clientes
-GET  /api/exportar/clientes-csv → Download CSV
-```
 
-👉 **Documentação completa:** [docs/API.md](docs/API.md)
+Documentacao completa: [docs/API.md](docs/API.md)
 
 ---
 
-## 🛡️ LGPD (Proteção de Dados)
+## LGPD (Protecao de Dados)
 
-✅ Coleta consentimento explícito  
-✅ Direito de acesso aos dados  
-✅ Direito de se esquecer (anonimização)  
-✅ Exportação de dados  
-✅ Auditoria de acessos  
-✅ DPO (Data Protection Officer)
+- Coleta consentimento explicito
+- Direito de acesso aos dados
+- Direito de se esquecer (anonimizacao)
+- Exportacao de dados
+- Auditoria de acessos
+- DPO (Data Protection Officer)
 
-👉 **Detalhes:** [docs/LGPD.md](docs/LGPD.md)
+Detalhes: [docs/LGPD.md](docs/LGPD.md)
 
 ---
 
-## 📊 Banco de Dados
+## Banco de Dados
 
 5 tabelas principais:
-- **CLIENTE** - Informações do cliente
-- **PRODUTO** - Açaís, bebidas, adicionais
+
+- **CLIENTE** - Informacoes do cliente
+- **PRODUTO** - Acais, bebidas, adicionais
 - **VENDA** - Cada venda registrada
 - **ITEM_VENDA** - Itens de cada venda
 - **PAGAMENTO** - Formas de pagamento
 
-5 views para relatórios de negócio
+5 views para relatorios de negocio
 
-👉 **Diagrama:** [docs/MER.md](docs/MER.md)
+Diagrama: [docs/MER.md](docs/MER.md)
 
 ---
 
-## 🧪 Dados de Teste
+## Dados de Teste
 
-Já vem pronto com:
+Ja vem pronto com:
+
 - 6 clientes de exemplo
 - 10 produtos variados
-- 10 vendas históricas
+- 10 vendas historicas
 
-Perfeito para testar tudo!
+Perfeito para testar tudo.
 
 ---
 
-## 📚 Documentação
+## Documentacao
 
-| Arquivo | Propósito |
-|---------|-----------|
-| [README.md](README.md) | Visão geral técnica |
+| Arquivo | Proposito |
+| --- | --- |
+| [README.md](README.md) | Visao geral tecnica |
 | [RUN.md](RUN.md) | Como executar |
 | [NEXT_STEPS.md](NEXT_STEPS.md) | O que fazer agora |
 | [SUMMARY.md](SUMMARY.md) | O que foi criado |
@@ -117,77 +122,86 @@ Perfeito para testar tudo!
 
 ---
 
-## ✅ Requisitos Atendidos
+## Requisitos Atendidos
 
 ### Funcionais (RF)
-✅ RF-01: Cadastro de Clientes  
-✅ RF-02: Registro de Vendas  
-✅ RF-03: Gerenciamento de Produtos  
-✅ RF-04: Formas de Pagamento  
-✅ RF-05: Relatórios de Venda  
-✅ RF-06: Exportação de Dados  
-✅ RF-07: Fechamento de Caixa  
-✅ RF-08: Política de Privacidade  
 
-### Não-Funcionais (RNF)
-✅ RNF-01: Usabilidade (interface intuitiva)  
-✅ RNF-02: Responsividade (320px até desktop)  
-✅ RNF-03: SQL normalizado (3FN)  
-✅ RNF-04: Versionamento Git  
-✅ RNF-05: LGPD conforme  
-✅ RNF-06: Performance (<2s carregamento)  
-✅ RNF-07: Segurança (contra SQL Injection, XSS)  
+- RF-01: Cadastro de Clientes
+- RF-02: Registro de Vendas
+- RF-03: Gerenciamento de Produtos
+- RF-04: Formas de Pagamento
+- RF-05: Relatorios de Venda
+- RF-06: Exportacao de Dados
+- RF-07: Fechamento de Caixa
+- RF-08: Politica de Privacidade
+
+### Nao-Funcionais (RNF)
+
+- RNF-01: Usabilidade (interface intuitiva)
+- RNF-02: Responsividade (320px ate desktop)
+- RNF-03: SQL normalizado (3FN)
+- RNF-04: Versionamento Git
+- RNF-05: LGPD conforme
+- RNF-06: Performance (<2s carregamento)
+- RNF-07: Seguranca (contra SQL Injection, XSS)
 
 ---
 
-## 🎨 Design Responsivo
+## Design Responsivo
 
 Funciona em:
-- 📱 **Mobile** (320px) - Coluna única
-- 📱 **Tablet** (768px) - 2 colunas
-- 💻 **Desktop** (1024px+) - Layout completo
+
+- **Mobile** (320px) - Coluna unica
+- **Tablet** (768px) - 2 colunas
+- **Desktop** (1024px+) - Layout completo
 
 ---
 
-## 🚀 Próximas Etapas
+## Proximas Etapas
 
 ### Curto Prazo (Esta semana)
-1. ✅ Executar localmente: `python run.py`
-2. ✅ Testar fluxos principais
-3. ✅ Validar com proprietário
-4. ✅ Coletar feedback
 
-### Médio Prazo (Próximas 2 semanas)
-1. 📝 Implementar feedback
-2. 📝 Submeter no GitHub
-3. 📝 Escrever relatório parcial
-4. 📝 Planejar quinzena 5-6
+1. Executar localmente: `python run.py`
+2. Testar fluxos principais
+3. Validar com proprietario
+4. Coletar feedback
+
+### Medio Prazo (Proximas 2 semanas)
+
+1. Implementar feedback
+2. Submeter no GitHub
+3. Escrever relatorio parcial
+4. Planejar quinzena 5-6
 
 ### Longo Prazo (Quinzenas 5-7)
-1. 📝 Adicionar autenticação
-2. 📝 Gráficos/dashboards avançados
-3. 📝 Integração pagamentos
-4. 📝 Produção (servidor real)
-5. 📝 Vídeo apresentação
-6. 📝 Relatório final ABNT
+
+1. Adicionar autenticacao
+2. Graficos/dashboards avancados
+3. Integracao pagamentos
+4. Producao (servidor real)
+5. Video apresentacao
+6. Relatorio final ABNT
 
 ---
 
-## 🐛 Solução de Problemas
+## Solucao de Problemas
 
-### Porta 5000 em uso?
+### Porta 5000 em uso
+
 ```bash
 # Mudar em backend/app.py
 app.run(port=5001)
 ```
 
-### Módulo não encontrado?
+### Modulo nao encontrado
+
 ```bash
 pip install -r requirements.txt
 python -m pip install --upgrade pip
 ```
 
-### Banco de dados corrompido?
+### Banco de dados corrompido
+
 ```bash
 # Deletar e reconstruir
 rm acaiteria.db
@@ -196,72 +210,73 @@ python run.py
 
 ---
 
-## 📞 Dúvidas Frequentes
+## Duvidas Frequentes
 
-**P: Preciso de autenticação?**  
-R: Não no MVP. Adicionar em quinzena 5-6.
+**P: Preciso de autenticacao?**
+R: Nao no MVP. Adicionar em quinzena 5-6.
 
-**P: Posso usar MySQL em vez de SQLite?**  
-R: Sim! Mude em `backend/app.py` na config de DATABASE_URL.
+**P: Posso usar MySQL em vez de SQLite?**
+R: Sim. Mude em `backend/app.py` na config de DATABASE_URL.
 
-**P: Como Adiciono mais produtos?**  
+**P: Como adiciono mais produtos?**
 R: Acesse `/produtos` ou POST em `/api/produtos`.
 
-**P: LGPD é realmente necessário?**  
-R: Sim! É Lei brasileira (Lei 13.709/2018). Obrigatório.
+**P: LGPD e realmente necessario?**
+R: Sim. E Lei brasileira (Lei 13.709/2018). Obrigatorio.
 
-**P: Posso colocar em produção now?**  
+**P: Posso colocar em producao agora?**
 R: Tecnicamente sim, mas recomenda testar mais primeiro.
 
 ---
 
-## 💻 Tech Stack
+## Tech Stack
 
-| Layer | Tecnologia | Versão |
-|-------|-----------|--------|
-| Backend | Python + Flask | 2.3.0 |
-| ORM | SQLAlchemy | 2.0.10 |
-| Banco | SQLite / MySQL | Any |
-| Frontend | HTML5 + CSS3 + JS Vanilla | ES6+ |
-| Servidor | Werkzeug | 2.3+ |
-| Versionamento | Git + GitHub | - |
+| Layer          | Tecnologia               | Versao |
+| -------------- | ------------------------ | ------ |
+| Backend        | Python + Flask           | 2.3.0  |
+| ORM            | SQLAlchemy               | 2.0.10 |
+| Banco          | SQLite / MySQL           | Any    |
+| Frontend       | HTML5 + CSS3 + JS Vanilla| ES6+   |
+| Servidor       | Werkzeug                 | 2.3+   |
+| Versionamento  | Git + GitHub             | -      |
 
 ---
 
-## 📋 Checklist de Execução
+## Checklist de Execucao
 
-```
+```text
 [ ] Clonar/copiar arquivos
 [ ] pip install -r requirements.txt
 [ ] python run.py
 [ ] Abrir http://localhost:5000
 [ ] Testar cadastro cliente
 [ ] Testar registrar venda
-[ ] Testar relatórios
+[ ] Testar relatorios
 [ ] Validar LGPD
-[ ] Feedback do proprietário
+[ ] Feedback do proprietario
 [ ] Submeter no GitHub
-[ ] Escrever relatório
+[ ] Escrever relatorio
 ```
 
 ---
 
-## 🏆 Você Conquistou!
+## Voce Conquistou
 
-✨ Um sistema CRM profissional  
-✨ 28 arquivos produção-ready  
-✨ ~7000 linhas de código  
-✨ 20+ endpoints API  
-✨ LGPD completo  
-✨ Documentação técnica  
-✨ Dados de teste  
-✨ Design responsivo  
+- Um sistema CRM profissional
+- 28 arquivos producao-ready
+- ~7000 linhas de codigo
+- 20+ endpoints API
+- LGPD completo
+- Documentacao tecnica
+- Dados de teste
+- Design responsivo
 
 ---
 
-## 📞 Suporte
+## Suporte
 
-Se tiver dúvidas:
+Se tiver duvidas:
+
 1. Consulte [NEXT_STEPS.md](NEXT_STEPS.md)
 2. Leia [docs/API.md](docs/API.md) para endpoints
 3. Revise [docs/LGPD.md](docs/LGPD.md) para privacidade
@@ -269,7 +284,7 @@ Se tiver dúvidas:
 
 ---
 
-## 🎬 Comece Agora!
+## Comece Agora
 
 ```bash
 cd AcaiteriaCRM
@@ -277,12 +292,10 @@ pip install -r requirements.txt
 python run.py
 ```
 
-**Abra o navegador em:** http://localhost:5000
-
-**Sucesso! 🚀**
+Abra o navegador em: `http://localhost:5000`
 
 ---
 
-*Projeto Integrador CRM - UNIVESP 2024*  
+*Projeto Integrador CRM - UNIVESP 2024*
 *Grupo 22 - Eixo de Computação*  
 *Desenvolvido com ❤️ para Combina Açaí*
