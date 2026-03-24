@@ -43,3 +43,39 @@ class TestCriarProduto:
     def test_criar_produto_sem_preco_retorna_400(self, client):
         resp = client.post('/api/produtos', json={'nome_produto': 'Teste'})
         assert resp.status_code == 400
+
+
+class TestAtualizarProduto:
+    def test_atualizar_nome(self, client):
+        r = _criar_produto(client)
+        pid = r.get_json()['id_produto']
+        resp = client.put(f'/api/produtos/{pid}', json={'nome_produto': 'Açaí 1L'})
+        assert resp.status_code == 200
+        assert resp.get_json()['nome_produto'] == 'Açaí 1L'
+
+    def test_atualizar_preco(self, client):
+        r = _criar_produto(client)
+        pid = r.get_json()['id_produto']
+        resp = client.put(f'/api/produtos/{pid}', json={'preco': 25.00})
+        assert resp.status_code == 200
+        assert resp.get_json()['preco'] == 25.00
+
+    def test_atualizar_produto_inexistente_404(self, client):
+        resp = client.put('/api/produtos/9999', json={'nome_produto': 'X'})
+        assert resp.status_code == 404
+
+
+class TestDeletarProduto:
+    def test_deletar_produto(self, client):
+        r = _criar_produto(client)
+        pid = r.get_json()['id_produto']
+        resp = client.delete(f'/api/produtos/{pid}')
+        assert resp.status_code == 200
+
+        # Produto ainda existe mas inativo — não aparece mais na listagem
+        lista = client.get('/api/produtos').get_json()
+        assert all(p['id_produto'] != pid for p in lista)
+
+    def test_deletar_produto_inexistente_404(self, client):
+        resp = client.delete('/api/produtos/9999')
+        assert resp.status_code == 404

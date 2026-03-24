@@ -6,15 +6,18 @@ Desenvolvido por: Grupo 22 - Projeto Integrador UNIVESP
 Data: 2026
 """
 
-from flask import Flask, render_template, request, jsonify, send_file
+from flask import Flask, render_template, request, jsonify, send_file, session, redirect, url_for
 from flask_restx import Api, Namespace, Resource
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from functools import wraps
 import csv
 import io
 import os
+import hashlib
+import secrets
 from pydantic import BaseModel, EmailStr, ValidationError, field_validator
 
 from .models import db, Cliente, Produto, Venda, ItemVenda, Pagamento, ConsentimentoHistorico
@@ -41,12 +44,15 @@ app = Flask(__name__,
 # Chave secreta para sessões (obrigatória em produção)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 
+# Desabilitar Swagger em produção
+_doc_path = '/api/docs' if os.environ.get('FLASK_ENV') != 'production' else False
+
 api = Api(
     app,
     version='1.0',
     title='Acaiteria CRM API',
     description='API REST do CRM — validação Pydantic, conformidade LGPD, rate-limiting.',
-    doc='/api/docs',
+    doc=_doc_path,
     prefix='/api'
 )
 
@@ -111,12 +117,36 @@ class VendaCreateSchema(BaseModel):
     id_cliente: int
     forma_pagamento: str = 'Dinheiro'
     observacoes: str | None = None
+    desconto_percentual: float = 0.0
+    taxa: float = 0.0
     itens: list[VendaItemSchema]
+
+    @field_validator('desconto_percentual')
+    @classmethod
+    def desconto_valido(cls, v: float) -> float:
+        if v < 0 or v > 100:
+            raise ValueError('Desconto deve estar entre 0 e 100%')
+        return v
+
+    @field_validator('taxa')
+    @classmethod
+    def taxa_valida(cls, v: float) -> float:
+        if v < 0:
+            raise ValueError('Taxa não pode ser negativa')
+        return v
 
 
 class ConsentimentoSchema(BaseModel):
     consentimento_lgpd: bool
     versao_politica: str = 'v1.0'
+
+
+class ProdutoUpdateSchema(BaseModel):
+    nome_produto: str | None = None
+    categoria: str | None = None
+    descricao: str | None = None
+    preco: float | None = None
+    ativo: bool | None = None
 
 
 def validar_payload(schema_cls):
@@ -125,6 +155,34 @@ def validar_payload(schema_cls):
         return schema_cls.model_validate(dados).model_dump()
     except ValidationError as e:
         raise ValueError(e.errors())
+
+
+# =============================================================================
+# AUTENTICAÇÃO — PIN simples para proteger o sistema
+# =============================================================================
+
+# PIN padrão (pode ser alterado via variável de ambiente)
+APP_PIN = os.environ.get('APP_PIN', '1234')
+
+
+def login_required(f):
+    """Decorator que protege rotas HTML exigindo login por PIN."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get('autenticado'):
+            return redirect('/login')
+        return f(*args, **kwargs)
+    return decorated
+
+
+def api_login_required(f):
+    """Decorator que protege rotas API exigindo login."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get('autenticado'):
+            return jsonify({'erro': 'Autenticação necessária'}), 401
+        return f(*args, **kwargs)
+    return decorated
 
 
 @health_ns.route('/health')
@@ -137,10 +195,34 @@ class HealthResource(Resource):
         }, 200
 
 # =============================================================================
+# ROTAS - AUTENTICAÇÃO
+# =============================================================================
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Página de login com PIN"""
+    if request.method == 'POST':
+        pin = request.form.get('pin', '')
+        if pin == APP_PIN:
+            session['autenticado'] = True
+            return redirect('/')
+        return render_template('login.html', erro='PIN incorreto. Tente novamente.')
+    return render_template('login.html')
+
+
+@app.route('/logout')
+def logout():
+    """Encerrar sessão"""
+    session.clear()
+    return redirect('/login')
+
+
+# =============================================================================
 # ROTAS - PÁGINA INICIAL
 # =============================================================================
 
 @app.route('/')
+@login_required
 def index():
     """Página inicial - Dashboard"""
     try:
@@ -190,10 +272,39 @@ def index():
 @app.route('/api/clientes', methods=['GET'])
 @limiter.limit("120 per minute")
 def listar_clientes():
-    """Listar todos os clientes ativos"""
+    """Listar todos os clientes ativos com busca e paginação"""
     try:
-        clientes = Cliente.query.filter_by(ativo=True).all()
-        return jsonify([cliente.to_dict() for cliente in clientes])
+        query = Cliente.query.filter_by(ativo=True)
+
+        # Busca por nome, telefone ou email
+        busca = request.args.get('busca', '').strip()
+        if busca:
+            filtro = f'%{busca}%'
+            query = query.filter(
+                db.or_(
+                    Cliente.nome.ilike(filtro),
+                    Cliente.telefone.ilike(filtro),
+                    Cliente.email.ilike(filtro)
+                )
+            )
+
+        # Paginação
+        pagina = request.args.get('pagina', 1, type=int)
+        por_pagina = request.args.get('por_pagina', 50, type=int)
+        por_pagina = min(por_pagina, 100)  # limite máximo
+
+        total = query.count()
+        clientes = query.order_by(Cliente.nome).offset(
+            (pagina - 1) * por_pagina
+        ).limit(por_pagina).all()
+
+        return jsonify({
+            'clientes': [cliente.to_dict() for cliente in clientes],
+            'total': total,
+            'pagina': pagina,
+            'por_pagina': por_pagina,
+            'total_paginas': (total + por_pagina - 1) // por_pagina
+        })
     except Exception as e:
         return jsonify({'erro': str(e)}), 500
 
@@ -422,6 +533,64 @@ def criar_produto():
         return jsonify({'erro': str(e)}), 500
 
 
+@app.route('/api/produtos/<int:id_produto>', methods=['GET'])
+def obter_produto(id_produto):
+    """Obter detalhes de um produto"""
+    try:
+        produto = Produto.query.get(id_produto)
+        if not produto:
+            return jsonify({'erro': 'Produto não encontrado'}), 404
+        return jsonify(produto.to_dict())
+    except Exception as e:
+        return jsonify({'erro': str(e)}), 500
+
+
+@app.route('/api/produtos/<int:id_produto>', methods=['PUT'])
+@limiter.limit("30 per minute")
+def atualizar_produto(id_produto):
+    """Atualizar dados de um produto"""
+    try:
+        produto = Produto.query.get(id_produto)
+        if not produto:
+            return jsonify({'erro': 'Produto não encontrado'}), 404
+
+        dados = request.get_json(silent=True) or {}
+
+        if 'nome_produto' in dados and dados['nome_produto']:
+            produto.nome_produto = dados['nome_produto']
+        if 'categoria' in dados:
+            produto.categoria = dados['categoria']
+        if 'descricao' in dados:
+            produto.descricao = dados['descricao']
+        if 'preco' in dados and dados['preco'] is not None:
+            produto.preco = Decimal(str(dados['preco']))
+        if 'ativo' in dados:
+            produto.ativo = bool(dados['ativo'])
+
+        db.session.commit()
+        return jsonify(produto.to_dict())
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'erro': str(e)}), 500
+
+
+@app.route('/api/produtos/<int:id_produto>', methods=['DELETE'])
+@limiter.limit("30 per minute")
+def deletar_produto(id_produto):
+    """Desativar produto (soft delete)"""
+    try:
+        produto = Produto.query.get(id_produto)
+        if not produto:
+            return jsonify({'erro': 'Produto não encontrado'}), 404
+
+        produto.ativo = False
+        db.session.commit()
+        return jsonify({'mensagem': f'Produto desativado com sucesso'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'erro': str(e)}), 500
+
+
 # =============================================================================
 # ROTAS - VENDAS
 # =============================================================================
@@ -473,6 +642,10 @@ def criar_venda():
             produto = Produto.query.get(item_dados['id_produto'])
             if not produto:
                 return jsonify({'erro': f'Produto {item_dados["id_produto"]} não encontrado'}), 404
+
+            # Validar produto ativo
+            if not produto.ativo:
+                return jsonify({'erro': f'Produto "{produto.nome_produto}" está desativado e não pode ser vendido'}), 400
             
             quantidade = int(item_dados['quantidade'])
             preco_unitario = Decimal(str(produto.preco))
@@ -486,7 +659,13 @@ def criar_venda():
             )
             venda.itens.append(item)
             valor_total += subtotal
-        
+
+        # Aplicar desconto e taxa
+        desconto_perc = Decimal(str(dados.get('desconto_percentual', 0)))
+        taxa = Decimal(str(dados.get('taxa', 0)))
+        desconto_valor = valor_total * desconto_perc / Decimal('100')
+        valor_total = valor_total - desconto_valor + taxa
+
         venda.valor_total = valor_total
         
         # Criar pagamento
@@ -553,6 +732,50 @@ def relatorio_dia_atual():
             'faturamento_total': float(faturamento),
             'por_forma_pagamento': {k: float(v) for k, v in por_forma.items()},
             'ticket_medio': float(faturamento / total_vendas) if total_vendas > 0 else 0
+        })
+    except Exception as e:
+        return jsonify({'erro': str(e)}), 500
+
+
+@app.route('/api/relatorios/por-data', methods=['GET'])
+def relatorio_por_data():
+    """Relatório de vendas filtrado por data (YYYY-MM-DD)"""
+    try:
+        data_str = request.args.get('data', '')
+        if not data_str:
+            return jsonify({'erro': 'Parâmetro "data" é obrigatório (formato YYYY-MM-DD)'}), 400
+
+        from datetime import date as date_type
+        try:
+            data_filtro = date_type.fromisoformat(data_str)
+        except ValueError:
+            return jsonify({'erro': 'Formato de data inválido. Use YYYY-MM-DD'}), 400
+
+        vendas_dia = Venda.query.filter(
+            db.func.date(Venda.data_venda) == data_filtro
+        ).all()
+
+        total_vendas = len(vendas_dia)
+        faturamento = sum(v.valor_total for v in vendas_dia)
+
+        por_forma = {}
+        for venda in vendas_dia:
+            forma = venda.forma_pagamento or 'Indefinido'
+            if forma not in por_forma:
+                por_forma[forma] = {'quantidade': 0, 'total': Decimal('0.00')}
+            por_forma[forma]['quantidade'] += 1
+            por_forma[forma]['total'] += venda.valor_total
+
+        return jsonify({
+            'data': data_filtro.isoformat(),
+            'total_vendas': total_vendas,
+            'faturamento_total': float(faturamento),
+            'por_forma_pagamento': {
+                k: {'quantidade': v['quantidade'], 'total': float(v['total'])}
+                for k, v in por_forma.items()
+            },
+            'ticket_medio': float(faturamento / total_vendas) if total_vendas > 0 else 0,
+            'vendas': [v.to_dict() for v in vendas_dia]
         })
     except Exception as e:
         return jsonify({'erro': str(e)}), 500
@@ -671,36 +894,42 @@ def exportar_clientes_csv():
 # =============================================================================
 
 @app.route('/cadastro-cliente')
+@login_required
 def pagina_cadastro_cliente():
     """Página de cadastro de cliente"""
     return render_template('cadastro_cliente.html')
 
 
 @app.route('/nova-venda')
+@login_required
 def pagina_nova_venda():
     """Página de registro de venda"""
     return render_template('venda.html')
 
 
 @app.route('/relatorios')
+@login_required
 def pagina_relatorios():
     """Página de relatórios"""
     return render_template('relatorios.html')
 
 
 @app.route('/clientes')
+@login_required
 def pagina_clientes():
     """Página de gerenciamento de clientes"""
     return render_template('clientes.html')
 
 
 @app.route('/produtos')
+@login_required
 def pagina_produtos():
     """Página de gerenciamento de produtos"""
     return render_template('produtos.html')
 
 
 @app.route('/fechamento')
+@login_required
 def pagina_fechamento():
     """Página de fechamento diário"""
     return render_template('fechamento.html')

@@ -30,7 +30,9 @@ class TestListarClientes:
     def test_lista_vazia(self, client):
         resp = client.get('/api/clientes')
         assert resp.status_code == 200
-        assert resp.get_json() == []
+        data = resp.get_json()
+        assert data['clientes'] == []
+        assert data['total'] == 0
 
     def test_lista_com_clientes(self, client):
         _criar_cliente(client, nome='Ana')
@@ -38,8 +40,8 @@ class TestListarClientes:
         resp = client.get('/api/clientes')
         assert resp.status_code == 200
         data = resp.get_json()
-        assert len(data) == 2
-        nomes = {c['nome'] for c in data}
+        assert len(data['clientes']) == 2
+        nomes = {c['nome'] for c in data['clientes']}
         assert 'Ana' in nomes
         assert 'Bruno' in nomes
 
@@ -108,7 +110,7 @@ class TestCrudCliente:
         assert resp.status_code == 200
 
         # Verificar anonimização: não aparece mais na lista
-        lista = client.get('/api/clientes').get_json()
+        lista = client.get('/api/clientes').get_json()['clientes']
         assert all(c['id_cliente'] != cid for c in lista)
 
 

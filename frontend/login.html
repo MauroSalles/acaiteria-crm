@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Açaiteria CRM</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
+    <style>
+        .login-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 80vh;
+        }
+        .login-card {
+            background: var(--branco);
+            border-radius: var(--raio);
+            box-shadow: var(--sombra-lg);
+            padding: 3rem 2.5rem;
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+        }
+        .login-card h1 {
+            color: var(--acai);
+            margin-bottom: 0.5rem;
+            font-size: 2rem;
+        }
+        .login-card .subtitle {
+            color: var(--cinza-600);
+            margin-bottom: 2rem;
+        }
+        .login-card .emoji-logo {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            display: block;
+        }
+        .pin-input {
+            font-size: 2rem;
+            text-align: center;
+            letter-spacing: 0.8rem;
+            padding: 1rem;
+            border: 2px solid var(--cinza-300);
+            border-radius: var(--raio-sm);
+            width: 100%;
+            margin-bottom: 1.5rem;
+            transition: border-color var(--fast);
+        }
+        .pin-input:focus {
+            outline: none;
+            border-color: var(--acai);
+            box-shadow: 0 0 0 3px rgba(108, 46, 185, 0.15);
+        }
+        .login-erro {
+            color: var(--vermelho);
+            background: #FFEBEE;
+            padding: 0.8rem;
+            border-radius: var(--raio-sm);
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="login-container">
+            <div class="login-card">
+                <span class="emoji-logo">🍇</span>
+                <h1>Açaiteria CRM</h1>
+                <p class="subtitle">Combina Açaí — Sistema de Gestão</p>
+
+                {% if erro %}
+                <div class="login-erro">⚠️ {{ erro }}</div>
+                {% endif %}
+
+                <form method="POST" action="/login">
+                    <div class="form-group">
+                        <label for="pin" style="text-align: left; display: block; margin-bottom: 0.5rem;">
+                            🔒 Digite o PIN de acesso:
+                        </label>
+                        <input 
+                            type="password" 
+                            id="pin" 
+                            name="pin" 
+                            class="pin-input" 
+                            maxlength="10" 
+                            required 
+                            autofocus
+                            autocomplete="off"
+                            placeholder="••••"
+                        >
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="width: 100%; padding: 1rem; font-size: 1.1rem;">
+                        🔓 Entrar
+                    </button>
+                </form>
+
+                <p style="margin-top: 2rem; font-size: 0.85rem; color: var(--cinza-600);">
+                    Projeto Integrador UNIVESP — Grupo 22
+                </p>
+            </div>
+        </div>
+
+        <footer class="footer">
+            <p>© 2026 - Projeto Integrador UNIVESP | Grupo 22 | Polo Lorena/SP</p>
+        </footer>
+    </div>
+</body>
+</html>

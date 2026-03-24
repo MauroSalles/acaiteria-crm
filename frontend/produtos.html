@@ -22,6 +22,7 @@
                 <li><a href="/produtos" class="active">Produtos</a></li>
                 <li><a href="/relatorios">Relatórios</a></li>
                 <li><a href="/fechamento">Fechamento</a></li>
+                <li><a href="/logout" style="color: #F48FB1;">🔒 Sair</a></li>
             </ul>
         </nav>
 
@@ -77,10 +78,11 @@
                                 <th>Preço</th>
                                 <th>Categoria</th>
                                 <th>Descrição</th>
+                                <th>Ações</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr><td colspan="5" class="text-center">⏳ Carregando...</td></tr>
+                            <tr><td colspan="6" class="text-center">⏳ Carregando...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -96,6 +98,8 @@
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>
     <script>
+        let editandoId = null;
+
         document.addEventListener('DOMContentLoaded', () => {
             carregarProdutos();
         });
@@ -118,26 +122,66 @@
             }
 
             try {
-                await requisicao('/api/produtos', {
-                    method: 'POST',
-                    body: JSON.stringify(dados)
-                });
-                mostrarAlerta('Produto cadastrado com sucesso!', 'sucesso');
+                if (editandoId) {
+                    // Atualizar produto existente
+                    await requisicao(`/api/produtos/${editandoId}`, {
+                        method: 'PUT',
+                        body: JSON.stringify(dados)
+                    });
+                    mostrarAlerta('Produto atualizado com sucesso!', 'sucesso');
+                    editandoId = null;
+                    document.querySelector('#form-produto button[type="submit"]').textContent = 'Cadastrar Produto';
+                } else {
+                    // Criar novo
+                    await requisicao('/api/produtos', {
+                        method: 'POST',
+                        body: JSON.stringify(dados)
+                    });
+                    mostrarAlerta('Produto cadastrado com sucesso!', 'sucesso');
+                }
                 document.getElementById('form-produto').reset();
                 carregarProdutos();
             } catch (erro) {
-                mostrarAlerta(`Erro ao cadastrar: ${erro.message}`, 'erro');
+                mostrarAlerta(`Erro: ${erro.message}`, 'erro');
             }
         });
 
+        function editarProduto(id, nome, preco, categoria, descricao) {
+            editandoId = id;
+            document.getElementById('nome_produto').value = nome;
+            document.getElementById('preco').value = preco;
+            document.getElementById('categoria').value = categoria || '';
+            document.getElementById('descricao').value = descricao || '';
+            document.querySelector('#form-produto button[type="submit"]').textContent = '💾 Salvar Alterações';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            mostrarAlerta(`Editando produto #${id}: ${nome}`, 'info');
+        }
+
+        async function deletarProduto(id, nome) {
+            if (!confirm(`Desativar o produto "${nome}"? Ele não aparecerá mais para novas vendas.`)) return;
+
+            try {
+                const res = await fetch(`/api/produtos/${id}`, { method: 'DELETE' });
+                if (res.ok) {
+                    mostrarAlerta(`Produto "${nome}" desativado com sucesso`, 'sucesso');
+                    carregarProdutos();
+                } else {
+                    const err = await res.json();
+                    mostrarAlerta(`Erro: ${err.erro}`, 'erro');
+                }
+            } catch (e) {
+                mostrarAlerta(`Erro: ${e.message}`, 'erro');
+            }
+        }
+
         async function carregarProdutos() {
             const tbody = document.querySelector('#tabela-produtos tbody');
-            tbody.innerHTML = '<tr><td colspan="5" class="text-center">⏳ Carregando...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center">⏳ Carregando...</td></tr>';
 
             try {
                 const produtos = await requisicao('/api/produtos');
                 if (produtos.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="5" class="text-center">Nenhum produto cadastrado</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="6" class="text-center">Nenhum produto cadastrado</td></tr>';
                     return;
                 }
 
@@ -148,10 +192,14 @@
                         <td>${formatarMoeda(p.preco)}</td>
                         <td>${p.categoria || '-'}</td>
                         <td>${p.descricao || '-'}</td>
+                        <td>
+                            <button onclick="editarProduto(${p.id_produto}, '${p.nome_produto.replace(/'/g, "\\'")}', ${p.preco}, '${(p.categoria || '').replace(/'/g, "\\'")}', '${(p.descricao || '').replace(/'/g, "\\'")}')" class="btn btn-info" style="font-size: 0.75rem; padding: 0.4rem 0.6rem;">✏️ Editar</button>
+                            <button onclick="deletarProduto(${p.id_produto}, '${p.nome_produto.replace(/'/g, "\\'")}')" class="btn-remover" style="font-size: 0.75rem;">🗑️</button>
+                        </td>
                     </tr>
                 `).join('');
             } catch (erro) {
-                tbody.innerHTML = '<tr><td colspan="5" class="text-center">Erro ao carregar produtos</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center">Erro ao carregar produtos</td></tr>';
                 mostrarAlerta(`Erro: ${erro.message}`, 'erro');
             }
         }

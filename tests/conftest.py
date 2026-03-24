@@ -35,7 +35,17 @@ def app():
 
 @pytest.fixture()
 def client(app):
-    """Cliente HTTP de teste."""
+    """Cliente HTTP de teste — já autenticado (sessão com PIN)."""
+    test_client = app.test_client()
+    # Autenticar automaticamente para todos os testes
+    with test_client.session_transaction() as sess:
+        sess['autenticado'] = True
+    return test_client
+
+
+@pytest.fixture()
+def unauthenticated_client(app):
+    """Cliente HTTP de teste — SEM autenticação."""
     return app.test_client()
 
 

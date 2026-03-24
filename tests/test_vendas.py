@@ -32,6 +32,44 @@ class TestCriarVenda:
         assert data['valor_total'] == 37.80  # 18.90 * 2
         assert len(data['itens']) == 1
 
+    def test_venda_com_desconto(self, client):
+        cid, pid = _setup_cliente_e_produto(client, consentimento=True)
+        resp = client.post('/api/vendas', json={
+            'id_cliente': cid,
+            'forma_pagamento': 'Dinheiro',
+            'itens': [{'id_produto': pid, 'quantidade': 2}],
+            'desconto_percentual': 10.0,
+        })
+        assert resp.status_code == 201
+        data = resp.get_json()
+        # 18.90 * 2 = 37.80  →  37.80 * 0.90 = 34.02
+        assert data['valor_total'] == 34.02
+
+    def test_venda_com_taxa(self, client):
+        cid, pid = _setup_cliente_e_produto(client, consentimento=True)
+        resp = client.post('/api/vendas', json={
+            'id_cliente': cid,
+            'forma_pagamento': 'Cartão',
+            'itens': [{'id_produto': pid, 'quantidade': 1}],
+            'taxa': 2.50,
+        })
+        assert resp.status_code == 201
+        data = resp.get_json()
+        # 18.90 + 2.50 = 21.40
+        assert data['valor_total'] == 21.40
+
+    def test_venda_produto_inativo_rejeitada(self, client):
+        cid, pid = _setup_cliente_e_produto(client, consentimento=True)
+        # Desativar o produto
+        client.delete(f'/api/produtos/{pid}')
+        resp = client.post('/api/vendas', json={
+            'id_cliente': cid,
+            'forma_pagamento': 'Dinheiro',
+            'itens': [{'id_produto': pid, 'quantidade': 1}],
+        })
+        assert resp.status_code == 400
+        assert 'desativado' in resp.get_json()['erro'].lower()
+
     def test_venda_bloqueada_sem_consentimento_lgpd(self, client):
         cid, pid = _setup_cliente_e_produto(client, consentimento=False)
         resp = client.post('/api/vendas', json={

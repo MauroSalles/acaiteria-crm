@@ -29,25 +29,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 });
 
-// Carregar clientes disponíveis
+// Carregar clientes disponíveis (somente com consentimento LGPD)
 async function carregarClientes() {
     try {
-        const clientes = await requisicao('/api/clientes');
+        const dados = await requisicao('/api/clientes');
+        const clientes = dados.clientes || dados;
         const select = document.getElementById('cliente-select');
         
         // Limpar opções existentes deixando a primeira
         select.innerHTML = '<option value="">-- Selecione um cliente --</option>';
         
-        // Adicionar clientes
-        clientes.forEach(cliente => {
+        // Filtrar e adicionar apenas clientes com consentimento LGPD
+        const clientesValidos = (Array.isArray(clientes) ? clientes : []).filter(c => c.consentimento_lgpd);
+        
+        clientesValidos.forEach(cliente => {
             const option = document.createElement('option');
             option.value = cliente.id_cliente;
             option.textContent = `${cliente.nome}${cliente.telefone ? ' - ' + cliente.telefone : ''}`;
             select.appendChild(option);
         });
-        
-        // Salvar para referência
-        produtosDisponiveis = clientes; // Reutilizar para guardar clientes
+
+        if (clientesValidos.length === 0) {
+            const option = document.createElement('option');
+            option.value = '';
+            option.textContent = '⚠️ Nenhum cliente com consentimento LGPD';
+            option.disabled = true;
+            select.appendChild(option);
+        }
     } catch (erro) {
         console.error('Erro ao carregar clientes:', erro);
         mostrarAlerta('❌ Erro ao carregar clientes', 'erro');
@@ -241,6 +249,8 @@ async function finalizarVenda() {
         id_cliente: clienteSelecionado.id_cliente,
         forma_pagamento: document.getElementById('forma-pagamento').value,
         observacoes: document.getElementById('observacoes').value || '',
+        desconto_percentual: descontoPerc,
+        taxa: taxa,
         itens: itensVenda.map(item => ({
             id_produto: item.id_produto,
             quantidade: item.quantidade

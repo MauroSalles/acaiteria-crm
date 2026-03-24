@@ -22,6 +22,7 @@
                 <li><a href="/produtos">Produtos</a></li>
                 <li><a href="/relatorios">Relatórios</a></li>
                 <li><a href="/fechamento">Fechamento</a></li>
+                <li><a href="/logout" style="color: #F48FB1;">🔒 Sair</a></li>
             </ul>
         </nav>
 
@@ -30,10 +31,20 @@
             <p class="subtitle">Visualize, edite e gerencie informações dos clientes cadastrados</p>
 
             <div class="card">
-                <div class="action-buttons" style="margin-bottom: 2rem;">
+                <div class="action-buttons" style="margin-bottom: 1rem;">
                     <a href="/cadastro-cliente" class="btn btn-primary">➕ Novo Cliente</a>
                     <button id="btn-atualizar" class="btn btn-info">🔄 Atualizar</button>
                     <button id="btn-exportar" class="btn btn-success">💾 Exportar CSV</button>
+                </div>
+
+                <!-- Barra de Busca -->
+                <div class="form-group" style="margin-bottom: 1.5rem;">
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="text" id="busca-cliente" class="form-control" 
+                               placeholder="🔍 Buscar por nome, telefone ou email..."
+                               style="flex: 1;">
+                        <button id="btn-buscar" class="btn btn-primary">Buscar</button>
+                    </div>
                 </div>
 
                 <div class="table-responsive">
@@ -65,16 +76,25 @@
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>
     <script>
-        async function carregarClientes() {
+        let paginaAtual = 1;
+
+        async function carregarClientes(pagina = 1) {
             try {
-                const resposta = await fetch('/api/clientes');
-                const clientes = await resposta.json();
+                const busca = document.getElementById('busca-cliente').value.trim();
+                let url = `/api/clientes?pagina=${pagina}&por_pagina=50`;
+                if (busca) url += `&busca=${encodeURIComponent(busca)}`;
+
+                const resposta = await fetch(url);
+                const dados = await resposta.json();
                 const tbody = document.querySelector('#tabela-clientes tbody');
 
                 if (!resposta.ok) throw new Error('Erro ao carregar');
 
+                const clientes = dados.clientes;
+                paginaAtual = dados.pagina;
+
                 if (clientes.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="6" class="text-center">Nenhum cliente cadastrado</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="6" class="text-center">Nenhum cliente encontrado</td></tr>';
                     return;
                 }
 
@@ -83,14 +103,34 @@
                         <td><strong>${c.nome}</strong></td>
                         <td>${c.telefone || '-'}</td>
                         <td>${c.email || '-'}</td>
-                        <td><a href="/relatorios">${c.id_cliente}</a></td>
+                        <td>${c.id_cliente}</td>
                         <td>${c.consentimento_lgpd ? '✅' : '⚠️'}</td>
                         <td>
-                            <a href="/relatorios" class="btn" style="font-size: 0.8rem; padding: 0.5rem;">📊 Ver</a>
                             <button onclick="deletarCliente(${c.id_cliente})" class="btn-remover" style="font-size: 0.8rem;">🗑️</button>
                         </td>
                     </tr>
                 `).join('');
+
+                // Info de paginação
+                if (dados.total_paginas > 1) {
+                    let paginacao = '<div style="margin-top: 1rem; text-align: center;">';
+                    if (paginaAtual > 1)
+                        paginacao += `<button class="btn btn-secondary" onclick="carregarClientes(${paginaAtual - 1})" style="margin: 0 0.25rem;">◀ Anterior</button>`;
+                    paginacao += `<span style="margin: 0 1rem;">Página ${dados.pagina} de ${dados.total_paginas} (${dados.total} clientes)</span>`;
+                    if (paginaAtual < dados.total_paginas)
+                        paginacao += `<button class="btn btn-secondary" onclick="carregarClientes(${paginaAtual + 1})" style="margin: 0 0.25rem;">Próxima ▶</button>`;
+                    paginacao += '</div>';
+
+                    const paginacaoEl = document.getElementById('paginacao');
+                    if (paginacaoEl) {
+                        paginacaoEl.innerHTML = paginacao;
+                    } else {
+                        const div = document.createElement('div');
+                        div.id = 'paginacao';
+                        div.innerHTML = paginacao;
+                        tbody.parentElement.parentElement.appendChild(div);
+                    }
+                }
             } catch (erro) {
                 document.querySelector('#tabela-clientes tbody').innerHTML = 
                     `<tr><td colspan="6" class="text-center" style="color: red;">❌ ${erro.message}</td></tr>`;
@@ -104,16 +144,20 @@
                 const res = await fetch(`/api/clientes/${id}`, { method: 'DELETE' });
                 if (res.ok) {
                     mostrarAlerta('✅ Cliente anonimizado conforme LGPD', 'sucesso');
-                    carregarClientes();
+                    carregarClientes(paginaAtual);
                 }
             } catch (e) {
                 mostrarAlerta('❌ Erro: ' + e.message, 'erro');
             }
         }
 
-        document.getElementById('btn-atualizar').addEventListener('click', carregarClientes);
+        document.getElementById('btn-atualizar').addEventListener('click', () => carregarClientes(1));
         document.getElementById('btn-exportar').addEventListener('click', () => {
             window.location.href = '/api/exportar/clientes-csv';
+        });
+        document.getElementById('btn-buscar').addEventListener('click', () => carregarClientes(1));
+        document.getElementById('busca-cliente').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') carregarClientes(1);
         });
 
         window.addEventListener('load', carregarClientes);

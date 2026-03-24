@@ -1,5 +1,5 @@
 """
-Testes do Health Check e Relatórios — Açaiteria CRM
+Testes do Health Check, Relatórios e Autenticação — Açaiteria CRM
 """
 
 
@@ -21,6 +21,14 @@ class TestRelatorioDia:
         assert 'total_vendas' in data
         assert 'faturamento_total' in data
         assert 'ticket_medio' in data
+        assert 'por_forma_pagamento' in data
+
+    def test_relatorio_por_data(self, client):
+        resp = client.get('/api/relatorios/por-data?data=2026-01-01')
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert 'total_vendas' in data
+        assert 'faturamento_total' in data
         assert 'por_forma_pagamento' in data
 
 
@@ -80,6 +88,33 @@ class TestPaginasHTML:
     def test_pagina_404(self, client):
         resp = client.get('/rota-inexistente')
         assert resp.status_code == 404
+
+
+class TestAutenticacao:
+    def test_login_page_carrega(self, unauthenticated_client):
+        resp = unauthenticated_client.get('/login')
+        assert resp.status_code == 200
+        assert b'PIN' in resp.data
+
+    def test_rota_protegida_redireciona_sem_auth(self, unauthenticated_client):
+        resp = unauthenticated_client.get('/')
+        assert resp.status_code == 302
+        assert '/login' in resp.headers['Location']
+
+    def test_login_com_pin_correto(self, unauthenticated_client):
+        resp = unauthenticated_client.post('/login', data={'pin': '1234'})
+        assert resp.status_code == 302
+        assert '/' in resp.headers['Location']
+
+    def test_login_com_pin_errado(self, unauthenticated_client):
+        resp = unauthenticated_client.post('/login', data={'pin': '0000'})
+        assert resp.status_code == 200
+        assert b'incorreto' in resp.data
+
+    def test_logout(self, client):
+        resp = client.get('/logout')
+        assert resp.status_code == 302
+        assert '/login' in resp.headers['Location']
 
 
 class TestExportCSV:

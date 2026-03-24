@@ -22,6 +22,7 @@
                 <li><a href="/produtos">Produtos</a></li>
                 <li><a href="/relatorios">Relatórios</a></li>
                 <li><a href="/fechamento" class="active">Fechamento</a></li>
+                <li><a href="/logout" style="color: #F48FB1;">🔒 Sair</a></li>
             </ul>
         </nav>
 
@@ -87,6 +88,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             const dataInput = document.getElementById('data-fechamento');
             dataInput.valueAsDate = new Date();
+            carregarFechamento(); // carregar automaticamente
         });
 
         document.getElementById('btn-carregar').addEventListener('click', carregarFechamento);
@@ -99,8 +101,13 @@
             }
 
             try {
-                const res = await fetch('/api/relatorios/dia-atual');
+                const res = await fetch(`/api/relatorios/por-data?data=${data}`);
                 const dados = await res.json();
+
+                if (!res.ok) {
+                    mostrarAlerta(dados.erro || 'Erro ao carregar', 'erro');
+                    return;
+                }
 
                 const resumo = document.getElementById('resumo-dia');
                 resumo.innerHTML = `
@@ -121,39 +128,49 @@
                 const tbody = document.querySelector('#tabela-pagamentos tbody');
                 let html = '';
                 let totalGeral = 0;
+                let totalQtd = 0;
 
-                for (const [forma, valor] of Object.entries(dados.por_forma_pagamento)) {
+                for (const [forma, info] of Object.entries(dados.por_forma_pagamento)) {
                     html += `
                         <tr>
                             <td><strong>${forma}</strong></td>
-                            <td>-</td>
-                            <td>R$ ${valor.toFixed(2)}</td>
+                            <td>${info.quantidade}</td>
+                            <td>R$ ${info.total.toFixed(2)}</td>
                         </tr>
                     `;
-                    totalGeral += valor;
+                    totalGeral += info.total;
+                    totalQtd += info.quantidade;
                 }
 
-                html += `
-                    <tr style="background-color: #f0f0f0; font-weight: bold;">
-                        <td>TOTAL</td>
-                        <td>${dados.total_vendas}</td>
-                        <td>R$ ${totalGeral.toFixed(2)}</td>
-                    </tr>
-                `;
+                if (dados.total_vendas === 0) {
+                    html = '<tr><td colspan="3" class="text-center">Nenhuma venda nesta data</td></tr>';
+                } else {
+                    html += `
+                        <tr style="background-color: #f0f0f0; font-weight: bold;">
+                            <td>TOTAL</td>
+                            <td>${totalQtd}</td>
+                            <td>R$ ${totalGeral.toFixed(2)}</td>
+                        </tr>
+                    `;
+                }
 
                 tbody.innerHTML = html;
-                document.getElementById('btn-confirmar').disabled = false;
-                document.getElementById('btn-imprimir').disabled = false;
-                
-                mostrarAlerta('Fechamento carregado com sucesso', 'sucesso');
+
+                if (dados.total_vendas > 0) {
+                    document.getElementById('btn-confirmar').disabled = false;
+                    document.getElementById('btn-imprimir').disabled = false;
+                }
+
+                mostrarAlerta(`Fechamento de ${data} carregado com sucesso`, 'sucesso');
             } catch (erro) {
                 mostrarAlerta('Erro: ' + erro.message, 'erro');
             }
         }
 
         document.getElementById('btn-confirmar').addEventListener('click', () => {
-            if (confirm('Confirmar fechamento de caixa? Esta acao nao pode ser desfeita.')) {
-                mostrarAlerta('Fechamento confirmado! Caixa encerrado com sucesso.', 'sucesso');
+            const data = document.getElementById('data-fechamento').value;
+            if (confirm(`Confirmar fechamento de caixa do dia ${data}? Esta ação não pode ser desfeita.`)) {
+                mostrarAlerta(`✅ Fechamento do dia ${data} confirmado! Caixa encerrado com sucesso.`, 'sucesso');
                 document.getElementById('btn-confirmar').disabled = true;
             }
         });
