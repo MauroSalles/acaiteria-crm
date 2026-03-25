@@ -10,19 +10,34 @@
     <div class="container">
         <!-- Navbar -->
         <nav class="navbar">
-            <div class="navbar-brand">
-                � <strong>Açaiteria CRM</strong> — Combina Açaí
-            </div>
-            <button class="navbar-toggle" onclick="document.querySelector('.navbar-menu').classList.toggle('open')" aria-label="Menu">☰</button>
-            <ul class="navbar-menu">
-                <li><a href="/">Dashboard</a></li>
-                <li><a href="/nova-venda">Nova Venda</a></li>
-                <li><a href="/cadastro-cliente" class="active">Cadastro</a></li>
-                <li><a href="/clientes">Clientes</a></li>
-                <li><a href="/produtos">Produtos</a></li>
-                <li><a href="/relatorios">Relatórios</a></li>
-                <li><a href="/fechamento">Fechamento</a></li>
-                <li><a href="/logout" style="color: #F48FB1;">🔒 Sair</a></li>
+            <div class="navbar-brand">🍇 <strong>Combina Açaí</strong></div>
+            <button class="navbar-toggle" onclick="document.getElementById('navMenu').classList.toggle('open')" aria-label="Menu">☰</button>
+            <ul class="navbar-menu" id="navMenu">
+                <li><a href="/">🏠 Início</a></li>
+                <li class="has-dropdown">
+                    <a href="#" onclick="navDropdown(this);return false">🛒 Vendas <span class="arrow">▾</span></a>
+                    <ul class="dropdown">
+                        <li><a href="/nova-venda">➕ Registrar Venda</a></li>
+                    </ul>
+                </li>
+                <li class="has-dropdown active">
+                    <a href="#" onclick="navDropdown(this);return false">👥 Clientes <span class="arrow">▾</span></a>
+                    <ul class="dropdown">
+                        <li><a href="/cadastro-cliente" class="active">➕ Cadastrar Cliente</a></li>
+                        <li><a href="/clientes">📋 Lista de Clientes</a></li>
+                    </ul>
+                </li>
+                <li><a href="/produtos">📦 Produtos</a></li>
+                <li class="has-dropdown">
+                    <a href="#" onclick="navDropdown(this);return false">💰 Financeiro <span class="arrow">▾</span></a>
+                    <ul class="dropdown">
+                        <li><a href="/relatorios">📊 Relatórios</a></li>
+                        <li><a href="/fechamento">🔐 Fechamento de Caixa</a></li>
+                    </ul>
+                </li>
+                <li><a href="/politica-privacidade">🔒 LGPD</a></li>
+                <li class="nav-separator"></li>
+                <li><a href="/logout" class="nav-logout">⬅ Sair</a></li>
             </ul>
         </nav>
 

@@ -8,21 +8,36 @@
 </head>
 <body>
     <div class="container">
-        <!-- Navbar/Header -->
+        <!-- Navbar -->
         <nav class="navbar">
-            <div class="navbar-brand">
-                � <strong>Açaiteria CRM</strong> — Combina Açaí
-            </div>
-            <button class="navbar-toggle" onclick="document.querySelector('.navbar-menu').classList.toggle('open')" aria-label="Menu">☰</button>
-            <ul class="navbar-menu">
-                <li><a href="/" class="active">Dashboard</a></li>
-                <li><a href="/nova-venda">Nova Venda</a></li>
-                <li><a href="/cadastro-cliente">Cadastro</a></li>
-                <li><a href="/clientes">Clientes</a></li>
-                <li><a href="/produtos">Produtos</a></li>
-                <li><a href="/relatorios">Relatórios</a></li>
-                <li><a href="/fechamento">Fechamento</a></li>
-                <li><a href="/logout" style="color: #F48FB1;">🔒 Sair</a></li>
+            <div class="navbar-brand">🍇 <strong>Combina Açaí</strong></div>
+            <button class="navbar-toggle" onclick="document.getElementById('navMenu').classList.toggle('open')" aria-label="Menu">☰</button>
+            <ul class="navbar-menu" id="navMenu">
+                <li><a href="/" class="active">🏠 Início</a></li>
+                <li class="has-dropdown">
+                    <a href="#" onclick="navDropdown(this);return false">🛒 Vendas <span class="arrow">▾</span></a>
+                    <ul class="dropdown">
+                        <li><a href="/nova-venda">➕ Registrar Venda</a></li>
+                    </ul>
+                </li>
+                <li class="has-dropdown">
+                    <a href="#" onclick="navDropdown(this);return false">👥 Clientes <span class="arrow">▾</span></a>
+                    <ul class="dropdown">
+                        <li><a href="/cadastro-cliente">➕ Cadastrar Cliente</a></li>
+                        <li><a href="/clientes">📋 Lista de Clientes</a></li>
+                    </ul>
+                </li>
+                <li><a href="/produtos">📦 Produtos</a></li>
+                <li class="has-dropdown">
+                    <a href="#" onclick="navDropdown(this);return false">💰 Financeiro <span class="arrow">▾</span></a>
+                    <ul class="dropdown">
+                        <li><a href="/relatorios">📊 Relatórios</a></li>
+                        <li><a href="/fechamento">🔐 Fechamento de Caixa</a></li>
+                    </ul>
+                </li>
+                <li><a href="/politica-privacidade">🔒 LGPD</a></li>
+                <li class="nav-separator"></li>
+                <li><a href="/logout" class="nav-logout">⬅ Sair</a></li>
             </ul>
         </nav>
 
@@ -113,6 +128,45 @@
                     <a href="/politica-privacidade" class="btn btn-secondary">
                         🔒 Política de Privacidade
                     </a>
+                </div>
+            </section>
+
+            <!-- Como Funciona — Guia Rápido para a Equipe -->
+            <section class="project-info">
+                <div class="card">
+                    <h2>📖 Como Funciona — Guia Rápido</h2>
+                    <p>Use o menu superior para navegar entre as categorias do sistema. Veja abaixo o passo a passo:</p>
+
+                    <h3 style="margin-top: 1rem;">🛒 Vendas</h3>
+                    <ol style="margin-left: 1.5rem; margin-bottom: 1rem;">
+                        <li>No menu superior, clique em <strong>Vendas → Registrar Venda</strong></li>
+                        <li>Selecione o cliente (deve ser cadastrado com consentimento LGPD)</li>
+                        <li>Adicione os produtos desejados e a quantidade</li>
+                        <li>Aplique desconto (%) ou taxa de serviço se necessário</li>
+                        <li>Escolha a forma de pagamento e clique em <strong>Finalizar Venda</strong></li>
+                    </ol>
+
+                    <h3>👥 Clientes</h3>
+                    <ol style="margin-left: 1.5rem; margin-bottom: 1rem;">
+                        <li>Clique em <strong>Clientes → Cadastrar Cliente</strong> para novos cadastros</li>
+                        <li>O cliente deve aceitar o consentimento LGPD para ser registrado</li>
+                        <li>Em <strong>Clientes → Lista de Clientes</strong>, busque, exporte ou gerencie todos os cadastros</li>
+                    </ol>
+
+                    <h3>📦 Produtos</h3>
+                    <ol style="margin-left: 1.5rem; margin-bottom: 1rem;">
+                        <li>Clique em <strong>Produtos</strong> no menu para cadastrar, editar ou desativar itens</li>
+                        <li>Defina nome, preço, categoria e descrição</li>
+                    </ol>
+
+                    <h3>💰 Financeiro</h3>
+                    <ol style="margin-left: 1.5rem; margin-bottom: 1rem;">
+                        <li><strong>Financeiro → Relatórios</strong> mostra vendas do dia, clientes frequentes e produtos mais vendidos</li>
+                        <li><strong>Financeiro → Fechamento de Caixa</strong> consolida as vendas por data e forma de pagamento</li>
+                    </ol>
+
+                    <h3>🔒 LGPD</h3>
+                    <p style="margin-left: 1.5rem;">A política de privacidade detalha quais dados são coletados e os direitos dos clientes. Todo cadastro exige consentimento.</p>
                 </div>
             </section>
 

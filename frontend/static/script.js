@@ -3,6 +3,26 @@
  * Funções auxiliares e gerais
  */
 
+// ---------- NAVBAR DROPDOWN (mobile) ----------
+function navDropdown(el) {
+    if (window.innerWidth <= 860) {
+        var parent = el.parentElement;
+        document.querySelectorAll('.has-dropdown.show').forEach(function(d) {
+            if (d !== parent) d.classList.remove('show');
+        });
+        parent.classList.toggle('show');
+    }
+}
+
+// Fechar dropdowns ao clicar fora
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.has-dropdown')) {
+        document.querySelectorAll('.has-dropdown.show').forEach(function(d) {
+            d.classList.remove('show');
+        });
+    }
+});
+
 // Função para mostrar alertas personalizados
 function mostrarAlerta(mensagem, tipo = 'info') {
     const alertIds = {
