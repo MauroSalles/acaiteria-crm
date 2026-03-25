@@ -55,6 +55,13 @@ function formatarMoeda(valor) {
     }).format(valor);
 }
 
+// Sanitizar texto para uso seguro em innerHTML (prevenir XSS)
+function escapeHtml(texto) {
+    const div = document.createElement('div');
+    div.appendChild(document.createTextNode(texto));
+    return div.innerHTML;
+}
+
 // Formatador de data
 function formatarData(data) {
     return new Date(data).toLocaleDateString('pt-BR');

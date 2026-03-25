@@ -15,6 +15,7 @@ from decimal import Decimal
 from functools import wraps
 import csv
 import io
+import logging
 import os
 import hashlib
 import secrets
@@ -82,6 +83,37 @@ db.init_app(app)
 # Criar tabelas automaticamente no primeiro request (necessário em produção/cloud)
 with app.app_context():
     db.create_all()
+
+# Configurar logging estruturado
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s %(name)s: %(message)s'
+)
+logger = logging.getLogger('acaiteria-crm')
+
+
+def _erro_interno(e):
+    """Loga exceção e retorna resposta segura (sem stack trace em produção)."""
+    logger.exception('Erro interno: %s', e)
+    if app.config.get('TESTING') or os.environ.get('FLASK_ENV') == 'development':
+        return jsonify({'erro': str(e)}), 500
+    return jsonify({'erro': 'Erro interno do servidor'}), 500
+
+
+# =============================================================================
+# SECURITY HEADERS
+# =============================================================================
+
+@app.after_request
+def adicionar_headers_seguranca(response):
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    response.headers['Permissions-Policy'] = 'geolocation=(), camera=(), microphone=()'
+    if os.environ.get('FLASK_ENV') == 'production':
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    return response
 
 
 class ClienteCreateSchema(BaseModel):
@@ -199,6 +231,7 @@ class HealthResource(Resource):
 # =============================================================================
 
 @app.route('/login', methods=['GET', 'POST'])
+@limiter.limit("5 per minute", methods=["POST"])
 def login():
     """Página de login com PIN"""
     if request.method == 'POST':
@@ -206,6 +239,7 @@ def login():
         if pin == APP_PIN:
             session['autenticado'] = True
             return redirect('/')
+        logger.warning('Tentativa de login com PIN incorreto de %s', request.remote_addr)
         return render_template('login.html', erro='PIN incorreto. Tente novamente.')
     return render_template('login.html')
 
@@ -253,7 +287,7 @@ def index():
         
         return render_template('index.html', stats=stats)
     except Exception as e:
-        print(f"Erro no dashboard: {e}")
+        logger.exception('Erro no dashboard: %s', e)
         stats_default = {
             'total_clientes': 0,
             'total_vendas': 0,
@@ -271,6 +305,7 @@ def index():
 
 @app.route('/api/clientes', methods=['GET'])
 @limiter.limit("120 per minute")
+@api_login_required
 def listar_clientes():
     """Listar todos os clientes ativos com busca e paginação"""
     try:
@@ -306,11 +341,12 @@ def listar_clientes():
             'total_paginas': (total + por_pagina - 1) // por_pagina
         })
     except Exception as e:
-        return jsonify({'erro': str(e)}), 500
+        return _erro_interno(e)
 
 
 @app.route('/api/clientes', methods=['POST'])
 @limiter.limit("30 per minute")
+@api_login_required
 def criar_cliente():
     """Criar novo cliente"""
     try:
@@ -356,10 +392,11 @@ def criar_cliente():
         db.session.rollback()
         if isinstance(e, ValueError):
             return jsonify({'erro': 'Payload invalido', 'detalhes': str(e)}), 400
-        return jsonify({'erro': str(e)}), 500
+        return _erro_interno(e)
 
 
 @app.route('/api/clientes/<int:id_cliente>', methods=['GET'])
+@api_login_required
 def obter_cliente(id_cliente):
     """Obter detalhes de um cliente"""
     try:
@@ -376,7 +413,7 @@ def obter_cliente(id_cliente):
         
         return jsonify(cliente_dict)
     except Exception as e:
-        return jsonify({'erro': str(e)}), 500
+        return _erro_interno(e)
 
 
 @app.route('/api/clientes/<int:id_cliente>', methods=['PUT'])
@@ -399,7 +436,7 @@ def atualizar_cliente(id_cliente):
         return jsonify(cliente.to_dict())
     except Exception as e:
         db.session.rollback()
-        return jsonify({'erro': str(e)}), 500
+        return _erro_interno(e)
 
 
 @app.route('/api/clientes/<int:id_cliente>', methods=['DELETE'])
@@ -423,7 +460,7 @@ def deletar_cliente(id_cliente):
         return jsonify({'mensagem': 'Cliente anonimizado conforme LGPD'}), 200
     except Exception as e:
         db.session.rollback()
-        return jsonify({'erro': str(e)}), 500
+        return _erro_interno(e)
 
 
 # =============================================================================
@@ -432,6 +469,7 @@ def deletar_cliente(id_cliente):
 
 @app.route('/api/clientes/<int:id_cliente>/consentimento', methods=['PUT'])
 @limiter.limit("30 per minute")
+@api_login_required
 def atualizar_consentimento(id_cliente):
     """Concede ou revoga consentimento LGPD e registra no histórico de auditoria"""
     try:
@@ -465,11 +503,12 @@ def atualizar_consentimento(id_cliente):
         db.session.rollback()
         if isinstance(e, ValueError):
             return jsonify({'erro': 'Payload invalido', 'detalhes': str(e)}), 400
-        return jsonify({'erro': str(e)}), 500
+        return _erro_interno(e)
 
 
 @app.route('/api/clientes/<int:id_cliente>/consentimento/historico', methods=['GET'])
 @limiter.limit("120 per minute")
+@api_login_required
 def historico_consentimento(id_cliente):
     """Retorna histórico completo de auditoria LGPD do cliente"""
     try:
@@ -489,7 +528,7 @@ def historico_consentimento(id_cliente):
             'historico': [h.to_dict() for h in historico]
         })
     except Exception as e:
-        return jsonify({'erro': str(e)}), 500
+        return _erro_interno(e)
 
 
 # =============================================================================
@@ -498,17 +537,19 @@ def historico_consentimento(id_cliente):
 
 @app.route('/api/produtos', methods=['GET'])
 @limiter.limit("120 per minute")
+@api_login_required
 def listar_produtos():
     """Listar todos os produtos ativos"""
     try:
         produtos = Produto.query.filter_by(ativo=True).all()
         return jsonify([produto.to_dict() for produto in produtos])
     except Exception as e:
-        return jsonify({'erro': str(e)}), 500
+        return _erro_interno(e)
 
 
 @app.route('/api/produtos', methods=['POST'])
 @limiter.limit("30 per minute")
+@api_login_required
 def criar_produto():
     """Criar novo produto"""
     try:
@@ -530,10 +571,11 @@ def criar_produto():
         db.session.rollback()
         if isinstance(e, ValueError):
             return jsonify({'erro': 'Payload invalido', 'detalhes': str(e)}), 400
-        return jsonify({'erro': str(e)}), 500
+        return _erro_interno(e)
 
 
 @app.route('/api/produtos/<int:id_produto>', methods=['GET'])
+@api_login_required
 def obter_produto(id_produto):
     """Obter detalhes de um produto"""
     try:
@@ -542,11 +584,12 @@ def obter_produto(id_produto):
             return jsonify({'erro': 'Produto não encontrado'}), 404
         return jsonify(produto.to_dict())
     except Exception as e:
-        return jsonify({'erro': str(e)}), 500
+        return _erro_interno(e)
 
 
 @app.route('/api/produtos/<int:id_produto>', methods=['PUT'])
 @limiter.limit("30 per minute")
+@api_login_required
 def atualizar_produto(id_produto):
     """Atualizar dados de um produto"""
     try:
@@ -571,11 +614,12 @@ def atualizar_produto(id_produto):
         return jsonify(produto.to_dict())
     except Exception as e:
         db.session.rollback()
-        return jsonify({'erro': str(e)}), 500
+        return _erro_interno(e)
 
 
 @app.route('/api/produtos/<int:id_produto>', methods=['DELETE'])
 @limiter.limit("30 per minute")
+@api_login_required
 def deletar_produto(id_produto):
     """Desativar produto (soft delete)"""
     try:
@@ -588,7 +632,7 @@ def deletar_produto(id_produto):
         return jsonify({'mensagem': f'Produto desativado com sucesso'})
     except Exception as e:
         db.session.rollback()
-        return jsonify({'erro': str(e)}), 500
+        return _erro_interno(e)
 
 
 # =============================================================================
@@ -597,17 +641,19 @@ def deletar_produto(id_produto):
 
 @app.route('/api/vendas', methods=['GET'])
 @limiter.limit("120 per minute")
+@api_login_required
 def listar_vendas():
     """Listar todas as vendas"""
     try:
         vendas = Venda.query.order_by(Venda.data_venda.desc()).all()
         return jsonify([venda.to_dict() for venda in vendas])
     except Exception as e:
-        return jsonify({'erro': str(e)}), 500
+        return _erro_interno(e)
 
 
 @app.route('/api/vendas', methods=['POST'])
 @limiter.limit("40 per minute")
+@api_login_required
 def criar_venda():
     """Criar nova venda"""
     try:
@@ -685,10 +731,11 @@ def criar_venda():
         db.session.rollback()
         if isinstance(e, ValueError):
             return jsonify({'erro': 'Payload invalido', 'detalhes': str(e)}), 400
-        return jsonify({'erro': str(e)}), 500
+        return _erro_interno(e)
 
 
 @app.route('/api/vendas/<int:id_venda>', methods=['GET'])
+@api_login_required
 def obter_venda(id_venda):
     """Obter detalhes de uma venda"""
     try:
@@ -698,7 +745,7 @@ def obter_venda(id_venda):
         
         return jsonify(venda.to_dict())
     except Exception as e:
-        return jsonify({'erro': str(e)}), 500
+        return _erro_interno(e)
 
 
 # =============================================================================
@@ -706,6 +753,7 @@ def obter_venda(id_venda):
 # =============================================================================
 
 @app.route('/api/relatorios/dia-atual', methods=['GET'])
+@api_login_required
 def relatorio_dia_atual():
     """Relatório de vendas do dia atual"""
     try:
@@ -734,10 +782,11 @@ def relatorio_dia_atual():
             'ticket_medio': float(faturamento / total_vendas) if total_vendas > 0 else 0
         })
     except Exception as e:
-        return jsonify({'erro': str(e)}), 500
+        return _erro_interno(e)
 
 
 @app.route('/api/relatorios/por-data', methods=['GET'])
+@api_login_required
 def relatorio_por_data():
     """Relatório de vendas filtrado por data (YYYY-MM-DD)"""
     try:
@@ -778,10 +827,11 @@ def relatorio_por_data():
             'vendas': [v.to_dict() for v in vendas_dia]
         })
     except Exception as e:
-        return jsonify({'erro': str(e)}), 500
+        return _erro_interno(e)
 
 
 @app.route('/api/relatorios/clientes-frequentes', methods=['GET'])
+@api_login_required
 def relatorio_clientes_frequentes():
     """Clientes mais frequentes (últimos 30 dias)"""
     try:
@@ -818,10 +868,11 @@ def relatorio_clientes_frequentes():
         
         return jsonify(resultado)
     except Exception as e:
-        return jsonify({'erro': str(e)}), 500
+        return _erro_interno(e)
 
 
 @app.route('/api/relatorios/produtos-ranking', methods=['GET'])
+@api_login_required
 def relatorio_produtos_ranking():
     """Produtos mais vendidos"""
     try:
@@ -850,7 +901,7 @@ def relatorio_produtos_ranking():
         
         return jsonify(resultado)
     except Exception as e:
-        return jsonify({'erro': str(e)}), 500
+        return _erro_interno(e)
 
 
 # =============================================================================
@@ -858,8 +909,15 @@ def relatorio_produtos_ranking():
 # =============================================================================
 
 @app.route('/api/exportar/clientes-csv', methods=['GET'])
+@api_login_required
 def exportar_clientes_csv():
     """Exportar lista de clientes em CSV"""
+    def sanitize_csv(value):
+        """Previne CSV formula injection (=, +, -, @, tab, CR)"""
+        if isinstance(value, str) and value and value[0] in ('=', '+', '-', '@', '\t', '\r'):
+            return "'" + value
+        return value
+
     try:
         clientes = Cliente.query.filter_by(ativo=True, consentimento_lgpd=True).all()
         
@@ -869,9 +927,9 @@ def exportar_clientes_csv():
         
         for cliente in clientes:
             writer.writerow([
-                cliente.nome,
-                cliente.telefone or '',
-                cliente.email or '',
+                sanitize_csv(cliente.nome),
+                sanitize_csv(cliente.telefone or ''),
+                sanitize_csv(cliente.email or ''),
                 cliente.data_cadastro.strftime('%Y-%m-%d') if cliente.data_cadastro else ''
             ])
         
@@ -886,7 +944,7 @@ def exportar_clientes_csv():
             download_name=f'clientes_export_{datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")}.csv'
         )
     except Exception as e:
-        return jsonify({'erro': str(e)}), 500
+        return _erro_interno(e)
 
 
 # =============================================================================

@@ -180,7 +180,7 @@ function renderizarItens() {
     lista.innerHTML = itensVenda.map((item, index) => `
         <div class="item-venda">
             <div>
-                <div class="item-nome">${item.nome_produto}</div>
+                <div class="item-nome">${escapeHtml(item.nome_produto)}</div>
                 <div class="item-valor">
                     Qtd: ${item.quantidade} × R$ ${item.preco_unitario.toFixed(2)} = 
                     <strong>${formatarMoeda(item.subtotal)}</strong>
