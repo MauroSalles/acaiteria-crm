@@ -84,6 +84,22 @@ db.init_app(app)
 with app.app_context():
     db.create_all()
 
+    # Auto-migração: adicionar colunas novas em tabelas existentes (SQLite/Postgres)
+    _migracoes = [
+        ('produto', 'estoque_atual', 'INTEGER DEFAULT 0'),
+        ('produto', 'estoque_minimo', 'INTEGER DEFAULT 0'),
+        ('cliente', 'pontos_fidelidade', 'INTEGER DEFAULT 0'),
+    ]
+    with db.engine.connect() as conn:
+        for tabela, coluna, tipo in _migracoes:
+            try:
+                conn.execute(db.text(
+                    f'ALTER TABLE {tabela} ADD COLUMN {coluna} {tipo}'
+                ))
+                conn.commit()
+            except Exception:
+                conn.rollback()
+
 # Configurar logging estruturado
 logging.basicConfig(
     level=logging.INFO,
