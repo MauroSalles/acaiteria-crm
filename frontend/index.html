@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Açaiteria CRM - Dashboard</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <meta name="theme-color" content="#7B1FA2">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icon-192.svg') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -36,7 +40,12 @@
                     </ul>
                 </li>
                 <li><a href="/politica-privacidade">🔒 LGPD</a></li>
+                {% if papel == 'admin' %}
+                <li><a href="/usuarios">👤 Usuários</a></li>
+                <li><a href="/historico">📋 Histórico</a></li>
+                {% endif %}
                 <li class="nav-separator"></li>
+                <li class="nav-user-info">👤 {{ usuario_nome }}</li>
                 <li><a href="/logout" class="nav-logout">⬅ Sair</a></li>
             </ul>
         </nav>
@@ -87,6 +96,48 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Gráficos do Dashboard -->
+            <section class="charts-section">
+                <div class="stats-grid" style="grid-template-columns: 1fr 1fr;">
+                    <div class="card">
+                        <h2>📈 Vendas — Últimos 7 Dias</h2>
+                        <canvas id="chartVendasDia" height="220"></canvas>
+                    </div>
+                    <div class="card">
+                        <h2>💳 Vendas por Forma de Pagamento</h2>
+                        <canvas id="chartPagamento" height="220"></canvas>
+                    </div>
+                </div>
+                <div class="stats-grid" style="grid-template-columns: 1fr; max-width: 600px; margin: 1rem auto;">
+                    <div class="card">
+                        <h2>🏆 Top 5 Produtos Mais Vendidos</h2>
+                        <canvas id="chartProdutos" height="200"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Alerta de Estoque Baixo -->
+            <section id="alerta-estoque" class="card" style="display:none; border-left: 4px solid #c62828; margin: 1rem 0;">
+                <h2>⚠️ Produtos com Estoque Baixo</h2>
+                <table class="tabela-responsiva" style="width:100%;">
+                    <thead>
+                        <tr><th>Produto</th><th>Categoria</th><th>Estoque Atual</th><th>Mínimo</th></tr>
+                    </thead>
+                    <tbody id="tbody-estoque-baixo"></tbody>
+                </table>
+            </section>
+
+            <!-- Ranking de Fidelidade -->
+            <section id="ranking-fidelidade" class="card" style="display:none; border-left: 4px solid #7B1FA2; margin: 1rem 0;">
+                <h2>🌟 Top Fidelidade</h2>
+                <table class="tabela-responsiva" style="width:100%;">
+                    <thead>
+                        <tr><th>Cliente</th><th>Pontos</th><th>Desconto Disponível</th></tr>
+                    </thead>
+                    <tbody id="tbody-ranking-fidelidade"></tbody>
+                </table>
+            </section>
 
             <!-- LGPD Compliance Stats -->
             <section class="lgpd-section">
@@ -202,5 +253,134 @@
     </div>
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+    (async function carregarGraficos() {
+        try {
+            const resp = await fetch('/api/dashboard/graficos');
+            if (!resp.ok) return;
+            const dados = await resp.json();
+
+            const corRoxo = '#7B1FA2';
+            const corRosa = '#F48FB1';
+            const coresPizza = ['#7B1FA2','#AB47BC','#CE93D8','#F48FB1','#E1BEE7','#4A148C','#9C27B0'];
+
+            // Gráfico vendas por dia (barras)
+            const ctxDia = document.getElementById('chartVendasDia');
+            if (ctxDia && dados.vendas_por_dia) {
+                new Chart(ctxDia, {
+                    type: 'bar',
+                    data: {
+                        labels: dados.vendas_por_dia.map(d => d.label),
+                        datasets: [{
+                            label: 'Faturamento (R$)',
+                            data: dados.vendas_por_dia.map(d => d.faturamento),
+                            backgroundColor: corRoxo,
+                            borderRadius: 6,
+                        }, {
+                            label: 'Qtd Vendas',
+                            data: dados.vendas_por_dia.map(d => d.quantidade),
+                            backgroundColor: corRosa,
+                            borderRadius: 6,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: { legend: { position: 'bottom' } },
+                        scales: { y: { beginAtZero: true } }
+                    }
+                });
+            }
+
+            // Gráfico forma de pagamento (doughnut)
+            const ctxPag = document.getElementById('chartPagamento');
+            if (ctxPag && dados.por_forma_pagamento && dados.por_forma_pagamento.length) {
+                new Chart(ctxPag, {
+                    type: 'doughnut',
+                    data: {
+                        labels: dados.por_forma_pagamento.map(p => p.forma),
+                        datasets: [{
+                            data: dados.por_forma_pagamento.map(p => p.total),
+                            backgroundColor: coresPizza,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: { legend: { position: 'bottom' } }
+                    }
+                });
+            }
+
+            // Top 5 Produtos (horizontal bar)
+            const ctxProd = document.getElementById('chartProdutos');
+            if (ctxProd && dados.top_produtos && dados.top_produtos.length) {
+                new Chart(ctxProd, {
+                    type: 'bar',
+                    data: {
+                        labels: dados.top_produtos.map(p => p.produto),
+                        datasets: [{
+                            label: 'Unidades vendidas',
+                            data: dados.top_produtos.map(p => p.quantidade),
+                            backgroundColor: coresPizza,
+                            borderRadius: 6,
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        plugins: { legend: { display: false } },
+                        scales: { x: { beginAtZero: true } }
+                    }
+                });
+            }
+        } catch (e) {
+            console.warn('Gráficos não carregados:', e);
+        }
+    })();
+
+    // Carregar alerta de estoque baixo
+    (async function carregarEstoqueBaixo() {
+        try {
+            const resp = await fetch('/api/produtos/estoque-baixo');
+            if (!resp.ok) return;
+            const produtos = await resp.json();
+            if (!produtos.length) return;
+            const section = document.getElementById('alerta-estoque');
+            const tbody = document.getElementById('tbody-estoque-baixo');
+            tbody.innerHTML = produtos.map(p => `
+                <tr style="background: #fff3e0;">
+                    <td><strong>${p.nome_produto}</strong></td>
+                    <td>${p.categoria || '-'}</td>
+                    <td style="color:#c62828;font-weight:bold;">${p.estoque_atual}</td>
+                    <td>${p.estoque_minimo}</td>
+                </tr>
+            `).join('');
+            section.style.display = 'block';
+        } catch (e) {
+            console.warn('Estoque baixo não carregado:', e);
+        }
+    })();
+
+    // Carregar ranking de fidelidade
+    (async function carregarRankingFidelidade() {
+        try {
+            const resp = await fetch('/api/fidelidade/ranking');
+            if (!resp.ok) return;
+            const clientes = await resp.json();
+            if (!clientes.length) return;
+            const section = document.getElementById('ranking-fidelidade');
+            const tbody = document.getElementById('tbody-ranking-fidelidade');
+            tbody.innerHTML = clientes.map((c, i) => `
+                <tr>
+                    <td>${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '⭐'} <strong>${c.nome}</strong></td>
+                    <td style="color:#7B1FA2;font-weight:bold;">${c.pontos}</td>
+                    <td>R$ ${(Math.floor(c.pontos / 100) * 5).toFixed(2)}</td>
+                </tr>
+            `).join('');
+            section.style.display = 'block';
+        } catch (e) {
+            console.warn('Ranking fidelidade não carregado:', e);
+        }
+    })();
+    </script>
 </body>
 </html>

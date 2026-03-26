@@ -3,6 +3,7 @@ Configuração do banco de dados para Flask-SQLAlchemy
 """
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime, timezone
+from werkzeug.security import generate_password_hash, check_password_hash
 
 db = SQLAlchemy()
 
@@ -13,6 +14,39 @@ def _utcnow():
 # =============================================================================
 # MODELOS DE DADOS
 # =============================================================================
+
+
+class Usuario(db.Model):
+    """Modelo de Usuário do sistema (admin ou operador)"""
+    __tablename__ = 'usuario'
+
+    id_usuario = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(150), nullable=False)
+    email = db.Column(db.String(150), unique=True, nullable=False)
+    senha_hash = db.Column(db.String(256), nullable=False)
+    papel = db.Column(db.String(20), nullable=False, default='operador')  # 'admin' | 'operador'
+    ativo = db.Column(db.Boolean, default=True)
+    data_criacao = db.Column(db.DateTime, default=_utcnow)
+
+    def set_senha(self, senha):
+        self.senha_hash = generate_password_hash(senha)
+
+    def verificar_senha(self, senha):
+        return check_password_hash(self.senha_hash, senha)
+
+    def to_dict(self):
+        return {
+            'id_usuario': self.id_usuario,
+            'nome': self.nome,
+            'email': self.email,
+            'papel': self.papel,
+            'ativo': self.ativo,
+            'data_criacao': self.data_criacao.isoformat() if self.data_criacao else None,
+        }
+
+    def __repr__(self):
+        return f'<Usuario {self.email} ({self.papel})>'
+
 
 class Cliente(db.Model):
     """Modelo de Cliente"""
@@ -29,6 +63,7 @@ class Cliente(db.Model):
     consentimento_versao = db.Column(db.String(20), nullable=True)
     data_exclusao = db.Column(db.DateTime, nullable=True)
     ativo = db.Column(db.Boolean, default=True)
+    pontos_fidelidade = db.Column(db.Integer, default=0)
     
     # Relacionamentos
     vendas = db.relationship('Venda', backref='cliente', lazy=True, cascade='all, delete-orphan')
@@ -48,7 +83,8 @@ class Cliente(db.Model):
             'consentimento_lgpd': self.consentimento_lgpd,
             'consentimento_versao': self.consentimento_versao,
             'data_consentimento': self.data_consentimento.isoformat() if self.data_consentimento else None,
-            'ativo': self.ativo
+            'ativo': self.ativo,
+            'pontos_fidelidade': self.pontos_fidelidade or 0
         }
 
 
@@ -84,6 +120,8 @@ class Produto(db.Model):
     categoria = db.Column(db.String(50))
     descricao = db.Column(db.Text)
     preco = db.Column(db.DECIMAL(10, 2), nullable=False)
+    estoque_atual = db.Column(db.Integer, default=0)
+    estoque_minimo = db.Column(db.Integer, default=0)
     ativo = db.Column(db.Boolean, default=True)
     data_criacao = db.Column(db.DateTime, default=_utcnow)
     data_atualizacao = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
@@ -101,6 +139,8 @@ class Produto(db.Model):
             'categoria': self.categoria,
             'descricao': self.descricao,
             'preco': float(self.preco),
+            'estoque_atual': self.estoque_atual,
+            'estoque_minimo': self.estoque_minimo,
             'ativo': self.ativo
         }
 
@@ -191,4 +231,33 @@ class Pagamento(db.Model):
             'metodo': self.metodo,
             'status': self.status,
             'referencia_transacao': self.referencia_transacao
+        }
+
+
+class LogAcao(db.Model):
+    """Modelo de Histórico/Audit Log de ações do sistema"""
+    __tablename__ = 'log_acao'
+
+    id_log = db.Column(db.Integer, primary_key=True)
+    id_usuario = db.Column(db.Integer, db.ForeignKey('usuario.id_usuario'), nullable=True)
+    acao = db.Column(db.String(50), nullable=False)  # 'criar', 'editar', 'excluir', 'login', 'logout'
+    entidade = db.Column(db.String(50), nullable=False)  # 'cliente', 'produto', 'venda', 'usuario'
+    id_entidade = db.Column(db.Integer)
+    detalhes = db.Column(db.Text)
+    ip = db.Column(db.String(45))
+    data_hora = db.Column(db.DateTime, default=_utcnow)
+
+    usuario = db.relationship('Usuario', backref='logs', lazy=True)
+
+    def to_dict(self):
+        return {
+            'id_log': self.id_log,
+            'id_usuario': self.id_usuario,
+            'usuario_nome': self.usuario.nome if self.usuario else None,
+            'acao': self.acao,
+            'entidade': self.entidade,
+            'id_entidade': self.id_entidade,
+            'detalhes': self.detalhes,
+            'ip': self.ip,
+            'data_hora': self.data_hora.isoformat() if self.data_hora else None,
         }

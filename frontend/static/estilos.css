@@ -193,6 +193,22 @@ img { max-width: 100%; display: block; }
 .nav-logout { color: var(--rosa-light) !important; }
 .nav-logout:hover { color: var(--branco) !important; background: rgba(244,143,177,.15) !important; }
 
+/* User info na navbar */
+.nav-user-info {
+    display: flex;
+    align-items: center;
+    color: var(--rosa-light);
+    font-size: .85rem;
+    padding: .5rem .75rem;
+    white-space: nowrap;
+    opacity: .9;
+}
+
+/* Badges de papel */
+.badge { display: inline-block; padding: .15rem .5rem; border-radius: .75rem; font-size: .75rem; font-weight: 600; }
+.badge-admin { background: var(--roxo-medio); color: var(--branco); }
+.badge-operador { background: var(--rosa-light); color: var(--roxo-escuro); }
+
 /* Separator */
 .nav-separator {
     border-left: 1px solid rgba(255,255,255,.2);

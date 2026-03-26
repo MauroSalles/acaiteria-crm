@@ -21,7 +21,7 @@ import hashlib
 import secrets
 from pydantic import BaseModel, EmailStr, ValidationError, field_validator
 
-from .models import db, Cliente, Produto, Venda, ItemVenda, Pagamento, ConsentimentoHistorico
+from .models import db, Usuario, Cliente, Produto, Venda, ItemVenda, Pagamento, ConsentimentoHistorico, LogAcao
 
 # =============================================================================
 # CONFIGURAÇÃO INICIAL
@@ -116,6 +116,15 @@ def adicionar_headers_seguranca(response):
     return response
 
 
+@app.context_processor
+def inject_user():
+    """Injeta dados do usuário logado em todos os templates."""
+    return {
+        'usuario_nome': session.get('usuario_nome', ''),
+        'papel': session.get('papel', ''),
+    }
+
+
 class ClienteCreateSchema(BaseModel):
     nome: str
     telefone: str | None = None
@@ -138,6 +147,8 @@ class ProdutoCreateSchema(BaseModel):
     categoria: str | None = None
     descricao: str | None = None
     preco: float
+    estoque_atual: int | None = 0
+    estoque_minimo: int | None = 0
 
 
 class VendaItemSchema(BaseModel):
@@ -190,18 +201,15 @@ def validar_payload(schema_cls):
 
 
 # =============================================================================
-# AUTENTICAÇÃO — PIN simples para proteger o sistema
+# AUTENTICAÇÃO — Login com email + senha e papéis (admin / operador)
 # =============================================================================
-
-# PIN padrão (pode ser alterado via variável de ambiente)
-APP_PIN = os.environ.get('APP_PIN', '1234')
 
 
 def login_required(f):
-    """Decorator que protege rotas HTML exigindo login por PIN."""
+    """Decorator que protege rotas HTML exigindo login."""
     @wraps(f)
     def decorated(*args, **kwargs):
-        if not session.get('autenticado'):
+        if not session.get('usuario_id'):
             return redirect('/login')
         return f(*args, **kwargs)
     return decorated
@@ -211,10 +219,59 @@ def api_login_required(f):
     """Decorator que protege rotas API exigindo login."""
     @wraps(f)
     def decorated(*args, **kwargs):
-        if not session.get('autenticado'):
+        if not session.get('usuario_id'):
             return jsonify({'erro': 'Autenticação necessária'}), 401
         return f(*args, **kwargs)
     return decorated
+
+
+def admin_required(f):
+    """Decorator que exige papel 'admin' para rotas HTML."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get('usuario_id'):
+            return redirect('/login')
+        if session.get('papel') != 'admin':
+            return render_template('index.html', stats=_stats_default(),
+                                   error='Acesso restrito a administradores'), 403
+        return f(*args, **kwargs)
+    return decorated
+
+
+def api_admin_required(f):
+    """Decorator que exige papel 'admin' para rotas API."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get('usuario_id'):
+            return jsonify({'erro': 'Autenticação necessária'}), 401
+        if session.get('papel') != 'admin':
+            return jsonify({'erro': 'Acesso restrito a administradores'}), 403
+        return f(*args, **kwargs)
+    return decorated
+
+
+def _stats_default():
+    return {
+        'total_clientes': 0, 'total_vendas': 0, 'faturamento_total': 0,
+        'vendas_semana': 0, 'clientes_consentimento': 0, 'taxa_consentimento': 0,
+    }
+
+
+def registrar_log(acao, entidade, id_entidade=None, detalhes=None):
+    """Registra uma ação no audit log (sem commit separado para evitar conflito)."""
+    try:
+        log = LogAcao(
+            id_usuario=session.get('usuario_id'),
+            acao=acao,
+            entidade=entidade,
+            id_entidade=id_entidade,
+            detalhes=detalhes,
+            ip=request.remote_addr,
+        )
+        db.session.add(log)
+        db.session.commit()
+    except Exception:
+        pass
 
 
 @health_ns.route('/health')
@@ -233,20 +290,27 @@ class HealthResource(Resource):
 @app.route('/login', methods=['GET', 'POST'])
 @limiter.limit("5 per minute", methods=["POST"])
 def login():
-    """Página de login com PIN"""
+    """Página de login com email e senha"""
     if request.method == 'POST':
-        pin = request.form.get('pin', '')
-        if pin == APP_PIN:
-            session['autenticado'] = True
+        email = request.form.get('email', '').strip().lower()
+        senha = request.form.get('senha', '')
+        usuario = Usuario.query.filter_by(email=email, ativo=True).first()
+        if usuario and usuario.verificar_senha(senha):
+            session['usuario_id'] = usuario.id_usuario
+            session['usuario_nome'] = usuario.nome
+            session['papel'] = usuario.papel
+            session['autenticado'] = True  # compatibilidade
+            registrar_log('login', 'usuario', usuario.id_usuario, f'Login de {usuario.nome}')
             return redirect('/')
-        logger.warning('Tentativa de login com PIN incorreto de %s', request.remote_addr)
-        return render_template('login.html', erro='PIN incorreto. Tente novamente.')
+        logger.warning('Tentativa de login falha para %s de %s', email, request.remote_addr)
+        return render_template('login.html', erro='Email ou senha incorretos.')
     return render_template('login.html')
 
 
 @app.route('/logout')
 def logout():
     """Encerrar sessão"""
+    registrar_log('logout', 'usuario', session.get('usuario_id'), 'Logout')
     session.clear()
     return redirect('/login')
 
@@ -285,18 +349,14 @@ def index():
             'taxa_consentimento': round((clientes_consentimento / total_clientes * 100) if total_clientes > 0 else 0, 2)
         }
         
-        return render_template('index.html', stats=stats)
+        return render_template('index.html', stats=stats,
+                               usuario_nome=session.get('usuario_nome', ''),
+                               papel=session.get('papel', ''))
     except Exception as e:
         logger.exception('Erro no dashboard: %s', e)
-        stats_default = {
-            'total_clientes': 0,
-            'total_vendas': 0,
-            'faturamento_total': 0,
-            'vendas_semana': 0,
-            'clientes_consentimento': 0,
-            'taxa_consentimento': 0,
-        }
-        return render_template('index.html', stats=stats_default, error=str(e))
+        return render_template('index.html', stats=_stats_default(), error=str(e),
+                               usuario_nome=session.get('usuario_nome', ''),
+                               papel=session.get('papel', ''))
 
 
 # =============================================================================
@@ -386,6 +446,7 @@ def criar_cliente():
             db.session.add(entrada)
 
         db.session.commit()
+        registrar_log('criar', 'cliente', cliente.id_cliente, f'Cliente criado: {cliente.nome}')
 
         return jsonify(cliente.to_dict()), 201
     except Exception as e:
@@ -432,6 +493,7 @@ def atualizar_cliente(id_cliente):
         cliente.observacoes = dados.get('observacoes', cliente.observacoes)
         
         db.session.commit()
+        registrar_log('editar', 'cliente', id_cliente, f'Cliente editado: {cliente.nome}')
         
         return jsonify(cliente.to_dict())
     except Exception as e:
@@ -456,6 +518,7 @@ def deletar_cliente(id_cliente):
         cliente.data_exclusao = datetime.now(timezone.utc)
         
         db.session.commit()
+        registrar_log('excluir', 'cliente', id_cliente, 'Cliente anonimizado (LGPD)')
         
         return jsonify({'mensagem': 'Cliente anonimizado conforme LGPD'}), 200
     except Exception as e:
@@ -539,10 +602,42 @@ def historico_consentimento(id_cliente):
 @limiter.limit("120 per minute")
 @api_login_required
 def listar_produtos():
-    """Listar todos os produtos ativos"""
+    """Listar produtos com filtros opcionais: busca, categoria, incluir_inativos"""
     try:
-        produtos = Produto.query.filter_by(ativo=True).all()
+        incluir_inativos = request.args.get('incluir_inativos', '').lower() == 'true'
+        query = Produto.query if incluir_inativos else Produto.query.filter_by(ativo=True)
+
+        busca = request.args.get('busca', '').strip()
+        if busca:
+            filtro = f'%{busca}%'
+            query = query.filter(
+                db.or_(
+                    Produto.nome_produto.ilike(filtro),
+                    Produto.descricao.ilike(filtro)
+                )
+            )
+
+        categoria = request.args.get('categoria', '').strip()
+        if categoria:
+            query = query.filter(Produto.categoria.ilike(f'%{categoria}%'))
+
+        produtos = query.order_by(Produto.nome_produto).all()
         return jsonify([produto.to_dict() for produto in produtos])
+    except Exception as e:
+        return _erro_interno(e)
+
+
+@app.route('/api/produtos/estoque-baixo', methods=['GET'])
+@api_login_required
+def produtos_estoque_baixo():
+    """Lista produtos com estoque abaixo do mínimo (alertas)"""
+    try:
+        produtos = Produto.query.filter(
+            Produto.ativo == True,
+            Produto.estoque_atual <= Produto.estoque_minimo,
+            (Produto.estoque_minimo > 0) | (Produto.estoque_atual > 0)
+        ).order_by(Produto.estoque_atual).all()
+        return jsonify([p.to_dict() for p in produtos])
     except Exception as e:
         return _erro_interno(e)
 
@@ -560,11 +655,14 @@ def criar_produto():
             categoria=dados.get('categoria'),
             descricao=dados.get('descricao'),
             preco=Decimal(str(dados.get('preco'))),
+            estoque_atual=int(dados.get('estoque_atual', 0)) if dados.get('estoque_atual') is not None else 0,
+            estoque_minimo=int(dados.get('estoque_minimo', 5)) if dados.get('estoque_minimo') is not None else 5,
             ativo=True
         )
         
         db.session.add(produto)
         db.session.commit()
+        registrar_log('criar', 'produto', produto.id_produto, f'Produto criado: {produto.nome_produto}')
         
         return jsonify(produto.to_dict()), 201
     except Exception as e:
@@ -609,8 +707,13 @@ def atualizar_produto(id_produto):
             produto.preco = Decimal(str(dados['preco']))
         if 'ativo' in dados:
             produto.ativo = bool(dados['ativo'])
+        if 'estoque_atual' in dados and dados['estoque_atual'] is not None:
+            produto.estoque_atual = max(0, int(dados['estoque_atual']))
+        if 'estoque_minimo' in dados and dados['estoque_minimo'] is not None:
+            produto.estoque_minimo = max(0, int(dados['estoque_minimo']))
 
         db.session.commit()
+        registrar_log('editar', 'produto', id_produto, f'Produto editado: {produto.nome_produto}')
         return jsonify(produto.to_dict())
     except Exception as e:
         db.session.rollback()
@@ -629,10 +732,54 @@ def deletar_produto(id_produto):
 
         produto.ativo = False
         db.session.commit()
+        registrar_log('excluir', 'produto', id_produto, f'Produto desativado: {produto.nome_produto}')
         return jsonify({'mensagem': f'Produto desativado com sucesso'})
     except Exception as e:
         db.session.rollback()
         return _erro_interno(e)
+
+
+# =============================================================================
+# ROTAS - HISTÓRICO DE AÇÕES (AUDIT LOG)
+# =============================================================================
+
+@app.route('/api/logs', methods=['GET'])
+@limiter.limit("60 per minute")
+@api_admin_required
+def listar_logs():
+    """Listar histórico de ações (somente admin). Suporta paginação e filtros."""
+    try:
+        pagina = request.args.get('pagina', 1, type=int)
+        por_pagina = min(request.args.get('por_pagina', 50, type=int), 100)
+        entidade = request.args.get('entidade')
+        acao = request.args.get('acao')
+
+        query = LogAcao.query.order_by(LogAcao.data_hora.desc())
+
+        if entidade:
+            query = query.filter(LogAcao.entidade == entidade)
+        if acao:
+            query = query.filter(LogAcao.acao == acao)
+
+        total = query.count()
+        logs = query.offset((pagina - 1) * por_pagina).limit(por_pagina).all()
+
+        return jsonify({
+            'logs': [l.to_dict() for l in logs],
+            'total': total,
+            'pagina': pagina,
+            'por_pagina': por_pagina,
+            'total_paginas': (total + por_pagina - 1) // por_pagina,
+        })
+    except Exception as e:
+        return _erro_interno(e)
+
+
+@app.route('/historico')
+@admin_required
+def pagina_historico():
+    """Página de histórico de ações (admin only)"""
+    return render_template('historico.html')
 
 
 # =============================================================================
@@ -643,10 +790,52 @@ def deletar_produto(id_produto):
 @limiter.limit("120 per minute")
 @api_login_required
 def listar_vendas():
-    """Listar todas as vendas"""
+    """Listar vendas com filtros: data_inicio, data_fim, cliente, forma_pagamento, pagina"""
     try:
-        vendas = Venda.query.order_by(Venda.data_venda.desc()).all()
-        return jsonify([venda.to_dict() for venda in vendas])
+        query = Venda.query
+
+        # Filtro por intervalo de datas
+        data_inicio = request.args.get('data_inicio', '').strip()
+        data_fim = request.args.get('data_fim', '').strip()
+        if data_inicio:
+            try:
+                dt_ini = datetime.strptime(data_inicio, '%Y-%m-%d')
+                query = query.filter(Venda.data_venda >= dt_ini)
+            except ValueError:
+                pass
+        if data_fim:
+            try:
+                dt_fim = datetime.strptime(data_fim, '%Y-%m-%d') + timedelta(days=1)
+                query = query.filter(Venda.data_venda < dt_fim)
+            except ValueError:
+                pass
+
+        # Filtro por cliente
+        id_cliente = request.args.get('id_cliente', type=int)
+        if id_cliente:
+            query = query.filter_by(id_cliente=id_cliente)
+
+        # Filtro por forma de pagamento
+        forma = request.args.get('forma_pagamento', '').strip()
+        if forma:
+            query = query.filter(Venda.forma_pagamento.ilike(f'%{forma}%'))
+
+        # Paginação
+        pagina = request.args.get('pagina', 1, type=int)
+        por_pagina = min(request.args.get('por_pagina', 50, type=int), 100)
+        total = query.count()
+
+        vendas = query.order_by(Venda.data_venda.desc()).offset(
+            (pagina - 1) * por_pagina
+        ).limit(por_pagina).all()
+
+        return jsonify({
+            'vendas': [venda.to_dict() for venda in vendas],
+            'total': total,
+            'pagina': pagina,
+            'por_pagina': por_pagina,
+            'total_paginas': (total + por_pagina - 1) // por_pagina
+        })
     except Exception as e:
         return _erro_interno(e)
 
@@ -694,6 +883,14 @@ def criar_venda():
                 return jsonify({'erro': f'Produto "{produto.nome_produto}" está desativado e não pode ser vendido'}), 400
             
             quantidade = int(item_dados['quantidade'])
+
+            # Verificar estoque somente se controle ativo (estoque ou mínimo > 0)
+            controle_ativo = (produto.estoque_atual or 0) > 0 or (produto.estoque_minimo or 0) > 0
+            if controle_ativo and produto.estoque_atual < quantidade:
+                return jsonify({
+                    'erro': f'Estoque insuficiente para "{produto.nome_produto}": disponível {produto.estoque_atual}, solicitado {quantidade}'
+                }), 400
+
             preco_unitario = Decimal(str(produto.preco))
             subtotal = preco_unitario * quantidade
             
@@ -723,10 +920,25 @@ def criar_venda():
         venda.pagamento = pagamento
         venda.status_pagamento = 'Concluído'
         
+        # Descontar estoque dos produtos vendidos (somente se controlado)
+        for item in venda.itens:
+            prod = Produto.query.get(item.id_produto)
+            if prod and ((prod.estoque_atual or 0) > 0 or (prod.estoque_minimo or 0) > 0):
+                prod.estoque_atual = max(0, prod.estoque_atual - item.quantidade)
+
+        # Acumular pontos de fidelidade (1 ponto por R$1 gasto)
+        pontos_ganhos = int(valor_total)
+        if pontos_ganhos > 0:
+            cliente.pontos_fidelidade = (cliente.pontos_fidelidade or 0) + pontos_ganhos
+
         db.session.add(venda)
         db.session.commit()
+        registrar_log('criar', 'venda', venda.id_venda, f'Venda #{venda.id_venda} - R${float(venda.valor_total):.2f}')
         
-        return jsonify(venda.to_dict()), 201
+        resultado = venda.to_dict()
+        resultado['pontos_ganhos'] = pontos_ganhos
+        resultado['pontos_total'] = cliente.pontos_fidelidade or 0
+        return jsonify(resultado), 201
     except Exception as e:
         db.session.rollback()
         if isinstance(e, ValueError):
@@ -744,6 +956,163 @@ def obter_venda(id_venda):
             return jsonify({'erro': 'Venda não encontrada'}), 404
         
         return jsonify(venda.to_dict())
+    except Exception as e:
+        return _erro_interno(e)
+
+
+# =============================================================================
+# ROTAS - FIDELIDADE
+# =============================================================================
+
+@app.route('/api/clientes/<int:id_cliente>/pontos', methods=['GET'])
+@api_login_required
+def obter_pontos_fidelidade(id_cliente):
+    """Consultar pontos de fidelidade de um cliente"""
+    try:
+        cliente = Cliente.query.get(id_cliente)
+        if not cliente or not cliente.ativo:
+            return jsonify({'erro': 'Cliente não encontrado'}), 404
+        return jsonify({
+            'id_cliente': cliente.id_cliente,
+            'nome': cliente.nome,
+            'pontos': cliente.pontos_fidelidade or 0
+        })
+    except Exception as e:
+        return _erro_interno(e)
+
+
+@app.route('/api/clientes/<int:id_cliente>/pontos/resgatar', methods=['POST'])
+@limiter.limit("30 per minute")
+@api_login_required
+def resgatar_pontos(id_cliente):
+    """Resgatar pontos de fidelidade (cada 100 pontos = R$5 de desconto)"""
+    try:
+        cliente = Cliente.query.get(id_cliente)
+        if not cliente or not cliente.ativo:
+            return jsonify({'erro': 'Cliente não encontrado'}), 404
+
+        dados = request.get_json(silent=True) or {}
+        pontos_resgatar = int(dados.get('pontos', 0))
+
+        if pontos_resgatar <= 0:
+            return jsonify({'erro': 'Quantidade de pontos deve ser positiva'}), 400
+
+        pontos_disponiveis = cliente.pontos_fidelidade or 0
+        if pontos_resgatar > pontos_disponiveis:
+            return jsonify({'erro': f'Pontos insuficientes. Disponível: {pontos_disponiveis}'}), 400
+
+        # Regra: cada 100 pontos = R$5.00 de desconto
+        if pontos_resgatar < 100:
+            return jsonify({'erro': 'Mínimo de 100 pontos para resgate'}), 400
+
+        desconto = Decimal(str((pontos_resgatar // 100) * 5))
+        pontos_usados = (pontos_resgatar // 100) * 100  # usa múltiplos de 100
+
+        cliente.pontos_fidelidade = pontos_disponiveis - pontos_usados
+        db.session.commit()
+        registrar_log('resgatar', 'fidelidade', cliente.id_cliente,
+                       f'{pontos_usados} pontos resgatados → R${float(desconto):.2f} desconto')
+
+        return jsonify({
+            'id_cliente': cliente.id_cliente,
+            'pontos_resgatados': pontos_usados,
+            'desconto_gerado': float(desconto),
+            'pontos_restantes': cliente.pontos_fidelidade
+        })
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
+@app.route('/api/fidelidade/ranking', methods=['GET'])
+@api_login_required
+def ranking_fidelidade():
+    """Top 10 clientes com mais pontos"""
+    try:
+        clientes = Cliente.query.filter(
+            Cliente.ativo == True,
+            Cliente.pontos_fidelidade > 0
+        ).order_by(Cliente.pontos_fidelidade.desc()).limit(10).all()
+
+        return jsonify([{
+            'id_cliente': c.id_cliente,
+            'nome': c.nome,
+            'pontos': c.pontos_fidelidade or 0
+        } for c in clientes])
+    except Exception as e:
+        return _erro_interno(e)
+
+
+# =============================================================================
+# ROTAS - DASHBOARD GRÁFICOS
+# =============================================================================
+
+@app.route('/api/dashboard/graficos', methods=['GET'])
+@api_login_required
+def dashboard_graficos():
+    """Dados para gráficos do dashboard: vendas por dia (7d) e por forma de pagamento"""
+    try:
+        hoje = datetime.now(timezone.utc).date()
+        inicio = hoje - timedelta(days=6)
+
+        # Vendas por dia (últimos 7 dias)
+        vendas_dia = db.session.query(
+            db.func.date(Venda.data_venda).label('dia'),
+            db.func.count(Venda.id_venda).label('qtd'),
+            db.func.coalesce(db.func.sum(Venda.valor_total), 0).label('total')
+        ).filter(
+            db.func.date(Venda.data_venda) >= inicio
+        ).group_by(
+            db.func.date(Venda.data_venda)
+        ).order_by(
+            db.func.date(Venda.data_venda)
+        ).all()
+
+        # Montar dict dia → dados (preencher dias sem vendas com 0)
+        mapa = {str(r.dia): {'qtd': r.qtd, 'total': float(r.total)} for r in vendas_dia}
+        dias = []
+        for i in range(7):
+            d = inicio + timedelta(days=i)
+            ds = str(d)
+            dias.append({
+                'data': ds,
+                'label': d.strftime('%d/%m'),
+                'quantidade': mapa.get(ds, {}).get('qtd', 0),
+                'faturamento': mapa.get(ds, {}).get('total', 0),
+            })
+
+        # Vendas por forma de pagamento
+        pagamentos = db.session.query(
+            Pagamento.metodo,
+            db.func.count(Pagamento.id_pagamento).label('qtd'),
+            db.func.coalesce(db.func.sum(Pagamento.valor_pago), 0).label('total')
+        ).group_by(Pagamento.metodo).all()
+
+        por_pagamento = [
+            {'forma': p.metodo, 'quantidade': p.qtd, 'total': float(p.total)}
+            for p in pagamentos
+        ]
+
+        # Top 5 produtos mais vendidos
+        top_produtos = db.session.query(
+            Produto.nome_produto,
+            db.func.sum(ItemVenda.quantidade).label('qtd')
+        ).join(ItemVenda).filter(
+            Produto.ativo == True
+        ).group_by(Produto.nome_produto).order_by(
+            db.func.sum(ItemVenda.quantidade).desc()
+        ).limit(5).all()
+
+        produtos_ranking = [
+            {'produto': p.nome_produto, 'quantidade': int(p.qtd)}
+            for p in top_produtos
+        ]
+
+        return jsonify({
+            'vendas_por_dia': dias,
+            'por_forma_pagamento': por_pagamento,
+            'top_produtos': produtos_ranking,
+        })
     except Exception as e:
         return _erro_interno(e)
 
@@ -947,6 +1316,93 @@ def exportar_clientes_csv():
         return _erro_interno(e)
 
 
+@app.route('/api/exportar/relatorio-pdf', methods=['GET'])
+@api_login_required
+def exportar_relatorio_pdf():
+    """Gera PDF com relatório de vendas do dia (ou data informada)"""
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.lib.units import cm
+
+    try:
+        data_str = request.args.get('data', datetime.now(timezone.utc).strftime('%Y-%m-%d'))
+        try:
+            data_ref = datetime.strptime(data_str, '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'erro': 'Data inválida. Use formato YYYY-MM-DD'}), 400
+
+        # Buscar vendas do dia
+        vendas = Venda.query.filter(
+            db.func.date(Venda.data_venda) == data_ref
+        ).order_by(Venda.data_venda).all()
+
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(buf, pagesize=A4,
+                                topMargin=1.5 * cm, bottomMargin=1.5 * cm)
+        styles = getSampleStyleSheet()
+        elements = []
+
+        # Título
+        elements.append(Paragraph(
+            f'<b>Combina Açaí — Relatório de Vendas</b>', styles['Title']))
+        elements.append(Paragraph(
+            f'Data: {data_ref.strftime("%d/%m/%Y")}', styles['Normal']))
+        elements.append(Spacer(1, 0.5 * cm))
+
+        if vendas:
+            # Tabela de vendas
+            header = ['#', 'Cliente', 'Itens', 'Forma Pgto', 'Valor (R$)']
+            rows = [header]
+            total_geral = 0
+            for v in vendas:
+                cliente_nome = v.cliente.nome if v.cliente else '—'
+                qtd_itens = sum(i.quantidade for i in v.itens) if v.itens else 0
+                rows.append([
+                    str(v.id_venda),
+                    cliente_nome[:25],
+                    str(qtd_itens),
+                    v.forma_pagamento or '—',
+                    f'{float(v.valor_total):.2f}',
+                ])
+                total_geral += float(v.valor_total)
+
+            rows.append(['', '', '', 'TOTAL', f'{total_geral:.2f}'])
+
+            t = Table(rows, repeatRows=1)
+            t.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#7B1FA2')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 9),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                ('ALIGN', (0, 0), (0, -1), 'CENTER'),
+                ('ALIGN', (-1, 0), (-1, -1), 'RIGHT'),
+                ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#F3E5F5')),
+                ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+            ]))
+            elements.append(t)
+        else:
+            elements.append(Paragraph('Nenhuma venda registrada nesta data.', styles['Normal']))
+
+        elements.append(Spacer(1, 1 * cm))
+        elements.append(Paragraph(
+            f'Gerado em {datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M UTC")} — CRM Açaiteria',
+            styles['Italic']))
+
+        doc.build(elements)
+        buf.seek(0)
+        return send_file(
+            buf,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=f'relatorio_{data_ref.strftime("%Y%m%d")}.pdf'
+        )
+    except Exception as e:
+        return _erro_interno(e)
+
+
 # =============================================================================
 # PÁGINAS HTML
 # =============================================================================
@@ -999,6 +1455,154 @@ def politica_privacidade():
     return render_template('politica_privacidade.html')
 
 
+@app.route('/usuarios')
+@admin_required
+def pagina_usuarios():
+    """Página de gerenciamento de usuários (admin only)"""
+    return render_template('usuarios.html')
+
+
+# =============================================================================
+# ROTAS - GESTÃO DE USUÁRIOS (admin only)
+# =============================================================================
+
+class UsuarioCreateSchema(BaseModel):
+    nome: str
+    email: EmailStr
+    senha: str
+    papel: str = 'operador'
+
+    @field_validator('nome')
+    @classmethod
+    def nome_valido(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) < 2:
+            raise ValueError('Nome deve ter ao menos 2 caracteres')
+        return v
+
+    @field_validator('senha')
+    @classmethod
+    def senha_forte(cls, v: str) -> str:
+        if len(v) < 4:
+            raise ValueError('Senha deve ter ao menos 4 caracteres')
+        return v
+
+    @field_validator('papel')
+    @classmethod
+    def papel_valido(cls, v: str) -> str:
+        if v not in ('admin', 'operador'):
+            raise ValueError('Papel deve ser "admin" ou "operador"')
+        return v
+
+
+@app.route('/api/usuarios', methods=['GET'])
+@api_admin_required
+def listar_usuarios():
+    """Listar todos os usuários (admin only)"""
+    try:
+        usuarios = Usuario.query.order_by(Usuario.nome).all()
+        return jsonify([u.to_dict() for u in usuarios])
+    except Exception as e:
+        return _erro_interno(e)
+
+
+@app.route('/api/usuarios', methods=['POST'])
+@limiter.limit("10 per minute")
+@api_admin_required
+def criar_usuario():
+    """Criar novo usuário (admin only)"""
+    try:
+        dados = validar_payload(UsuarioCreateSchema)
+
+        if Usuario.query.filter_by(email=dados['email'].lower()).first():
+            return jsonify({'erro': 'Email já cadastrado'}), 409
+
+        usuario = Usuario(
+            nome=dados['nome'],
+            email=dados['email'].lower(),
+            papel=dados.get('papel', 'operador'),
+        )
+        usuario.set_senha(dados['senha'])
+
+        db.session.add(usuario)
+        db.session.commit()
+        return jsonify(usuario.to_dict()), 201
+    except Exception as e:
+        db.session.rollback()
+        if isinstance(e, ValueError):
+            return jsonify({'erro': 'Payload inválido', 'detalhes': str(e)}), 400
+        return _erro_interno(e)
+
+
+@app.route('/api/usuarios/<int:id_usuario>', methods=['PUT'])
+@limiter.limit("10 per minute")
+@api_admin_required
+def atualizar_usuario(id_usuario):
+    """Atualizar usuário (admin only)"""
+    try:
+        usuario = Usuario.query.get(id_usuario)
+        if not usuario:
+            return jsonify({'erro': 'Usuário não encontrado'}), 404
+
+        dados = request.get_json(silent=True) or {}
+
+        if 'nome' in dados and dados['nome']:
+            usuario.nome = dados['nome'].strip()
+        if 'email' in dados and dados['email']:
+            novo_email = dados['email'].strip().lower()
+            existente = Usuario.query.filter_by(email=novo_email).first()
+            if existente and existente.id_usuario != id_usuario:
+                return jsonify({'erro': 'Email já cadastrado por outro usuário'}), 409
+            usuario.email = novo_email
+        if 'papel' in dados and dados['papel'] in ('admin', 'operador'):
+            usuario.papel = dados['papel']
+        if 'senha' in dados and dados['senha']:
+            if len(dados['senha']) < 4:
+                return jsonify({'erro': 'Senha deve ter ao menos 4 caracteres'}), 400
+            usuario.set_senha(dados['senha'])
+        if 'ativo' in dados:
+            usuario.ativo = bool(dados['ativo'])
+
+        db.session.commit()
+        return jsonify(usuario.to_dict())
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
+@app.route('/api/usuarios/<int:id_usuario>', methods=['DELETE'])
+@api_admin_required
+def deletar_usuario(id_usuario):
+    """Desativar usuário (admin only, não pode desativar a si mesmo)"""
+    try:
+        if session.get('usuario_id') == id_usuario:
+            return jsonify({'erro': 'Não é possível desativar seu próprio usuário'}), 400
+
+        usuario = Usuario.query.get(id_usuario)
+        if not usuario:
+            return jsonify({'erro': 'Usuário não encontrado'}), 404
+
+        usuario.ativo = False
+        db.session.commit()
+        return jsonify({'mensagem': f'Usuário {usuario.nome} desativado'})
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
+@app.route('/api/me', methods=['GET'])
+@api_login_required
+def usuario_atual():
+    """Retorna dados do usuário logado"""
+    try:
+        usuario = Usuario.query.get(session.get('usuario_id'))
+        if not usuario:
+            return jsonify({'erro': 'Usuário não encontrado'}), 404
+        return jsonify(usuario.to_dict())
+    except Exception as e:
+        return _erro_interno(e)
+
+
 # =============================================================================
 # TRATAMENTO DE ERROS
 # =============================================================================
@@ -1014,11 +1618,30 @@ def erro_interno(erro):
 
 
 # =============================================================================
+# SEED — Cria admin padrão se não existir nenhum usuário
+# =============================================================================
+
+def _seed_admin():
+    """Cria usuário admin padrão caso a tabela esteja vazia."""
+    if Usuario.query.first() is None:
+        admin = Usuario(
+            nome='Administrador',
+            email=os.environ.get('ADMIN_EMAIL', 'admin@acaiteria.com'),
+            papel='admin',
+        )
+        admin.set_senha(os.environ.get('ADMIN_SENHA', 'admin123'))
+        db.session.add(admin)
+        db.session.commit()
+        logger.info('Admin padrão criado: %s', admin.email)
+
+
+# =============================================================================
 # CRIAR TABELAS (usado pelo gunicorn na nuvem)
 # =============================================================================
 
 with app.app_context():
     db.create_all()
+    _seed_admin()
 
 
 if __name__ == '__main__':

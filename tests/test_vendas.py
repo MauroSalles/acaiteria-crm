@@ -11,10 +11,12 @@ def _setup_cliente_e_produto(client, consentimento=True):
         'consentimento_lgpd': consentimento,
         'versao_politica': 'v1.0',
     })
+    assert rc.status_code == 201, f'Falha ao criar cliente: {rc.status_code} {rc.data}'
     rp = client.post('/api/produtos', json={
         'nome_produto': 'Açaí 500ml',
         'preco': 18.90,
     })
+    assert rp.status_code == 201, f'Falha ao criar produto: {rp.status_code} {rp.data}'
     return rc.get_json()['id_cliente'], rp.get_json()['id_produto']
 
 
@@ -108,7 +110,9 @@ class TestListarVendas:
     def test_listar_vendas_vazio(self, client):
         resp = client.get('/api/vendas')
         assert resp.status_code == 200
-        assert resp.get_json() == []
+        data = resp.get_json()
+        assert data['vendas'] == []
+        assert data['total'] == 0
 
     def test_listar_com_vendas(self, client):
         cid, pid = _setup_cliente_e_produto(client, consentimento=True)
@@ -118,7 +122,22 @@ class TestListarVendas:
         })
         resp = client.get('/api/vendas')
         assert resp.status_code == 200
-        assert len(resp.get_json()) == 1
+        data = resp.get_json()
+        assert len(data['vendas']) == 1
+        assert data['total'] == 1
+
+    def test_filtrar_por_forma_pagamento(self, client):
+        cid, pid = _setup_cliente_e_produto(client, consentimento=True)
+        client.post('/api/vendas', json={
+            'id_cliente': cid,
+            'forma_pagamento': 'Pix',
+            'itens': [{'id_produto': pid, 'quantidade': 1}],
+        })
+        resp = client.get('/api/vendas?forma_pagamento=Pix')
+        data = resp.get_json()
+        assert data['total'] == 1
+        resp2 = client.get('/api/vendas?forma_pagamento=Cartao')
+        assert resp2.get_json()['total'] == 0
 
     def test_obter_venda_por_id(self, client):
         cid, pid = _setup_cliente_e_produto(client, consentimento=True)

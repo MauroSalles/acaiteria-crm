@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Clientes - Açaiteria CRM</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <meta name="theme-color" content="#7B1FA2">
 </head>
 <body>
     <div class="container">
@@ -36,7 +38,12 @@
                     </ul>
                 </li>
                 <li><a href="/politica-privacidade">🔒 LGPD</a></li>
+                {% if papel == 'admin' %}
+                <li><a href="/usuarios">👤 Usuários</a></li>
+                <li><a href="/historico">📋 Histórico</a></li>
+                {% endif %}
                 <li class="nav-separator"></li>
+                <li class="nav-user-info">👤 {{ usuario_nome }}</li>
                 <li><a href="/logout" class="nav-logout">⬅ Sair</a></li>
             </ul>
         </nav>
@@ -69,7 +76,7 @@
                                 <th>Nome</th>
                                 <th>Telefone</th>
                                 <th>Email</th>
-                                <th>Vendas</th>
+                                <th>Pontos 🌟</th>
                                 <th>LGPD</th>
                                 <th>Ações</th>
                             </tr>
@@ -118,7 +125,7 @@
                         <td><strong>${c.nome}</strong></td>
                         <td>${c.telefone || '-'}</td>
                         <td>${c.email || '-'}</td>
-                        <td>${c.id_cliente}</td>
+                        <td><span style="color: #7B1FA2; font-weight: bold;">🌟 ${c.pontos_fidelidade || 0}</span></td>
                         <td>${c.consentimento_lgpd ? '✅' : '⚠️'}</td>
                         <td>
                             <button onclick="deletarCliente(${c.id_cliente})" class="btn-remover" style="font-size: 0.8rem;">🗑️</button>

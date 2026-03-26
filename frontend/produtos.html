@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Produtos - Açaiteria CRM</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <meta name="theme-color" content="#7B1FA2">
 </head>
 <body>
     <div class="container">
@@ -36,7 +38,12 @@
                     </ul>
                 </li>
                 <li><a href="/politica-privacidade">🔒 LGPD</a></li>
+                {% if papel == 'admin' %}
+                <li><a href="/usuarios">👤 Usuários</a></li>
+                <li><a href="/historico">📋 Histórico</a></li>
+                {% endif %}
                 <li class="nav-separator"></li>
+                <li class="nav-user-info">👤 {{ usuario_nome }}</li>
                 <li><a href="/logout" class="nav-logout">⬅ Sair</a></li>
             </ul>
         </nav>
@@ -75,6 +82,16 @@
                         <textarea id="descricao" name="descricao" rows="2"
                                   placeholder="Descrição opcional do produto"></textarea>
                     </div>
+                    <div style="display:flex;gap:1rem;flex-wrap:wrap;">
+                        <div class="form-group" style="flex:1;min-width:120px;">
+                            <label for="estoque_atual">Estoque Atual</label>
+                            <input type="number" id="estoque_atual" name="estoque_atual" min="0" value="0">
+                        </div>
+                        <div class="form-group" style="flex:1;min-width:120px;">
+                            <label for="estoque_minimo">Estoque Mínimo</label>
+                            <input type="number" id="estoque_minimo" name="estoque_minimo" min="0" value="5">
+                        </div>
+                    </div>
                     <button type="submit" class="btn btn-primary">Cadastrar Produto</button>
                 </form>
             </div>
@@ -92,7 +109,7 @@
                                 <th>Nome</th>
                                 <th>Preço</th>
                                 <th>Categoria</th>
-                                <th>Descrição</th>
+                                <th>Estoque</th>
                                 <th>Ações</th>
                             </tr>
                         </thead>
@@ -128,7 +145,9 @@
                 nome_produto: document.getElementById('nome_produto').value.trim(),
                 preco: parseFloat(document.getElementById('preco').value),
                 categoria: document.getElementById('categoria').value || undefined,
-                descricao: document.getElementById('descricao').value.trim() || undefined
+                descricao: document.getElementById('descricao').value.trim() || undefined,
+                estoque_atual: parseInt(document.getElementById('estoque_atual').value) || 0,
+                estoque_minimo: parseInt(document.getElementById('estoque_minimo').value) || 5
             };
 
             if (!dados.nome_produto || !dados.preco) {
@@ -161,12 +180,14 @@
             }
         });
 
-        function editarProduto(id, nome, preco, categoria, descricao) {
+        function editarProduto(id, nome, preco, categoria, descricao, estoqueAtual, estoqueMinimo) {
             editandoId = id;
             document.getElementById('nome_produto').value = nome;
             document.getElementById('preco').value = preco;
             document.getElementById('categoria').value = categoria || '';
             document.getElementById('descricao').value = descricao || '';
+            document.getElementById('estoque_atual').value = estoqueAtual || 0;
+            document.getElementById('estoque_minimo').value = estoqueMinimo || 5;
             document.querySelector('#form-produto button[type="submit"]').textContent = '💾 Salvar Alterações';
             window.scrollTo({ top: 0, behavior: 'smooth' });
             mostrarAlerta(`Editando produto #${id}: ${nome}`, 'info');
@@ -200,19 +221,24 @@
                     return;
                 }
 
-                tbody.innerHTML = produtos.map(p => `
+                tbody.innerHTML = produtos.map(p => {
+                    const baixo = p.estoque_atual <= p.estoque_minimo;
+                    const estoqueLabel = baixo
+                        ? `<span style="color:#c62828;font-weight:bold;">⚠️ ${p.estoque_atual}</span> / ${p.estoque_minimo}`
+                        : `${p.estoque_atual} / ${p.estoque_minimo}`;
+                    return `
                     <tr>
                         <td>${p.id_produto}</td>
-                        <td>${p.nome_produto}</td>
+                        <td>${escapeHtml(p.nome_produto)}</td>
                         <td>${formatarMoeda(p.preco)}</td>
-                        <td>${p.categoria || '-'}</td>
-                        <td>${p.descricao || '-'}</td>
+                        <td>${escapeHtml(p.categoria || '-')}</td>
+                        <td>${estoqueLabel}</td>
                         <td>
-                            <button onclick="editarProduto(${p.id_produto}, '${p.nome_produto.replace(/'/g, "\\'")}', ${p.preco}, '${(p.categoria || '').replace(/'/g, "\\'")}', '${(p.descricao || '').replace(/'/g, "\\'")}')" class="btn btn-info" style="font-size: 0.75rem; padding: 0.4rem 0.6rem;">✏️ Editar</button>
+                            <button onclick="editarProduto(${p.id_produto}, '${p.nome_produto.replace(/'/g, "\\'")}', ${p.preco}, '${(p.categoria || '').replace(/'/g, "\\'")}', '${(p.descricao || '').replace(/'/g, "\\'")}', ${p.estoque_atual}, ${p.estoque_minimo})" class="btn btn-info" style="font-size: 0.75rem; padding: 0.4rem 0.6rem;">✏️ Editar</button>
                             <button onclick="deletarProduto(${p.id_produto}, '${p.nome_produto.replace(/'/g, "\\'")}')" class="btn-remover" style="font-size: 0.75rem;">🗑️</button>
                         </td>
                     </tr>
-                `).join('');
+                `}).join('');
             } catch (erro) {
                 tbody.innerHTML = '<tr><td colspan="6" class="text-center">Erro ao carregar produtos</td></tr>';
                 mostrarAlerta(`Erro: ${erro.message}`, 'erro');

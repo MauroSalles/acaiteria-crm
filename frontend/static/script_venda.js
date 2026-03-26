@@ -88,11 +88,13 @@ async function carregarProdutos() {
 }
 
 // Selecionar cliente
-function selecionarCliente() {
+async function selecionarCliente() {
     const idCliente = document.getElementById('cliente-select').value;
     
     if (!idCliente) {
         clienteSelecionado = null;
+        const infoEl = document.getElementById('cliente-pontos-info');
+        if (infoEl) infoEl.style.display = 'none';
         return;
     }
     
@@ -107,6 +109,23 @@ function selecionarCliente() {
     
     // Salvar para caso de desistência
     salvarLocal('vendaClienteAtual', clienteSelecionado);
+
+    // Buscar pontos de fidelidade
+    try {
+        const pontos = await requisicao(`/api/clientes/${idCliente}/pontos`);
+        let infoEl = document.getElementById('cliente-pontos-info');
+        if (!infoEl) {
+            infoEl = document.createElement('div');
+            infoEl.id = 'cliente-pontos-info';
+            infoEl.style.cssText = 'margin-top:0.5rem;padding:0.5rem;background:#f3e5f5;border-radius:8px;font-size:0.9rem;';
+            select.parentElement.appendChild(infoEl);
+        }
+        infoEl.style.display = 'block';
+        const ptTotal = pontos.pontos || 0;
+        const descDisponivel = Math.floor(ptTotal / 100) * 5;
+        infoEl.innerHTML = `🌟 <strong>${ptTotal}</strong> pontos` +
+            (descDisponivel > 0 ? ` — Pode resgatar até <strong>R$ ${descDisponivel.toFixed(2)}</strong> de desconto` : '');
+    } catch(e) { /* silencioso */ }
 }
 
 // Adicionar item à venda
@@ -271,7 +290,11 @@ async function finalizarVenda() {
         const venda = resposta;
         
         // Sucesso!
-        mostrarAlerta(`✅ Venda #${venda.id_venda} finalizada com sucesso!`, 'sucesso');
+        let msg = `✅ Venda #${venda.id_venda} finalizada com sucesso!`;
+        if (venda.pontos_ganhos) {
+            msg += ` 🌟 +${venda.pontos_ganhos} pontos (total: ${venda.pontos_total})`;
+        }
+        mostrarAlerta(msg, 'sucesso');
         
         // Limpar localStorage
         removerLocal('vendaItens');
@@ -292,6 +315,18 @@ async function finalizarVenda() {
         
         // Gerar recibo
         exibirRecibo(venda);
+
+        // Mostrar botão de compartilhar via WhatsApp
+        const msgEl = document.getElementById('mensagem');
+        if (msgEl) {
+            const btnWa = document.createElement('button');
+            btnWa.className = 'btn btn-success';
+            btnWa.style.cssText = 'margin-top:0.5rem;';
+            btnWa.textContent = '📱 Enviar Comprovante via WhatsApp';
+            btnWa.onclick = function() { compartilharVendaWhatsApp(venda.id_venda); };
+            msgEl.appendChild(document.createElement('br'));
+            msgEl.appendChild(btnWa);
+        }
         
         // Reabilitar botão
         setTimeout(() => {

@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Relatórios - Açaiteria CRM</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <meta name="theme-color" content="#7B1FA2">
 </head>
 <body>
     <div class="container">
@@ -36,7 +38,12 @@
                     </ul>
                 </li>
                 <li><a href="/politica-privacidade">🔒 LGPD</a></li>
+                {% if papel == 'admin' %}
+                <li><a href="/usuarios">👤 Usuários</a></li>
+                <li><a href="/historico">📋 Histórico</a></li>
+                {% endif %}
                 <li class="nav-separator"></li>
+                <li class="nav-user-info">👤 {{ usuario_nome }}</li>
                 <li><a href="/logout" class="nav-logout">⬅ Sair</a></li>
             </ul>
         </nav>
@@ -52,9 +59,23 @@
                     <div id="relatorio-dia" class="relatorio-grid">
                         <p>Carregando...</p>
                     </div>
-                    <button id="btn-exportar-dia" class="btn btn-info" style="margin-top: 15px;">
-                        💾 Exportar Relatório de Hoje
-                    </button>
+                    <div class="action-buttons" style="margin-top: 15px; gap: .5rem; display: flex; flex-wrap: wrap;">
+                        <button id="btn-exportar-dia" class="btn btn-info">
+                            💾 Exportar CSV
+                        </button>
+                        <a id="btn-pdf-hoje" href="/api/exportar/relatorio-pdf" class="btn btn-primary" target="_blank">
+                            📄 Baixar PDF de Hoje
+                        </a>
+                        <button id="btn-whatsapp-dia" class="btn btn-success" onclick="compartilharWhatsAppDia()">
+                            📱 Enviar via WhatsApp
+                        </button>
+                        <div style="display: flex; align-items: center; gap: .5rem;">
+                            <input type="date" id="pdf-data" class="form-control" style="max-width:180px;">
+                            <button id="btn-pdf-data" class="btn btn-secondary" onclick="window.open('/api/exportar/relatorio-pdf?data='+document.getElementById('pdf-data').value,'_blank')">
+                                📄 PDF por Data
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </section>
 
@@ -233,6 +254,33 @@
                 alert('❌ Erro ao exportar: ' + erro.message);
             }
         });
+
+        // Compartilhar resumo do dia via WhatsApp
+        async function compartilharWhatsAppDia() {
+            try {
+                const resp = await fetch('/api/relatorios/dia-atual');
+                if (!resp.ok) throw new Error('Erro ao carregar dados');
+                const d = resp.ok ? await resp.json() : null;
+                if (!d) return;
+
+                const hoje = new Date().toLocaleDateString('pt-BR');
+                let texto = `🍇 *Combina Açaí — Resumo do Dia*\n📅 ${hoje}\n\n`;
+                texto += `🛒 Vendas: ${d.total_vendas}\n`;
+                texto += `💰 Faturamento: R$ ${d.faturamento_total.toFixed(2)}\n`;
+                texto += `📊 Ticket Médio: R$ ${d.ticket_medio.toFixed(2)}\n`;
+
+                if (d.por_forma_pagamento && Object.keys(d.por_forma_pagamento).length) {
+                    texto += `\n💳 *Por forma de pagamento:*\n`;
+                    for (const [forma, valor] of Object.entries(d.por_forma_pagamento)) {
+                        texto += `  • ${forma}: R$ ${valor.toFixed(2)}\n`;
+                    }
+                }
+
+                window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_blank');
+            } catch (e) {
+                alert('❌ Erro ao compartilhar: ' + e.message);
+            }
+        }
 
         // Carregar tudo ao iniciar
         window.addEventListener('load', () => {

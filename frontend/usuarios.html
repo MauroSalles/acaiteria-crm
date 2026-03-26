@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Usuários - Açaiteria CRM</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <meta name="theme-color" content="#7B1FA2">
+</head>
+<body>
+    <div class="container">
+        <!-- Navbar -->
+        <nav class="navbar">
+            <div class="navbar-brand">🍇 <strong>Combina Açaí</strong></div>
+            <button class="navbar-toggle" onclick="document.getElementById('navMenu').classList.toggle('open')" aria-label="Menu">☰</button>
+            <ul class="navbar-menu" id="navMenu">
+                <li><a href="/">🏠 Início</a></li>
+                <li class="has-dropdown">
+                    <a href="#" onclick="navDropdown(this);return false">🛒 Vendas <span class="arrow">▾</span></a>
+                    <ul class="dropdown">
+                        <li><a href="/nova-venda">➕ Registrar Venda</a></li>
+                    </ul>
+                </li>
+                <li class="has-dropdown">
+                    <a href="#" onclick="navDropdown(this);return false">👥 Clientes <span class="arrow">▾</span></a>
+                    <ul class="dropdown">
+                        <li><a href="/cadastro-cliente">➕ Cadastrar Cliente</a></li>
+                        <li><a href="/clientes">📋 Lista de Clientes</a></li>
+                    </ul>
+                </li>
+                <li><a href="/produtos">📦 Produtos</a></li>
+                <li class="has-dropdown">
+                    <a href="#" onclick="navDropdown(this);return false">💰 Financeiro <span class="arrow">▾</span></a>
+                    <ul class="dropdown">
+                        <li><a href="/relatorios">📊 Relatórios</a></li>
+                        <li><a href="/fechamento">🔐 Fechamento de Caixa</a></li>
+                    </ul>
+                </li>
+                <li><a href="/politica-privacidade">🔒 LGPD</a></li>
+                {% if papel == 'admin' %}
+                <li><a href="/usuarios" class="active">👤 Usuários</a></li>
+                <li><a href="/historico">📋 Histórico</a></li>
+                {% endif %}
+                <li class="nav-separator"></li>
+                <li class="nav-user-info">👤 {{ usuario_nome }}</li>
+                <li><a href="/logout" class="nav-logout">⬅ Sair</a></li>
+            </ul>
+        </nav>
+
+        <main class="content">
+            <h1>👤 Gestão de Usuários</h1>
+            <p class="subtitle">Crie e gerencie contas de acesso ao sistema (somente administradores)</p>
+
+            <!-- Formulário -->
+            <div class="card">
+                <h2 id="form-titulo">Cadastrar Novo Usuário</h2>
+                <form id="form-usuario">
+                    <div class="form-group">
+                        <label for="nome">Nome *</label>
+                        <input type="text" id="nome" name="nome" required placeholder="Nome completo">
+                    </div>
+                    <div class="form-group">
+                        <label for="email">Email *</label>
+                        <input type="email" id="email" name="email" required placeholder="usuario@email.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="senha">Senha *</label>
+                        <input type="password" id="senha" name="senha" placeholder="Mínimo 4 caracteres" minlength="4">
+                    </div>
+                    <div class="form-group">
+                        <label for="papel">Papel *</label>
+                        <select id="papel" name="papel">
+                            <option value="operador">Operador (vendas e consultas)</option>
+                            <option value="admin">Administrador (acesso total)</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button type="submit" class="btn btn-primary" id="btn-salvar">Cadastrar Usuário</button>
+                        <button type="button" class="btn btn-secondary" id="btn-cancelar" style="display:none;" onclick="cancelarEdicao()">Cancelar</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Lista -->
+            <div class="card" style="margin-top: 2rem;">
+                <h2>Usuários Cadastrados</h2>
+                <div class="table-responsive">
+                    <table class="table" id="tabela-usuarios">
+                        <thead>
+                            <tr>
+                                <th>Nome</th>
+                                <th>Email</th>
+                                <th>Papel</th>
+                                <th>Status</th>
+                                <th>Criado em</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td colspan="6" class="text-center">⏳ Carregando...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="mensagem" class="alert" style="display: none; margin-top: 20px;"></div>
+        </main>
+
+        <footer class="footer">
+            <p>&copy; 2026 - Projeto Integrador UNIVESP | Grupo 22 | Polo Lorena/SP</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        let editandoId = null;
+
+        document.addEventListener('DOMContentLoaded', carregarUsuarios);
+
+        document.getElementById('form-usuario').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const dados = {
+                nome: document.getElementById('nome').value.trim(),
+                email: document.getElementById('email').value.trim(),
+                papel: document.getElementById('papel').value,
+            };
+
+            const senha = document.getElementById('senha').value;
+            if (editandoId) {
+                if (senha) dados.senha = senha;
+            } else {
+                if (!senha || senha.length < 4) {
+                    mostrarAlerta('Senha é obrigatória (mínimo 4 caracteres)', 'erro');
+                    return;
+                }
+                dados.senha = senha;
+            }
+
+            try {
+                if (editandoId) {
+                    await requisicao(`/api/usuarios/${editandoId}`, {
+                        method: 'PUT',
+                        body: JSON.stringify(dados),
+                    });
+                    mostrarAlerta('Usuário atualizado!', 'sucesso');
+                    cancelarEdicao();
+                } else {
+                    await requisicao('/api/usuarios', {
+                        method: 'POST',
+                        body: JSON.stringify(dados),
+                    });
+                    mostrarAlerta('Usuário criado!', 'sucesso');
+                }
+                document.getElementById('form-usuario').reset();
+                carregarUsuarios();
+            } catch (erro) {
+                mostrarAlerta('Erro: ' + erro.message, 'erro');
+            }
+        });
+
+        function editarUsuario(id, nome, email, papel) {
+            editandoId = id;
+            document.getElementById('nome').value = nome;
+            document.getElementById('email').value = email;
+            document.getElementById('papel').value = papel;
+            document.getElementById('senha').value = '';
+            document.getElementById('senha').removeAttribute('required');
+            document.getElementById('senha').placeholder = 'Deixe vazio para manter a senha atual';
+            document.getElementById('form-titulo').textContent = `Editando: ${nome}`;
+            document.getElementById('btn-salvar').textContent = '💾 Salvar Alterações';
+            document.getElementById('btn-cancelar').style.display = 'inline-block';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function cancelarEdicao() {
+            editandoId = null;
+            document.getElementById('form-usuario').reset();
+            document.getElementById('senha').setAttribute('required', '');
+            document.getElementById('senha').placeholder = 'Mínimo 4 caracteres';
+            document.getElementById('form-titulo').textContent = 'Cadastrar Novo Usuário';
+            document.getElementById('btn-salvar').textContent = 'Cadastrar Usuário';
+            document.getElementById('btn-cancelar').style.display = 'none';
+        }
+
+        async function desativarUsuario(id, nome) {
+            if (!confirm(`Desativar o usuário "${nome}"?`)) return;
+            try {
+                await requisicao(`/api/usuarios/${id}`, { method: 'DELETE' });
+                mostrarAlerta(`Usuário "${nome}" desativado`, 'sucesso');
+                carregarUsuarios();
+            } catch (erro) {
+                mostrarAlerta('Erro: ' + erro.message, 'erro');
+            }
+        }
+
+        async function carregarUsuarios() {
+            const tbody = document.querySelector('#tabela-usuarios tbody');
+            try {
+                const usuarios = await requisicao('/api/usuarios');
+                if (usuarios.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="text-center">Nenhum usuário</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = usuarios.map(u => `
+                    <tr style="${u.ativo ? '' : 'opacity: 0.5;'}">
+                        <td><strong>${escapeHtml(u.nome)}</strong></td>
+                        <td>${escapeHtml(u.email)}</td>
+                        <td><span class="badge ${u.papel === 'admin' ? 'badge-admin' : 'badge-operador'}">${u.papel}</span></td>
+                        <td>${u.ativo ? '✅ Ativo' : '❌ Inativo'}</td>
+                        <td>${u.data_criacao ? new Date(u.data_criacao).toLocaleDateString('pt-BR') : '-'}</td>
+                        <td>
+                            ${u.ativo ? `
+                                <button onclick="editarUsuario(${u.id_usuario}, '${escapeHtml(u.nome).replace(/'/g, "\\'")}', '${escapeHtml(u.email).replace(/'/g, "\\'")}', '${u.papel}')" class="btn btn-info" style="font-size:0.75rem;padding:0.4rem 0.6rem;">✏️</button>
+                                <button onclick="desativarUsuario(${u.id_usuario}, '${escapeHtml(u.nome).replace(/'/g, "\\'")}')" class="btn-remover" style="font-size:0.75rem;">🗑️</button>
+                            ` : '<em>desativado</em>'}
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (erro) {
+                tbody.innerHTML = `<tr><td colspan="6" class="text-center" style="color:red;">Erro: ${erro.message}</td></tr>`;
+            }
+        }
+    </script>
+</body>
+</html>

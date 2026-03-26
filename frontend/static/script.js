@@ -3,6 +3,11 @@
  * Funções auxiliares e gerais
  */
 
+// ---------- PWA: REGISTRAR SERVICE WORKER ----------
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/static/sw.js').catch(function() {});
+}
+
 // ---------- NAVBAR DROPDOWN (mobile) ----------
 function navDropdown(el) {
     if (window.innerWidth <= 860) {
@@ -157,6 +162,35 @@ async function copiarParaClipboard(texto) {
     } catch (erro) {
         console.error('Erro ao copiar:', erro);
         mostrarAlerta('❌ Erro ao copiar', 'erro');
+    }
+}
+
+// Compartilhar texto via WhatsApp (abre em nova aba)
+function compartilharWhatsApp(texto) {
+    window.open('https://wa.me/?text=' + encodeURIComponent(texto), '_blank');
+}
+
+// Compartilhar comprovante de venda via WhatsApp
+async function compartilharVendaWhatsApp(idVenda) {
+    try {
+        const venda = await requisicao('/api/vendas/' + idVenda);
+        let texto = '🍇 *Combina Açaí — Comprovante*\n';
+        texto += '━━━━━━━━━━━━━━━━━\n';
+        texto += '📋 Venda #' + venda.id_venda + '\n';
+        texto += '📅 ' + formatarData(venda.data_venda) + '\n';
+        texto += '👤 ' + (venda.cliente_nome || 'N/A') + '\n\n';
+        texto += '*Itens:*\n';
+        (venda.itens || []).forEach(function(item) {
+            texto += '  • ' + item.produto_nome + ' x' + item.quantidade;
+            texto += ' — R$ ' + item.subtotal.toFixed(2) + '\n';
+        });
+        texto += '\n💰 *Total: R$ ' + venda.valor_total.toFixed(2) + '*\n';
+        texto += '💳 ' + (venda.forma_pagamento || 'N/A') + '\n';
+        texto += '━━━━━━━━━━━━━━━━━\n';
+        texto += 'Obrigado pela preferência! 💜';
+        compartilharWhatsApp(texto);
+    } catch (e) {
+        mostrarAlerta('❌ Erro ao compartilhar: ' + e.message, 'erro');
     }
 }
 
@@ -366,8 +400,13 @@ const ProdutoAPI = {
 
 // ----- VENDAS -----
 const VendaAPI = {
-    /** GET /api/vendas — mais recentes primeiro */
-    listar: () => _req('/api/vendas'),
+    /** GET /api/vendas — com filtros opcionais (data_inicio, data_fim, id_cliente, forma_pagamento, pagina) */
+    listar: (filtros = {}) => {
+        const params = new URLSearchParams();
+        Object.entries(filtros).forEach(([k, v]) => { if (v) params.set(k, v); });
+        const qs = params.toString();
+        return _req('/api/vendas' + (qs ? '?' + qs : ''));
+    },
 
     /** GET /api/vendas/:id — com itens e pagamento */
     obter: (id) => _req(`/api/vendas/${id}`),

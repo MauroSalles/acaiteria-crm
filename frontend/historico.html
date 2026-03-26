@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Histórico de Ações - Açaiteria CRM</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <meta name="theme-color" content="#7B1FA2">
+</head>
+<body>
+    <div class="container">
+        <!-- Navbar -->
+        <nav class="navbar">
+            <div class="navbar-brand">🍇 <strong>Combina Açaí</strong></div>
+            <button class="navbar-toggle" onclick="document.getElementById('navMenu').classList.toggle('open')" aria-label="Menu">☰</button>
+            <ul class="navbar-menu" id="navMenu">
+                <li><a href="/">🏠 Início</a></li>
+                <li class="has-dropdown">
+                    <a href="#" onclick="navDropdown(this);return false">🛒 Vendas <span class="arrow">▾</span></a>
+                    <ul class="dropdown">
+                        <li><a href="/nova-venda">➕ Registrar Venda</a></li>
+                    </ul>
+                </li>
+                <li class="has-dropdown">
+                    <a href="#" onclick="navDropdown(this);return false">👥 Clientes <span class="arrow">▾</span></a>
+                    <ul class="dropdown">
+                        <li><a href="/cadastro-cliente">➕ Cadastrar Cliente</a></li>
+                        <li><a href="/clientes">📋 Lista de Clientes</a></li>
+                    </ul>
+                </li>
+                <li><a href="/produtos">📦 Produtos</a></li>
+                <li class="has-dropdown">
+                    <a href="#" onclick="navDropdown(this);return false">💰 Financeiro <span class="arrow">▾</span></a>
+                    <ul class="dropdown">
+                        <li><a href="/relatorios">📊 Relatórios</a></li>
+                        <li><a href="/fechamento">🔐 Fechamento de Caixa</a></li>
+                    </ul>
+                </li>
+                <li><a href="/politica-privacidade">🔒 LGPD</a></li>
+                {% if papel == 'admin' %}
+                <li><a href="/usuarios">👤 Usuários</a></li>
+                <li><a href="/historico" class="active">📋 Histórico</a></li>
+                {% endif %}
+                <li class="nav-separator"></li>
+                <li class="nav-user-info">👤 {{ usuario_nome }}</li>
+                <li><a href="/logout" class="nav-logout">⬅ Sair</a></li>
+            </ul>
+        </nav>
+
+        <main class="content">
+            <h1>📋 Histórico de Ações</h1>
+            <p class="subtitle">Registro de todas as operações realizadas no sistema</p>
+
+            <!-- Filtros -->
+            <div class="card" style="margin-bottom: 1rem;">
+                <div style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end;">
+                    <div>
+                        <label for="filtroEntidade">Entidade:</label>
+                        <select id="filtroEntidade" class="form-input" style="width: auto;">
+                            <option value="">Todas</option>
+                            <option value="cliente">Cliente</option>
+                            <option value="produto">Produto</option>
+                            <option value="venda">Venda</option>
+                            <option value="usuario">Usuário</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="filtroAcao">Ação:</label>
+                        <select id="filtroAcao" class="form-input" style="width: auto;">
+                            <option value="">Todas</option>
+                            <option value="criar">Criar</option>
+                            <option value="editar">Editar</option>
+                            <option value="excluir">Excluir</option>
+                            <option value="login">Login</option>
+                            <option value="logout">Logout</option>
+                        </select>
+                    </div>
+                    <button onclick="carregarLogs(1)" class="btn btn-primary" style="height: fit-content;">🔍 Filtrar</button>
+                </div>
+            </div>
+
+            <!-- Tabela de logs -->
+            <div class="card">
+                <table class="tabela-responsiva" id="tabela-logs">
+                    <thead>
+                        <tr>
+                            <th>Data/Hora</th>
+                            <th>Usuário</th>
+                            <th>Ação</th>
+                            <th>Entidade</th>
+                            <th>Detalhes</th>
+                            <th>IP</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td colspan="6" class="text-center">⏳ Carregando...</td></tr>
+                    </tbody>
+                </table>
+
+                <!-- Paginação -->
+                <div id="paginacao-logs" style="display: flex; justify-content: center; gap: 0.5rem; margin-top: 1rem;"></div>
+            </div>
+        </main>
+
+        <footer class="footer">
+            <p>🍇 Açaiteria CRM &copy; 2025 — UNIVESP Grupo 22</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+    let paginaAtual = 1;
+
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    async function carregarLogs(pagina) {
+        paginaAtual = pagina || 1;
+        const tbody = document.querySelector('#tabela-logs tbody');
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center">⏳ Carregando...</td></tr>';
+
+        const entidade = document.getElementById('filtroEntidade').value;
+        const acao = document.getElementById('filtroAcao').value;
+
+        const params = new URLSearchParams({ pagina: paginaAtual, por_pagina: 30 });
+        if (entidade) params.set('entidade', entidade);
+        if (acao) params.set('acao', acao);
+
+        try {
+            const resp = await fetch(`/api/logs?${params}`);
+            if (!resp.ok) throw new Error('Erro ao carregar logs');
+            const data = await resp.json();
+
+            if (!data.logs.length) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center">Nenhum registro encontrado</td></tr>';
+                document.getElementById('paginacao-logs').innerHTML = '';
+                return;
+            }
+
+            const acaoIcons = { criar: '🟢', editar: '🟡', excluir: '🔴', login: '🔵', logout: '⚪' };
+
+            tbody.innerHTML = data.logs.map(l => {
+                const dt = new Date(l.data_hora);
+                const dataStr = dt.toLocaleDateString('pt-BR') + ' ' + dt.toLocaleTimeString('pt-BR');
+                const icon = acaoIcons[l.acao] || '⚫';
+                return `
+                    <tr>
+                        <td style="white-space: nowrap;">${dataStr}</td>
+                        <td>${escapeHtml(l.usuario_nome || 'Sistema')}</td>
+                        <td>${icon} ${escapeHtml(l.acao)}</td>
+                        <td>${escapeHtml(l.entidade)}</td>
+                        <td>${escapeHtml(l.detalhes || '-')}</td>
+                        <td style="font-size: 0.8rem;">${escapeHtml(l.ip || '-')}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            // Paginação
+            const pag = document.getElementById('paginacao-logs');
+            if (data.total_paginas > 1) {
+                let html = '';
+                if (paginaAtual > 1)
+                    html += `<button class="btn btn-secondary" onclick="carregarLogs(${paginaAtual - 1})">◀ Anterior</button>`;
+                html += `<span style="padding: 0.5rem;">Página ${data.pagina} de ${data.total_paginas}</span>`;
+                if (paginaAtual < data.total_paginas)
+                    html += `<button class="btn btn-secondary" onclick="carregarLogs(${paginaAtual + 1})">Próxima ▶</button>`;
+                pag.innerHTML = html;
+            } else {
+                pag.innerHTML = '';
+            }
+        } catch (e) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center" style="color:red;">Erro ao carregar logs</td></tr>';
+        }
+    }
+
+    carregarLogs(1);
+    </script>
+</body>
+</html>

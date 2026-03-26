@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - Açaiteria CRM</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <meta name="theme-color" content="#7B1FA2">
     <style>
         .login-container {
             display: flex;
@@ -17,7 +19,7 @@
             border-radius: var(--raio);
             box-shadow: var(--sombra-lg);
             padding: 3rem 2.5rem;
-            max-width: 400px;
+            max-width: 420px;
             width: 100%;
             text-align: center;
         }
@@ -35,18 +37,16 @@
             margin-bottom: 1rem;
             display: block;
         }
-        .pin-input {
-            font-size: 2rem;
-            text-align: center;
-            letter-spacing: 0.8rem;
-            padding: 1rem;
+        .login-input {
+            font-size: 1rem;
+            padding: 0.9rem 1rem;
             border: 2px solid var(--cinza-300);
             border-radius: var(--raio-sm);
             width: 100%;
-            margin-bottom: 1.5rem;
+            margin-bottom: 1rem;
             transition: border-color var(--fast);
         }
-        .pin-input:focus {
+        .login-input:focus {
             outline: none;
             border-color: var(--acai);
             box-shadow: 0 0 0 3px rgba(108, 46, 185, 0.15);
@@ -57,6 +57,13 @@
             padding: 0.8rem;
             border-radius: var(--raio-sm);
             margin-bottom: 1rem;
+        }
+        .login-label {
+            text-align: left;
+            display: block;
+            margin-bottom: 0.4rem;
+            font-weight: 500;
+            color: var(--cinza-700, #555);
         }
     </style>
 </head>
@@ -74,19 +81,28 @@
 
                 <form method="POST" action="/login">
                     <div class="form-group">
-                        <label for="pin" style="text-align: left; display: block; margin-bottom: 0.5rem;">
-                            🔒 Digite o PIN de acesso:
-                        </label>
+                        <label for="email" class="login-label">📧 Email:</label>
                         <input 
-                            type="password" 
-                            id="pin" 
-                            name="pin" 
-                            class="pin-input" 
-                            maxlength="10" 
+                            type="email" 
+                            id="email" 
+                            name="email" 
+                            class="login-input" 
                             required 
                             autofocus
-                            autocomplete="off"
-                            placeholder="••••"
+                            autocomplete="email"
+                            placeholder="seu@email.com"
+                        >
+                    </div>
+                    <div class="form-group">
+                        <label for="senha" class="login-label">🔒 Senha:</label>
+                        <input 
+                            type="password" 
+                            id="senha" 
+                            name="senha" 
+                            class="login-input" 
+                            required 
+                            autocomplete="current-password"
+                            placeholder="••••••••"
                         >
                     </div>
                     <button type="submit" class="btn btn-primary" style="width: 100%; padding: 1rem; font-size: 1.1rem;">

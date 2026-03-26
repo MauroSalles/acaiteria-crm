@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fechamento Diário - Açaiteria CRM</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <meta name="theme-color" content="#7B1FA2">
 </head>
 <body>
     <div class="container">
@@ -36,7 +38,12 @@
                     </ul>
                 </li>
                 <li><a href="/politica-privacidade">🔒 LGPD</a></li>
+                {% if papel == 'admin' %}
+                <li><a href="/usuarios">👤 Usuários</a></li>
+                <li><a href="/historico">📋 Histórico</a></li>
+                {% endif %}
                 <li class="nav-separator"></li>
+                <li class="nav-user-info">👤 {{ usuario_nome }}</li>
                 <li><a href="/logout" class="nav-logout">⬅ Sair</a></li>
             </ul>
         </nav>
@@ -85,6 +92,7 @@
                 <div class="action-buttons">
                     <button id="btn-confirmar" class="btn btn-success" disabled>✅ Confirmar Fechamento</button>
                     <button id="btn-imprimir" class="btn btn-info" disabled>🖨️ Imprimir Recibo</button>
+                    <button id="btn-whatsapp-fechamento" class="btn btn-success" disabled onclick="compartilharFechamentoWhatsApp()">📱 WhatsApp</button>
                     <a href="/relatorios" class="btn btn-secondary">📊 Ver Relatórios</a>
                 </div>
             </div>
@@ -174,6 +182,7 @@
                 if (dados.total_vendas > 0) {
                     document.getElementById('btn-confirmar').disabled = false;
                     document.getElementById('btn-imprimir').disabled = false;
+                    document.getElementById('btn-whatsapp-fechamento').disabled = false;
                 }
 
                 mostrarAlerta(`Fechamento de ${data} carregado com sucesso`, 'sucesso');
@@ -193,6 +202,28 @@
         document.getElementById('btn-imprimir').addEventListener('click', () => {
             window.print();
         });
+
+        async function compartilharFechamentoWhatsApp() {
+            const data = document.getElementById('data-fechamento').value;
+            try {
+                const res = await fetch('/api/relatorios/por-data?data=' + data);
+                const d = await res.json();
+                let texto = '🍇 *Combina Açaí — Fechamento de Caixa*\n';
+                texto += '📅 ' + data.split('-').reverse().join('/') + '\n\n';
+                texto += '🛒 Vendas: ' + d.total_vendas + '\n';
+                texto += '💰 Faturamento: R$ ' + d.faturamento_total.toFixed(2) + '\n';
+                texto += '📊 Ticket Médio: R$ ' + d.ticket_medio.toFixed(2) + '\n';
+                if (d.por_forma_pagamento) {
+                    texto += '\n💳 *Por forma de pagamento:*\n';
+                    for (const [forma, info] of Object.entries(d.por_forma_pagamento)) {
+                        texto += '  • ' + forma + ': ' + info.quantidade + 'x — R$ ' + info.total.toFixed(2) + '\n';
+                    }
+                }
+                compartilharWhatsApp(texto);
+            } catch (e) {
+                mostrarAlerta('❌ Erro ao compartilhar: ' + e.message, 'erro');
+            }
+        }
     </script>
 </body>
 </html>
