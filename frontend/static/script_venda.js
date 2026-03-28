@@ -14,6 +14,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     await carregarClientes();
     await carregarProdutos();
     
+    // Restaurar carrinho salvo (caso usuário recarregou a página)
+    const itensSalvos = obterLocal('vendaItens');
+    if (itensSalvos && Array.isArray(itensSalvos) && itensSalvos.length > 0) {
+        itensVenda = itensSalvos;
+        renderizarItens();
+        recalcularTotais();
+        mostrarAlerta('🔄 Carrinho anterior restaurado automaticamente', 'info');
+    }
+    const clienteSalvo = obterLocal('vendaClienteAtual');
+    if (clienteSalvo && clienteSalvo.id_cliente) {
+        const select = document.getElementById('cliente-select');
+        select.value = String(clienteSalvo.id_cliente);
+        if (select.value) {
+            clienteSelecionado = clienteSalvo;
+        }
+    }
+    
     // Event listeners
     document.getElementById('btn-adicionar').addEventListener('click', adicionarItem);
     document.getElementById('desconto-perc').addEventListener('change', recalcularTotais);

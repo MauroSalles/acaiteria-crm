@@ -27,7 +27,6 @@ from .models import db, Usuario, Cliente, Produto, Venda, ItemVenda, Pagamento, 
 # CONFIGURAÇÃO INICIAL
 # =============================================================================
 
-import os
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -43,7 +42,16 @@ app = Flask(__name__,
             static_url_path='/static')
 
 # Chave secreta para sessões (obrigatória em produção)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
+_secret = os.environ.get('SECRET_KEY', '')
+if not _secret and os.environ.get('FLASK_ENV') == 'production':
+    raise RuntimeError('SECRET_KEY obrigatória em produção!')
+app.config['SECRET_KEY'] = _secret or 'dev-secret-key-change-in-production'
+
+# Proteção de cookies de sessão
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+if os.environ.get('FLASK_ENV') == 'production':
+    app.config['SESSION_COOKIE_SECURE'] = True
 
 # Desabilitar Swagger em produção
 _doc_path = '/api/docs' if os.environ.get('FLASK_ENV') != 'production' else False
@@ -127,6 +135,15 @@ def adicionar_headers_seguranca(response):
     response.headers['X-XSS-Protection'] = '1; mode=block'
     response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
     response.headers['Permissions-Policy'] = 'geolocation=(), camera=(), microphone=()'
+    response.headers['Content-Security-Policy'] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "img-src 'self' data:; "
+        "connect-src 'self'; "
+        "frame-ancestors 'none'"
+    )
     if os.environ.get('FLASK_ENV') == 'production':
         response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
     return response
@@ -206,6 +223,8 @@ class ProdutoUpdateSchema(BaseModel):
     descricao: str | None = None
     preco: float | None = None
     ativo: bool | None = None
+    estoque_atual: int | None = None
+    estoque_minimo: int | None = None
 
 
 def validar_payload(schema_cls):
@@ -286,8 +305,12 @@ def registrar_log(acao, entidade, id_entidade=None, detalhes=None):
         )
         db.session.add(log)
         db.session.commit()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning('Falha ao registrar log: %s', e)
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
 
 
 @health_ns.route('/health')
@@ -494,19 +517,54 @@ def obter_cliente(id_cliente):
 
 
 @app.route('/api/clientes/<int:id_cliente>', methods=['PUT'])
+@api_login_required
 def atualizar_cliente(id_cliente):
     """Atualizar dados de um cliente"""
     try:
         cliente = Cliente.query.get(id_cliente)
         if not cliente:
             return jsonify({'erro': 'Cliente não encontrado'}), 404
+        if not cliente.ativo:
+            return jsonify({'erro': 'Cliente anonimizado não pode ser editado'}), 400
         
-        dados = request.get_json()
-        
-        cliente.nome = dados.get('nome', cliente.nome)
-        cliente.telefone = dados.get('telefone', cliente.telefone)
-        cliente.email = dados.get('email', cliente.email)
-        cliente.observacoes = dados.get('observacoes', cliente.observacoes)
+        dados = request.get_json(silent=True) or {}
+
+        # Validar nome se fornecido
+        if 'nome' in dados:
+            nome = (dados['nome'] or '').strip()
+            if len(nome) < 2:
+                return jsonify({'erro': 'Nome deve ter ao menos 2 caracteres'}), 400
+            cliente.nome = nome
+
+        # Validar e-mail se fornecido
+        if 'email' in dados:
+            email = (dados['email'] or '').strip().lower() or None
+            if email and '@' not in email:
+                return jsonify({'erro': 'E-mail inválido'}), 400
+            # Verificar duplicidade
+            if email:
+                existente = Cliente.query.filter(
+                    Cliente.email == email, Cliente.ativo == True,
+                    Cliente.id_cliente != id_cliente
+                ).first()
+                if existente:
+                    return jsonify({'erro': 'E-mail já cadastrado por outro cliente'}), 409
+            cliente.email = email
+
+        # Validar telefone se fornecido
+        if 'telefone' in dados:
+            telefone = (dados['telefone'] or '').strip() or None
+            if telefone:
+                existente = Cliente.query.filter(
+                    Cliente.telefone == telefone, Cliente.ativo == True,
+                    Cliente.id_cliente != id_cliente
+                ).first()
+                if existente:
+                    return jsonify({'erro': 'Telefone já cadastrado por outro cliente'}), 409
+            cliente.telefone = telefone
+
+        if 'observacoes' in dados:
+            cliente.observacoes = dados.get('observacoes')
         
         db.session.commit()
         registrar_log('editar', 'cliente', id_cliente, f'Cliente editado: {cliente.nome}')
@@ -518,6 +576,7 @@ def atualizar_cliente(id_cliente):
 
 
 @app.route('/api/clientes/<int:id_cliente>', methods=['DELETE'])
+@api_login_required
 def deletar_cliente(id_cliente):
     """Deletar (anonimizar) um cliente - LGPD"""
     try:
@@ -973,6 +1032,60 @@ def obter_venda(id_venda):
         
         return jsonify(venda.to_dict())
     except Exception as e:
+        return _erro_interno(e)
+
+
+@app.route('/api/vendas/<int:id_venda>/cancelar', methods=['POST'])
+@limiter.limit("10 per minute")
+@api_admin_required
+def cancelar_venda(id_venda):
+    """Cancelar (estornar) uma venda — somente admin.
+    Restaura estoque e remove pontos de fidelidade do cliente."""
+    try:
+        venda = Venda.query.get(id_venda)
+        if not venda:
+            return jsonify({'erro': 'Venda não encontrada'}), 404
+
+        if venda.status_pagamento == 'Cancelado':
+            return jsonify({'erro': 'Venda já foi cancelada anteriormente'}), 400
+
+        dados = request.get_json(silent=True) or {}
+        motivo = (dados.get('motivo') or '').strip()
+        if not motivo or len(motivo) < 3:
+            return jsonify({'erro': 'Motivo do cancelamento é obrigatório (mínimo 3 caracteres)'}), 400
+
+        # Restaurar estoque dos itens
+        for item in venda.itens:
+            prod = Produto.query.get(item.id_produto)
+            if prod:
+                prod.estoque_atual = (prod.estoque_atual or 0) + item.quantidade
+
+        # Remover pontos de fidelidade concedidos
+        pontos_remover = int(venda.valor_total)
+        cliente = Cliente.query.get(venda.id_cliente)
+        if cliente and pontos_remover > 0:
+            cliente.pontos_fidelidade = max(0, (cliente.pontos_fidelidade or 0) - pontos_remover)
+
+        # Atualizar status da venda
+        venda.status_pagamento = 'Cancelado'
+        venda.observacoes = f'{venda.observacoes or ""}\n[CANCELADO] {motivo}'.strip()
+
+        # Atualizar pagamento
+        if venda.pagamento:
+            venda.pagamento.status = 'Estornado'
+
+        db.session.commit()
+        registrar_log('cancelar', 'venda', id_venda,
+                       f'Venda #{id_venda} cancelada — R${float(venda.valor_total):.2f} — Motivo: {motivo}')
+
+        return jsonify({
+            'mensagem': f'Venda #{id_venda} cancelada com sucesso',
+            'estoque_restaurado': True,
+            'pontos_removidos': pontos_remover,
+            'venda': venda.to_dict()
+        })
+    except Exception as e:
+        db.session.rollback()
         return _erro_interno(e)
 
 
@@ -1738,11 +1851,10 @@ def _seed_admin():
 
 
 # =============================================================================
-# CRIAR TABELAS (usado pelo gunicorn na nuvem)
+# CRIAR TABELAS E SEED (usado pelo gunicorn na nuvem — tabelas já criadas acima)
 # =============================================================================
 
 with app.app_context():
-    db.create_all()
     _seed_admin()
 
 

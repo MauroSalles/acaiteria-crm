@@ -460,3 +460,177 @@ class TestTotemAutoCadastro:
         clientes = resp.get_json()['clientes']
         assert any(c['nome'] == 'Visivel No CRM' for c in clientes)
 
+
+class TestCancelamentoVenda:
+    """Testa o cancelamento/estorno de vendas (somente admin)."""
+
+    def _criar_venda(self, client):
+        """Helper: cria cliente + produto + venda, retorna (id_venda, id_cliente, id_produto)."""
+        rc = client.post('/api/clientes', json={
+            'nome': 'Cancelar Teste', 'consentimento_lgpd': True, 'versao_politica': 'v1.0',
+        })
+        cid = rc.get_json()['id_cliente']
+        rp = client.post('/api/produtos', json={
+            'nome_produto': 'Açaí Cancel', 'preco': 20.0,
+            'estoque_atual': 10, 'estoque_minimo': 2,
+        })
+        pid = rp.get_json()['id_produto']
+        rv = client.post('/api/vendas', json={
+            'id_cliente': cid,
+            'forma_pagamento': 'Pix',
+            'itens': [{'id_produto': pid, 'quantidade': 3}],
+        })
+        vid = rv.get_json()['id_venda']
+        return vid, cid, pid
+
+    def test_cancelar_venda_sucesso(self, client):
+        vid, cid, pid = self._criar_venda(client)
+
+        # Estoque deve ser 7 (10 - 3)
+        assert client.get(f'/api/produtos/{pid}').get_json()['estoque_atual'] == 7
+
+        resp = client.post(f'/api/vendas/{vid}/cancelar', json={
+            'motivo': 'Cliente desistiu da compra',
+        })
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data['estoque_restaurado'] is True
+        assert data['pontos_removidos'] == 60  # 3 x 20 = 60
+
+        # Estoque restaurado para 10
+        assert client.get(f'/api/produtos/{pid}').get_json()['estoque_atual'] == 10
+
+        # Venda marcada como cancelada
+        venda = client.get(f'/api/vendas/{vid}').get_json()
+        assert venda['status_pagamento'] == 'Cancelado'
+
+    def test_cancelar_venda_sem_motivo(self, client):
+        vid, _, _ = self._criar_venda(client)
+        resp = client.post(f'/api/vendas/{vid}/cancelar', json={})
+        assert resp.status_code == 400
+        assert 'motivo' in resp.get_json()['erro'].lower()
+
+    def test_cancelar_venda_duplicada(self, client):
+        vid, _, _ = self._criar_venda(client)
+        client.post(f'/api/vendas/{vid}/cancelar', json={'motivo': 'Primeira vez'})
+        resp = client.post(f'/api/vendas/{vid}/cancelar', json={'motivo': 'Segunda vez'})
+        assert resp.status_code == 400
+        assert 'já foi cancelada' in resp.get_json()['erro']
+
+    def test_cancelar_venda_inexistente(self, client):
+        resp = client.post('/api/vendas/9999/cancelar', json={'motivo': 'Teste'})
+        assert resp.status_code == 404
+
+    def test_cancelar_venda_requer_admin(self, client):
+        vid, _, _ = self._criar_venda(client)
+        with client.session_transaction() as sess:
+            sess['papel'] = 'operador'
+        resp = client.post(f'/api/vendas/{vid}/cancelar', json={'motivo': 'Teste'})
+        assert resp.status_code == 403
+
+    def test_cancelar_remove_pontos_fidelidade(self, client):
+        vid, cid, _ = self._criar_venda(client)
+        # Após venda de R$60, deve ter 60 pontos
+        pontos_antes = client.get(f'/api/clientes/{cid}/pontos').get_json()['pontos']
+        assert pontos_antes == 60
+
+        client.post(f'/api/vendas/{vid}/cancelar', json={'motivo': 'Estorno'})
+        pontos_depois = client.get(f'/api/clientes/{cid}/pontos').get_json()['pontos']
+        assert pontos_depois == 0
+
+
+class TestSegurancaRotas:
+    """Testa que rotas protegidas exigem autenticação."""
+
+    def test_editar_cliente_sem_login(self, app):
+        c = app.test_client()
+        resp = c.put('/api/clientes/1', json={'nome': 'Hacker'})
+        assert resp.status_code == 401
+
+    def test_deletar_cliente_sem_login(self, app):
+        c = app.test_client()
+        resp = c.delete('/api/clientes/1')
+        assert resp.status_code == 401
+
+    def test_listar_vendas_sem_login(self, app):
+        c = app.test_client()
+        resp = c.get('/api/vendas')
+        assert resp.status_code == 401
+
+    def test_criar_venda_sem_login(self, app):
+        c = app.test_client()
+        resp = c.post('/api/vendas', json={})
+        assert resp.status_code == 401
+
+    def test_listar_produtos_sem_login(self, app):
+        c = app.test_client()
+        resp = c.get('/api/produtos')
+        assert resp.status_code == 401
+
+    def test_dashboard_sem_login(self, app):
+        c = app.test_client()
+        resp = c.get('/api/dashboard/graficos')
+        assert resp.status_code == 401
+
+    def test_exportar_csv_sem_login(self, app):
+        c = app.test_client()
+        resp = c.get('/api/exportar/clientes-csv')
+        assert resp.status_code == 401
+
+
+class TestEdicaoCliente:
+    """Testa a edição de clientes com validação aprimorada."""
+
+    def _criar_cliente(self, client, nome='Edit Test', telefone=None, email=None):
+        resp = client.post('/api/clientes', json={
+            'nome': nome, 'telefone': telefone, 'email': email,
+            'consentimento_lgpd': True, 'versao_politica': 'v1.0',
+        })
+        return resp.get_json()['id_cliente']
+
+    def test_editar_nome(self, client):
+        cid = self._criar_cliente(client)
+        resp = client.put(f'/api/clientes/{cid}', json={'nome': 'Nome Editado'})
+        assert resp.status_code == 200
+        assert resp.get_json()['nome'] == 'Nome Editado'
+
+    def test_editar_email_duplicado(self, client):
+        c1 = self._criar_cliente(client, nome='C1', email='unico@teste.com')
+        c2 = self._criar_cliente(client, nome='C2', email='outro@teste.com')
+        resp = client.put(f'/api/clientes/{c2}', json={'email': 'unico@teste.com'})
+        assert resp.status_code == 409
+        assert 'E-mail' in resp.get_json()['erro']
+
+    def test_editar_telefone_duplicado(self, client):
+        c1 = self._criar_cliente(client, nome='T1', telefone='(12) 91111-0001')
+        c2 = self._criar_cliente(client, nome='T2', telefone='(12) 92222-0002')
+        resp = client.put(f'/api/clientes/{c2}', json={'telefone': '(12) 91111-0001'})
+        assert resp.status_code == 409
+        assert 'Telefone' in resp.get_json()['erro']
+
+    def test_editar_nome_curto(self, client):
+        cid = self._criar_cliente(client)
+        resp = client.put(f'/api/clientes/{cid}', json={'nome': 'A'})
+        assert resp.status_code == 400
+
+    def test_editar_cliente_anonimizado(self, client):
+        cid = self._criar_cliente(client)
+        client.delete(f'/api/clientes/{cid}')
+        resp = client.put(f'/api/clientes/{cid}', json={'nome': 'Fantasma'})
+        assert resp.status_code == 400
+        assert 'anonimizado' in resp.get_json()['erro']
+
+    def test_editar_email_invalido(self, client):
+        cid = self._criar_cliente(client)
+        resp = client.put(f'/api/clientes/{cid}', json={'email': 'sem-arroba'})
+        assert resp.status_code == 400
+        assert 'inválido' in resp.get_json()['erro']
+
+    def test_editar_manter_mesmo_email(self, client):
+        """Editar outro campo não deve conflitar com o próprio email."""
+        cid = self._criar_cliente(client, nome='Meu', email='meu@teste.com')
+        resp = client.put(f'/api/clientes/{cid}', json={
+            'nome': 'Meu Editado', 'email': 'meu@teste.com'
+        })
+        assert resp.status_code == 200
+        assert resp.get_json()['nome'] == 'Meu Editado'
