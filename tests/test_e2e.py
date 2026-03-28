@@ -634,3 +634,82 @@ class TestEdicaoCliente:
         })
         assert resp.status_code == 200
         assert resp.get_json()['nome'] == 'Meu Editado'
+
+
+class TestRegistroLoginPage:
+    """Testa o fluxo de auto-cadastro via página de login (Registre-se)."""
+
+    def test_login_contem_registre_se(self, app):
+        """Página de login contém o formulário Registre-se."""
+        c = app.test_client()
+        resp = c.get('/login')
+        html = resp.data.decode()
+        assert resp.status_code == 200
+        assert 'Cadastre-se' in html
+        assert 'reg-form' in html
+        assert 'flipToRegister' in html
+
+    def test_login_contem_lgpd(self, app):
+        """Formulário de registro tem checkbox LGPD."""
+        c = app.test_client()
+        resp = c.get('/login')
+        html = resp.data.decode()
+        assert 'reg-lgpd' in html
+        assert 'Política de Privacidade' in html
+
+    def test_login_contem_steps(self, app):
+        """Formulário de registro tem indicador multi-step."""
+        c = app.test_client()
+        resp = c.get('/login')
+        html = resp.data.decode()
+        assert 'step-1' in html
+        assert 'step-2' in html
+        assert 'step-3' in html
+        assert 'step-dot' in html
+
+    def test_registro_via_api_totem_sucesso(self, app):
+        """Registro na página de login usa a mesma API do totem."""
+        c = app.test_client()
+        resp = c.post('/api/totem/cadastro', json={
+            'nome': 'Cliente Login Page',
+            'telefone': '(12) 97777-0001',
+            'email': 'loginreg@teste.com',
+            'consentimento_lgpd': True,
+            'versao_politica': 'v1.0',
+        })
+        assert resp.status_code == 201
+        data = resp.get_json()
+        assert data['nome'] == 'Cliente Login Page'
+        assert data['pontos_fidelidade'] == 10
+
+    def test_registro_apenas_nome_e_lgpd(self, app):
+        """Registro mínimo: só nome + consentimento (sem telefone/email)."""
+        c = app.test_client()
+        resp = c.post('/api/totem/cadastro', json={
+            'nome': 'Só Nome',
+            'consentimento_lgpd': True,
+            'versao_politica': 'v1.0',
+        })
+        assert resp.status_code == 201
+        assert resp.get_json()['pontos_fidelidade'] == 10
+
+    def test_registro_com_observacoes(self, app):
+        """Registro com campo de preferências preenchido."""
+        c = app.test_client()
+        resp = c.post('/api/totem/cadastro', json={
+            'nome': 'Preferência Teste',
+            'observacoes': 'Gosto de açaí com granola e banana',
+            'consentimento_lgpd': True,
+            'versao_politica': 'v1.0',
+        })
+        assert resp.status_code == 201
+
+    def test_login_form_post_ainda_funciona(self, app):
+        """Login por POST continua funcionando normalmente."""
+        c = app.test_client()
+        resp = c.post('/login', data={
+            'email': 'invalido@naoexiste.com',
+            'senha': 'senhaerrada',
+        })
+        assert resp.status_code == 200
+        assert 'incorretos' in resp.data.decode()

@@ -14,105 +14,503 @@
             align-items: center;
             min-height: 80vh;
         }
-        .login-card {
+
+        /* ===== Card com flip 3D ===== */
+        .card-wrapper {
+            max-width: 440px;
+            width: 100%;
+            perspective: 1200px;
+        }
+        .card-flipper {
+            position: relative;
+            transition: transform 0.6s cubic-bezier(.4,0,.2,1);
+            transform-style: preserve-3d;
+        }
+        .card-flipper.flipped {
+            transform: rotateY(180deg);
+        }
+        .card-face {
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
             background: var(--branco);
             border-radius: var(--raio);
             box-shadow: var(--sombra-lg);
-            padding: 3rem 2.5rem;
-            max-width: 420px;
-            width: 100%;
+            padding: 2.5rem 2rem;
             text-align: center;
         }
-        .login-card h1 {
+        .card-front {
+            position: relative;
+            z-index: 2;
+        }
+        .card-back {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            transform: rotateY(180deg);
+        }
+
+        .card-face h1 {
             color: var(--acai);
-            margin-bottom: 0.5rem;
-            font-size: 2rem;
+            margin-bottom: 0.3rem;
+            font-size: 1.9rem;
         }
-        .login-card .subtitle {
+        .card-face .subtitle {
             color: var(--cinza-600);
-            margin-bottom: 2rem;
+            margin-bottom: 1.5rem;
+            font-size: 0.95rem;
         }
-        .login-card .emoji-logo {
-            font-size: 4rem;
-            margin-bottom: 1rem;
+        .card-face .emoji-logo {
+            font-size: 3.5rem;
+            margin-bottom: 0.5rem;
             display: block;
         }
+
+        /* ===== Inputs ===== */
         .login-input {
             font-size: 1rem;
-            padding: 0.9rem 1rem;
+            padding: 0.85rem 1rem;
             border: 2px solid var(--cinza-300);
             border-radius: var(--raio-sm);
             width: 100%;
-            margin-bottom: 1rem;
-            transition: border-color var(--fast);
+            margin-bottom: 0.9rem;
+            transition: border-color 0.2s;
+            box-sizing: border-box;
+            appearance: none;
+            -webkit-appearance: none;
         }
         .login-input:focus {
             outline: none;
             border-color: var(--acai);
             box-shadow: 0 0 0 3px rgba(108, 46, 185, 0.15);
         }
+        .login-label {
+            text-align: left;
+            display: block;
+            margin-bottom: 0.35rem;
+            font-weight: 600;
+            color: #444;
+            font-size: 0.95rem;
+        }
+
+        /* ===== Mensagens ===== */
         .login-erro {
             color: var(--vermelho);
             background: #FFEBEE;
             padding: 0.8rem;
             border-radius: var(--raio-sm);
             margin-bottom: 1rem;
+            font-size: 0.95rem;
         }
-        .login-label {
-            text-align: left;
-            display: block;
-            margin-bottom: 0.4rem;
+        .reg-msg {
+            display: none;
+            padding: 0.8rem;
+            border-radius: var(--raio-sm);
+            margin-bottom: 1rem;
+            font-size: 0.95rem;
             font-weight: 500;
-            color: var(--cinza-700, #555);
+            text-align: center;
+        }
+        .reg-msg.sucesso {
+            display: block;
+            background: #E8F5E9;
+            color: #2E7D32;
+            border: 1px solid #66BB6A;
+        }
+        .reg-msg.erro {
+            display: block;
+            background: #FFEBEE;
+            color: #C62828;
+            border: 1px solid #EF5350;
+        }
+
+        /* ===== Botões ===== */
+        .btn-entrar {
+            width: 100%;
+            padding: 1rem;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #fff;
+            background: linear-gradient(135deg, var(--acai), var(--acai-light, #9B59B6));
+            border: none;
+            border-radius: var(--raio-sm);
+            cursor: pointer;
+            transition: transform 0.15s, box-shadow 0.15s;
+            box-shadow: 0 4px 12px rgba(108, 46, 185, 0.3);
+        }
+        .btn-entrar:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(108, 46, 185, 0.4);
+        }
+        .btn-entrar:active { transform: translateY(0); }
+        .btn-entrar:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-registrar {
+            width: 100%;
+            padding: 1rem;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #fff;
+            background: linear-gradient(135deg, #00C853, #2E7D32);
+            border: none;
+            border-radius: var(--raio-sm);
+            cursor: pointer;
+            transition: transform 0.15s, box-shadow 0.15s;
+            box-shadow: 0 4px 12px rgba(0, 200, 83, 0.3);
+        }
+        .btn-registrar:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(0, 200, 83, 0.4);
+        }
+        .btn-registrar:active { transform: translateY(0); }
+        .btn-registrar:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* ===== Link de alternância ===== */
+        .toggle-link {
+            margin-top: 1.2rem;
+            font-size: 0.95rem;
+            color: var(--cinza-600);
+        }
+        .toggle-link a {
+            color: var(--acai);
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+        .toggle-link a:hover {
+            color: var(--acai-dark, #4A1D80);
+            text-decoration: underline;
+        }
+
+        /* ===== Separador visual ===== */
+        .divider {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            margin: 1.2rem 0;
+            color: var(--cinza-400);
+            font-size: 0.85rem;
+        }
+        .divider::before, .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--cinza-300);
+        }
+
+        /* ===== LGPD checkbox ===== */
+        .lgpd-check {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.6rem;
+            text-align: left;
+            margin-bottom: 1rem;
+            padding: 0.8rem;
+            background: #FFF8E1;
+            border: 1px solid #FFD54F;
+            border-radius: var(--raio-sm);
+        }
+        .lgpd-check input[type="checkbox"] {
+            width: 22px;
+            height: 22px;
+            min-width: 22px;
+            margin-top: 2px;
+            accent-color: var(--acai);
+            cursor: pointer;
+        }
+        .lgpd-check span {
+            font-size: 0.85rem;
+            line-height: 1.4;
+            color: #555;
+        }
+        .lgpd-check a {
+            color: var(--acai);
+            font-weight: 600;
+        }
+
+        /* ===== Textarea ===== */
+        .login-textarea {
+            font-size: 1rem;
+            font-family: inherit;
+            padding: 0.85rem 1rem;
+            border: 2px solid var(--cinza-300);
+            border-radius: var(--raio-sm);
+            width: 100%;
+            margin-bottom: 0.9rem;
+            transition: border-color 0.2s;
+            box-sizing: border-box;
+            resize: vertical;
+            min-height: 60px;
+            appearance: none;
+            -webkit-appearance: none;
+        }
+        .login-textarea:focus {
+            outline: none;
+            border-color: var(--acai);
+            box-shadow: 0 0 0 3px rgba(108, 46, 185, 0.15);
+        }
+
+        /* ===== Tela de sucesso ===== */
+        .reg-sucesso {
+            display: none;
+        }
+        .reg-sucesso .check-icon {
+            font-size: 4rem;
+            display: block;
+            margin-bottom: 0.6rem;
+            animation: bounceIn 0.6s ease;
+        }
+        @keyframes bounceIn {
+            0% { transform: scale(0); }
+            60% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+        .reg-sucesso h2 {
+            color: #2E7D32;
+            font-size: 1.4rem;
+            margin-bottom: 0.3rem;
+        }
+        .reg-sucesso p {
+            color: #555;
+            font-size: 1rem;
+            line-height: 1.5;
+        }
+        .pontos-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #FFD54F, #FF9800);
+            color: #fff;
+            font-size: 1rem;
+            font-weight: 700;
+            padding: 0.6rem 1.2rem;
+            border-radius: 50px;
+            margin: 0.8rem 0;
+            box-shadow: 0 3px 10px rgba(255, 152, 0, 0.3);
+        }
+
+        /* ===== Spinner ===== */
+        .spinner {
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            border: 3px solid transparent;
+            border-top: 3px solid #fff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            vertical-align: middle;
+            margin-right: 6px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ===== Indicador de etapas ===== */
+        .steps {
+            display: flex;
+            justify-content: center;
+            gap: 0.5rem;
+            margin-bottom: 1.2rem;
+        }
+        .step-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--cinza-300);
+            transition: background 0.3s, transform 0.3s;
+        }
+        .step-dot.active {
+            background: var(--acai);
+            transform: scale(1.3);
+        }
+
+        /* ===== Footer ===== */
+        .login-footer {
+            text-align: center;
+            margin-top: 1rem;
+            font-size: 0.82rem;
+            color: var(--cinza-600);
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="login-container">
-            <div class="login-card">
-                <span class="emoji-logo">🍇</span>
-                <h1>Açaiteria CRM</h1>
-                <p class="subtitle">Combina Açaí — Sistema de Gestão</p>
+            <div class="card-wrapper">
+                <div class="card-flipper" id="cardFlipper">
 
-                {% if erro %}
-                <div class="login-erro">⚠️ {{ erro }}</div>
-                {% endif %}
+                    <!-- ====== FACE FRONTAL — LOGIN ====== -->
+                    <div class="card-face card-front">
+                        <span class="emoji-logo">🍇</span>
+                        <h1>Açaiteria CRM</h1>
+                        <p class="subtitle">Combina Açaí — Sistema de Gestão</p>
 
-                <form method="POST" action="/login">
-                    <div class="form-group">
-                        <label for="email" class="login-label">📧 Email:</label>
-                        <input 
-                            type="email" 
-                            id="email" 
-                            name="email" 
-                            class="login-input" 
-                            required 
-                            autofocus
-                            autocomplete="email"
-                            placeholder="seu@email.com"
-                        >
+                        {% if erro %}
+                        <div class="login-erro">⚠️ {{ erro }}</div>
+                        {% endif %}
+
+                        <form method="POST" action="/login">
+                            <div class="form-group">
+                                <label for="email" class="login-label">📧 Email:</label>
+                                <input 
+                                    type="email" 
+                                    id="email" 
+                                    name="email" 
+                                    class="login-input" 
+                                    required 
+                                    autofocus
+                                    autocomplete="email"
+                                    placeholder="seu@email.com"
+                                >
+                            </div>
+                            <div class="form-group">
+                                <label for="senha" class="login-label">🔒 Senha:</label>
+                                <input 
+                                    type="password" 
+                                    id="senha" 
+                                    name="senha" 
+                                    class="login-input" 
+                                    required 
+                                    autocomplete="current-password"
+                                    placeholder="••••••••"
+                                >
+                            </div>
+                            <button type="submit" class="btn-entrar">
+                                🔓 Entrar
+                            </button>
+                        </form>
+
+                        <div class="divider">ou</div>
+
+                        <p class="toggle-link">
+                            É cliente? <a onclick="flipToRegister()" id="link-registrar">Cadastre-se aqui! 🎉</a>
+                        </p>
+
+                        <p class="login-footer">
+                            Projeto Integrador UNIVESP — Grupo 22
+                        </p>
                     </div>
-                    <div class="form-group">
-                        <label for="senha" class="login-label">🔒 Senha:</label>
-                        <input 
-                            type="password" 
-                            id="senha" 
-                            name="senha" 
-                            class="login-input" 
-                            required 
-                            autocomplete="current-password"
-                            placeholder="••••••••"
-                        >
-                    </div>
-                    <button type="submit" class="btn btn-primary" style="width: 100%; padding: 1rem; font-size: 1.1rem;">
-                        🔓 Entrar
-                    </button>
-                </form>
 
-                <p style="margin-top: 2rem; font-size: 0.85rem; color: var(--cinza-600);">
-                    Projeto Integrador UNIVESP — Grupo 22
-                </p>
+                    <!-- ====== FACE TRASEIRA — REGISTRE-SE ====== -->
+                    <div class="card-face card-back">
+                        <span class="emoji-logo">🍇</span>
+                        <h1>Cadastre-se</h1>
+                        <p class="subtitle">Ganhe pontos de fidelidade!</p>
+
+                        <!-- Etapas visuais -->
+                        <div class="steps" id="step-dots">
+                            <span class="step-dot active" data-step="1"></span>
+                            <span class="step-dot" data-step="2"></span>
+                            <span class="step-dot" data-step="3"></span>
+                        </div>
+
+                        <!-- Formulário de registro (multi-step) -->
+                        <div id="reg-form-wrap">
+                            <form id="reg-form" novalidate>
+                                <div id="reg-msg" class="reg-msg"></div>
+
+                                <!-- STEP 1: Dados básicos -->
+                                <div id="step-1" class="reg-step">
+                                    <div class="form-group">
+                                        <label for="reg-nome" class="login-label">📝 Seu nome *</label>
+                                        <input 
+                                            type="text" 
+                                            id="reg-nome" 
+                                            class="login-input" 
+                                            placeholder="Digite seu nome completo"
+                                            required
+                                            autocomplete="name"
+                                            minlength="2"
+                                            maxlength="150"
+                                        >
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="reg-telefone" class="login-label">📱 WhatsApp</label>
+                                        <input 
+                                            type="tel" 
+                                            id="reg-telefone" 
+                                            class="login-input" 
+                                            placeholder="(12) 99999-9999"
+                                            autocomplete="tel"
+                                            maxlength="20"
+                                        >
+                                    </div>
+                                    <button type="button" class="btn-registrar" onclick="nextStep(2)">
+                                        Próximo ➜
+                                    </button>
+                                </div>
+
+                                <!-- STEP 2: Contato + preferências -->
+                                <div id="step-2" class="reg-step" style="display:none;">
+                                    <div class="form-group">
+                                        <label for="reg-email" class="login-label">✉️ E-mail</label>
+                                        <input 
+                                            type="email" 
+                                            id="reg-email" 
+                                            class="login-input" 
+                                            placeholder="seu@email.com"
+                                            autocomplete="email"
+                                            maxlength="100"
+                                        >
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="reg-obs" class="login-label">🍨 Preferências (opcional)</label>
+                                        <textarea 
+                                            id="reg-obs" 
+                                            class="login-textarea" 
+                                            placeholder="Ex: Gosto de açaí com granola..."
+                                            maxlength="500"
+                                        ></textarea>
+                                    </div>
+                                    <button type="button" class="btn-registrar" onclick="nextStep(3)">
+                                        Próximo ➜
+                                    </button>
+                                    <p class="toggle-link"><a onclick="prevStep(1)">⬅ Voltar</a></p>
+                                </div>
+
+                                <!-- STEP 3: LGPD + confirmar -->
+                                <div id="step-3" class="reg-step" style="display:none;">
+                                    <div class="lgpd-check">
+                                        <input type="checkbox" id="reg-lgpd" required>
+                                        <span>
+                                            Li e aceito a 
+                                            <a href="/politica-privacidade" target="_blank">Política de Privacidade</a>
+                                            e autorizo o uso dos meus dados conforme a LGPD.
+                                        </span>
+                                    </div>
+                                    <button type="submit" class="btn-registrar" id="btn-registrar">
+                                        ✅ Cadastrar e Ganhar Pontos
+                                    </button>
+                                    <p class="toggle-link"><a onclick="prevStep(2)">⬅ Voltar</a></p>
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- Tela de sucesso (oculta) -->
+                        <div id="reg-sucesso" class="reg-sucesso">
+                            <span class="check-icon">🎉</span>
+                            <h2>Cadastro realizado!</h2>
+                            <p id="reg-boas-vindas">Bem-vindo(a) à família Combina Açaí!</p>
+                            <div class="pontos-badge">🌟 +10 pontos de boas-vindas!</div>
+                            <p>Acumule pontos a cada compra e troque por prêmios!</p>
+                        </div>
+
+                        <div class="divider">ou</div>
+
+                        <p class="toggle-link">
+                            Já tem acesso? <a onclick="flipToLogin()" id="link-login">Faça login 🔓</a>
+                        </p>
+
+                        <p class="login-footer">
+                            Projeto Integrador UNIVESP — Grupo 22
+                        </p>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -120,5 +518,173 @@
             <p>© 2026 - Projeto Integrador UNIVESP | Grupo 22 | Polo Lorena/SP</p>
         </footer>
     </div>
+
+    <script>
+    (function() {
+        'use strict';
+
+        var flipper = document.getElementById('cardFlipper');
+        var regForm = document.getElementById('reg-form');
+        var msgEl = document.getElementById('reg-msg');
+        var btnRegistrar = document.getElementById('btn-registrar');
+        var currentStep = 1;
+
+        // === Flip card ===
+        window.flipToRegister = function() {
+            flipper.classList.add('flipped');
+            resetRegistro();
+            setTimeout(function() {
+                document.getElementById('reg-nome').focus();
+            }, 650);
+        };
+        window.flipToLogin = function() {
+            flipper.classList.remove('flipped');
+            setTimeout(function() {
+                document.getElementById('email').focus();
+            }, 650);
+        };
+
+        // === Multi-step navigation ===
+        window.nextStep = function(step) {
+            esconderMsg();
+            // Validar step atual
+            if (step === 2) {
+                var nome = document.getElementById('reg-nome').value.trim();
+                if (!nome || nome.length < 2) {
+                    mostrarMsg('Por favor, digite seu nome (mínimo 2 caracteres).', 'erro');
+                    document.getElementById('reg-nome').focus();
+                    return;
+                }
+            }
+            if (step === 3) {
+                var email = document.getElementById('reg-email').value.trim();
+                if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                    mostrarMsg('Por favor, digite um e-mail válido.', 'erro');
+                    document.getElementById('reg-email').focus();
+                    return;
+                }
+            }
+            showStep(step);
+        };
+        window.prevStep = function(step) {
+            esconderMsg();
+            showStep(step);
+        };
+
+        function showStep(step) {
+            currentStep = step;
+            for (var i = 1; i <= 3; i++) {
+                document.getElementById('step-' + i).style.display = i === step ? 'block' : 'none';
+            }
+            // Atualizar dots
+            var dots = document.querySelectorAll('.step-dot');
+            dots.forEach(function(d) {
+                var s = parseInt(d.getAttribute('data-step'));
+                d.classList.toggle('active', s <= step);
+            });
+        }
+
+        // === Máscara de telefone ===
+        var telInput = document.getElementById('reg-telefone');
+        telInput.addEventListener('input', function() {
+            var v = this.value.replace(/\D/g, '').slice(0, 11);
+            if (v.length > 6) {
+                this.value = '(' + v.slice(0,2) + ') ' + v.slice(2,7) + '-' + v.slice(7);
+            } else if (v.length > 2) {
+                this.value = '(' + v.slice(0,2) + ') ' + v.slice(2);
+            } else if (v.length > 0) {
+                this.value = '(' + v;
+            }
+        });
+
+        // === Mensagens ===
+        function mostrarMsg(texto, tipo) {
+            msgEl.textContent = texto;
+            msgEl.className = 'reg-msg ' + tipo;
+            msgEl.style.display = 'block';
+        }
+        function esconderMsg() {
+            msgEl.className = 'reg-msg';
+            msgEl.style.display = 'none';
+            msgEl.textContent = '';
+        }
+
+        function escapeHtml(t) {
+            var d = document.createElement('div');
+            d.textContent = t;
+            return d.innerHTML;
+        }
+
+        // === Submit ===
+        regForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            esconderMsg();
+
+            if (!document.getElementById('reg-lgpd').checked) {
+                mostrarMsg('Você precisa aceitar a Política de Privacidade.', 'erro');
+                return;
+            }
+
+            var nome = document.getElementById('reg-nome').value.trim();
+            var telefone = document.getElementById('reg-telefone').value.trim();
+            var email = document.getElementById('reg-email').value.trim();
+            var obs = document.getElementById('reg-obs').value.trim();
+
+            btnRegistrar.disabled = true;
+            btnRegistrar.innerHTML = '<span class="spinner"></span> Cadastrando...';
+
+            var payload = {
+                nome: nome,
+                consentimento_lgpd: true,
+                versao_politica: 'v1.0'
+            };
+            if (telefone) payload.telefone = telefone;
+            if (email) payload.email = email;
+            if (obs) payload.observacoes = obs;
+
+            fetch('/api/totem/cadastro', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(function(resp) {
+                return resp.json().then(function(data) {
+                    return { ok: resp.ok, status: resp.status, data: data };
+                });
+            })
+            .then(function(result) {
+                if (result.ok) {
+                    var nomeCliente = escapeHtml(result.data.nome || nome);
+                    document.getElementById('reg-boas-vindas').innerHTML =
+                        'Bem-vindo(a), <strong>' + nomeCliente + '</strong>! 🍇';
+                    document.getElementById('reg-form-wrap').style.display = 'none';
+                    document.getElementById('step-dots').style.display = 'none';
+                    document.getElementById('reg-sucesso').style.display = 'block';
+                } else {
+                    var erro = result.data.erro || result.data.detalhes || 'Erro ao cadastrar.';
+                    mostrarMsg(erro, 'erro');
+                }
+            })
+            .catch(function() {
+                mostrarMsg('Erro de conexão. Tente novamente.', 'erro');
+            })
+            .finally(function() {
+                btnRegistrar.disabled = false;
+                btnRegistrar.innerHTML = '✅ Cadastrar e Ganhar Pontos';
+            });
+        });
+
+        // === Reset ===
+        function resetRegistro() {
+            regForm.reset();
+            esconderMsg();
+            showStep(1);
+            document.getElementById('reg-form-wrap').style.display = 'block';
+            document.getElementById('step-dots').style.display = 'flex';
+            document.getElementById('reg-sucesso').style.display = 'none';
+        }
+
+    })();
+    </script>
 </body>
 </html>
