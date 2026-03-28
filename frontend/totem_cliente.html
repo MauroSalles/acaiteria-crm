@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Cadastre-se — Combina Açaí</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <meta name="theme-color" content="#7B1FA2">
+    <style>
+        /* ===== TOTEM — Layout touch-friendly para tablet/balcão ===== */
+        body {
+            background: linear-gradient(135deg, #6C2EB9 0%, #4A1D80 50%, #2E1065 100%);
+            min-height: 100vh;
+            margin: 0;
+            padding: 0;
+        }
+        .totem-container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 1.5rem 1rem;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .totem-header {
+            text-align: center;
+            color: #fff;
+            margin-bottom: 1.5rem;
+        }
+        .totem-header .emoji-logo {
+            font-size: 3.5rem;
+            display: block;
+            margin-bottom: 0.3rem;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.08); }
+        }
+        .totem-header h1 {
+            font-size: 1.8rem;
+            margin: 0 0 0.2rem 0;
+            font-weight: 700;
+        }
+        .totem-header p {
+            font-size: 1rem;
+            opacity: 0.9;
+            margin: 0;
+        }
+
+        /* Card principal */
+        .totem-card {
+            background: #fff;
+            border-radius: 20px;
+            padding: 2rem 1.5rem;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            flex: 1;
+        }
+        .totem-card h2 {
+            color: var(--acai, #6C2EB9);
+            text-align: center;
+            font-size: 1.4rem;
+            margin: 0 0 0.3rem 0;
+        }
+        .totem-card .subtitle {
+            text-align: center;
+            color: #666;
+            font-size: 0.95rem;
+            margin-bottom: 1.5rem;
+        }
+
+        /* Campos do formulário — grandes para toque */
+        .totem-form .form-group {
+            margin-bottom: 1.2rem;
+        }
+        .totem-form label {
+            display: block;
+            font-weight: 600;
+            font-size: 1.05rem;
+            margin-bottom: 0.4rem;
+            color: #333;
+        }
+        .totem-form input,
+        .totem-form textarea {
+            width: 100%;
+            padding: 1rem;
+            font-size: 1.1rem;
+            border: 2px solid #ddd;
+            border-radius: 12px;
+            transition: border-color 0.2s;
+            box-sizing: border-box;
+            -webkit-appearance: none;
+        }
+        .totem-form input:focus,
+        .totem-form textarea:focus {
+            outline: none;
+            border-color: var(--acai, #6C2EB9);
+            box-shadow: 0 0 0 4px rgba(108, 46, 185, 0.15);
+        }
+        .totem-form input::placeholder,
+        .totem-form textarea::placeholder {
+            color: #aaa;
+        }
+        .totem-form textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        /* LGPD Consent */
+        .totem-lgpd {
+            background: #FFF8E1;
+            border: 2px solid #FFD54F;
+            border-radius: 14px;
+            padding: 1.2rem;
+            margin: 1.5rem 0;
+        }
+        .totem-lgpd h3 {
+            color: #E65100;
+            font-size: 1.05rem;
+            margin: 0 0 0.8rem 0;
+        }
+        .totem-lgpd .checkbox-wrap {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.8rem;
+        }
+        .totem-lgpd .checkbox-wrap input[type="checkbox"] {
+            width: 28px;
+            height: 28px;
+            min-width: 28px;
+            margin-top: 2px;
+            accent-color: var(--acai, #6C2EB9);
+            cursor: pointer;
+        }
+        .totem-lgpd .checkbox-wrap span {
+            font-size: 0.95rem;
+            line-height: 1.4;
+            color: #555;
+        }
+        .totem-lgpd .checkbox-wrap a {
+            color: var(--acai, #6C2EB9);
+            font-weight: 600;
+        }
+        .totem-lgpd .uso-dados {
+            margin-top: 0.8rem;
+            font-size: 0.85rem;
+            color: #777;
+        }
+        .totem-lgpd .uso-dados ul {
+            list-style: none;
+            padding: 0;
+            margin: 0.3rem 0 0 0;
+        }
+        .totem-lgpd .uso-dados li {
+            padding: 0.15rem 0;
+        }
+
+        /* Botão GRANDE para toque */
+        .totem-btn {
+            display: block;
+            width: 100%;
+            padding: 1.2rem;
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: #fff;
+            background: linear-gradient(135deg, #6C2EB9, #9B59B6);
+            border: none;
+            border-radius: 14px;
+            cursor: pointer;
+            transition: transform 0.15s, box-shadow 0.15s;
+            box-shadow: 0 4px 15px rgba(108, 46, 185, 0.4);
+            margin-top: 0.5rem;
+        }
+        .totem-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(108, 46, 185, 0.5);
+        }
+        .totem-btn:active {
+            transform: translateY(0);
+        }
+        .totem-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Mensagens */
+        .totem-msg {
+            display: none;
+            padding: 1rem;
+            border-radius: 12px;
+            text-align: center;
+            font-size: 1rem;
+            font-weight: 500;
+            margin-top: 1rem;
+        }
+        .totem-msg.sucesso {
+            display: block;
+            background: #E8F5E9;
+            color: #2E7D32;
+            border: 2px solid #66BB6A;
+        }
+        .totem-msg.erro {
+            display: block;
+            background: #FFEBEE;
+            color: #C62828;
+            border: 2px solid #EF5350;
+        }
+
+        /* Tela de sucesso */
+        .totem-sucesso {
+            display: none;
+            text-align: center;
+            padding: 2rem 1rem;
+        }
+        .totem-sucesso .check-icon {
+            font-size: 5rem;
+            display: block;
+            margin-bottom: 1rem;
+            animation: bounceIn 0.6s ease;
+        }
+        @keyframes bounceIn {
+            0% { transform: scale(0); }
+            60% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+        .totem-sucesso h2 {
+            color: #2E7D32;
+            font-size: 1.6rem;
+            margin-bottom: 0.5rem;
+        }
+        .totem-sucesso p {
+            color: #555;
+            font-size: 1.1rem;
+            line-height: 1.5;
+        }
+        .totem-sucesso .pontos-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #FFD54F, #FF9800);
+            color: #fff;
+            font-size: 1.2rem;
+            font-weight: 700;
+            padding: 0.8rem 1.5rem;
+            border-radius: 50px;
+            margin: 1rem 0;
+            box-shadow: 0 4px 15px rgba(255, 152, 0, 0.3);
+        }
+
+        /* Footer */
+        .totem-footer {
+            text-align: center;
+            color: rgba(255,255,255,0.6);
+            font-size: 0.8rem;
+            padding: 1rem 0 0.5rem;
+        }
+        .totem-footer a {
+            color: rgba(255,255,255,0.8);
+        }
+
+        /* Animação de carregamento */
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid transparent;
+            border-top: 3px solid #fff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            vertical-align: middle;
+            margin-right: 8px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="totem-container">
+        <!-- Header -->
+        <div class="totem-header">
+            <span class="emoji-logo">🍇</span>
+            <h1>Combina Açaí</h1>
+            <p>Cadastre-se e ganhe pontos de fidelidade!</p>
+        </div>
+
+        <!-- Card com formulário -->
+        <div class="totem-card" id="card-form">
+            <h2>👤 Faça seu cadastro</h2>
+            <p class="subtitle">Rápido, fácil e seguro</p>
+
+            <form id="totem-form" class="totem-form" novalidate>
+                <div class="form-group">
+                    <label for="nome">📝 Seu nome *</label>
+                    <input 
+                        type="text" 
+                        id="nome" 
+                        name="nome" 
+                        placeholder="Digite seu nome completo"
+                        required
+                        autocomplete="name"
+                        minlength="2"
+                        maxlength="150"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="telefone">📱 WhatsApp</label>
+                    <input 
+                        type="tel" 
+                        id="telefone" 
+                        name="telefone"
+                        placeholder="(12) 99999-9999"
+                        autocomplete="tel"
+                        maxlength="20"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="email">✉️ E-mail</label>
+                    <input 
+                        type="email" 
+                        id="email" 
+                        name="email"
+                        placeholder="seu@email.com"
+                        autocomplete="email"
+                        maxlength="100"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="observacoes">🍨 Preferências (opcional)</label>
+                    <textarea 
+                        id="observacoes" 
+                        name="observacoes"
+                        placeholder="Ex: Gosto de açaí com granola, sem leite condensado..."
+                        maxlength="500"
+                    ></textarea>
+                </div>
+
+                <!-- LGPD -->
+                <div class="totem-lgpd">
+                    <h3>🔒 Proteção de Dados (LGPD)</h3>
+                    <div class="checkbox-wrap">
+                        <input type="checkbox" id="consentimento" name="consentimento_lgpd" required>
+                        <span>
+                            Li e aceito a 
+                            <a href="/politica-privacidade" target="_blank">Política de Privacidade</a>
+                            e autorizo o uso dos meus dados conforme a LGPD.
+                        </span>
+                    </div>
+                    <div class="uso-dados">
+                        <ul>
+                            <li>✅ Histórico de compras e promoções</li>
+                            <li>✅ Programa de fidelidade (pontos)</li>
+                            <li>❌ Nunca compartilhamos seus dados</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <button type="submit" class="totem-btn" id="btn-cadastrar">
+                    ✅ Cadastrar e Ganhar Pontos
+                </button>
+
+                <div id="totem-msg" class="totem-msg"></div>
+            </form>
+        </div>
+
+        <!-- Tela de sucesso (oculta inicialmente) -->
+        <div class="totem-card totem-sucesso" id="card-sucesso">
+            <span class="check-icon">🎉</span>
+            <h2>Cadastro realizado!</h2>
+            <p id="msg-boas-vindas">Bem-vindo(a) à família Combina Açaí!</p>
+            <div class="pontos-badge">🌟 +10 pontos de boas-vindas!</div>
+            <p>Acumule pontos a cada compra e troque por prêmios!</p>
+            <button class="totem-btn" onclick="novoCadastro()" style="margin-top: 1.5rem; background: linear-gradient(135deg, #00C853, #2E7D32);">
+                👤 Novo Cadastro
+            </button>
+        </div>
+
+        <!-- Footer -->
+        <div class="totem-footer">
+            <p>© 2026 — Combina Açaí · Projeto Integrador UNIVESP · Grupo 22</p>
+            <p><a href="/politica-privacidade">Política de Privacidade</a></p>
+        </div>
+    </div>
+
+    <script>
+    (function() {
+        'use strict';
+
+        var form = document.getElementById('totem-form');
+        var btnCadastrar = document.getElementById('btn-cadastrar');
+        var msgEl = document.getElementById('totem-msg');
+        var cardForm = document.getElementById('card-form');
+        var cardSucesso = document.getElementById('card-sucesso');
+
+        // Máscara simples de telefone
+        var telInput = document.getElementById('telefone');
+        telInput.addEventListener('input', function() {
+            var v = this.value.replace(/\D/g, '').slice(0, 11);
+            if (v.length > 6) {
+                this.value = '(' + v.slice(0,2) + ') ' + v.slice(2,7) + '-' + v.slice(7);
+            } else if (v.length > 2) {
+                this.value = '(' + v.slice(0,2) + ') ' + v.slice(2);
+            } else if (v.length > 0) {
+                this.value = '(' + v;
+            }
+        });
+
+        function mostrarMsg(texto, tipo) {
+            msgEl.textContent = texto;
+            msgEl.className = 'totem-msg ' + tipo;
+        }
+
+        function esconderMsg() {
+            msgEl.className = 'totem-msg';
+            msgEl.style.display = 'none';
+        }
+
+        function escapeHtml(t) {
+            var d = document.createElement('div');
+            d.textContent = t;
+            return d.innerHTML;
+        }
+
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            esconderMsg();
+
+            var nome = document.getElementById('nome').value.trim();
+            var telefone = document.getElementById('telefone').value.trim();
+            var email = document.getElementById('email').value.trim();
+            var obs = document.getElementById('observacoes').value.trim();
+            var consentimento = document.getElementById('consentimento').checked;
+
+            // Validações
+            if (!nome || nome.length < 2) {
+                mostrarMsg('Por favor, digite seu nome (mínimo 2 caracteres).', 'erro');
+                document.getElementById('nome').focus();
+                return;
+            }
+
+            if (!consentimento) {
+                mostrarMsg('Você precisa aceitar a Política de Privacidade.', 'erro');
+                return;
+            }
+
+            if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                mostrarMsg('Por favor, digite um e-mail válido.', 'erro');
+                document.getElementById('email').focus();
+                return;
+            }
+
+            // Enviar
+            btnCadastrar.disabled = true;
+            btnCadastrar.innerHTML = '<span class="spinner"></span> Cadastrando...';
+
+            var payload = {
+                nome: nome,
+                consentimento_lgpd: true,
+                versao_politica: 'v1.0'
+            };
+            if (telefone) payload.telefone = telefone;
+            if (email) payload.email = email;
+            if (obs) payload.observacoes = obs;
+
+            fetch('/api/totem/cadastro', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(function(resp) {
+                return resp.json().then(function(data) {
+                    return { ok: resp.ok, status: resp.status, data: data };
+                });
+            })
+            .then(function(result) {
+                if (result.ok) {
+                    // Sucesso
+                    var nomeCliente = escapeHtml(result.data.nome || nome);
+                    document.getElementById('msg-boas-vindas').innerHTML =
+                        'Bem-vindo(a), <strong>' + nomeCliente + '</strong>! 🍇';
+                    cardForm.style.display = 'none';
+                    cardSucesso.style.display = 'block';
+                } else {
+                    var erro = result.data.erro || result.data.detalhes || 'Erro ao cadastrar.';
+                    mostrarMsg(erro, 'erro');
+                }
+            })
+            .catch(function() {
+                mostrarMsg('Erro de conexão. Tente novamente.', 'erro');
+            })
+            .finally(function() {
+                btnCadastrar.disabled = false;
+                btnCadastrar.innerHTML = '✅ Cadastrar e Ganhar Pontos';
+            });
+        });
+
+        // Novo cadastro — reseta tudo
+        window.novoCadastro = function() {
+            form.reset();
+            esconderMsg();
+            cardSucesso.style.display = 'none';
+            cardForm.style.display = 'block';
+            document.getElementById('nome').focus();
+        };
+
+        // Auto-reset após 60s na tela de sucesso (para tablet no balcão)
+        var resetTimer;
+        var observer = new MutationObserver(function() {
+            if (cardSucesso.style.display === 'block') {
+                clearTimeout(resetTimer);
+                resetTimer = setTimeout(function() {
+                    window.novoCadastro();
+                }, 60000);
+            }
+        });
+        observer.observe(cardSucesso, { attributes: true, attributeFilter: ['style'] });
+
+    })();
+    </script>
+</body>
+</html>

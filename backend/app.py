@@ -1479,6 +1479,92 @@ def pagina_usuarios():
 
 
 # =============================================================================
+# TOTEM — Cadastro público de clientes (sem login)
+# =============================================================================
+
+@app.route('/totem')
+def pagina_totem():
+    """Totem de auto-cadastro — página pública para tablet no balcão"""
+    return render_template('totem_cliente.html')
+
+
+@app.route('/api/totem/cadastro', methods=['POST'])
+@limiter.limit("10 per minute")
+def totem_cadastrar_cliente():
+    """API pública para auto-cadastro via totem (rate-limited)"""
+    try:
+        dados = request.get_json(silent=True) or {}
+
+        nome = (dados.get('nome') or '').strip()
+        if not nome or len(nome) < 2:
+            return jsonify({'erro': 'Nome é obrigatório (mínimo 2 caracteres)'}), 400
+
+        consentimento = dados.get('consentimento_lgpd', False)
+        if not consentimento:
+            return jsonify({'erro': 'Consentimento LGPD é obrigatório'}), 400
+
+        telefone = (dados.get('telefone') or '').strip() or None
+        email = (dados.get('email') or '').strip().lower() or None
+        observacoes = (dados.get('observacoes') or '').strip() or None
+
+        # Validar email se fornecido
+        if email and '@' not in email:
+            return jsonify({'erro': 'E-mail inválido'}), 400
+
+        # Verificar duplicidade por telefone ou email
+        if telefone:
+            existente = Cliente.query.filter_by(telefone=telefone, ativo=True).first()
+            if existente:
+                return jsonify({'erro': 'Este telefone já está cadastrado. Fale com o atendente.'}), 409
+        if email:
+            existente = Cliente.query.filter_by(email=email, ativo=True).first()
+            if existente:
+                return jsonify({'erro': 'Este e-mail já está cadastrado. Fale com o atendente.'}), 409
+
+        cliente = Cliente(
+            nome=nome,
+            telefone=telefone,
+            email=email,
+            observacoes=observacoes,
+            consentimento_lgpd=True,
+            data_consentimento=datetime.now(timezone.utc),
+            consentimento_versao=dados.get('versao_politica', 'v1.0'),
+            ativo=True
+        )
+
+        db.session.add(cliente)
+        db.session.flush()
+
+        # Registrar histórico LGPD
+        entrada = ConsentimentoHistorico(
+            id_cliente=cliente.id_cliente,
+            acao='concedeu',
+            versao_politica=dados.get('versao_politica', 'v1.0'),
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent', '')[:255]
+        )
+        db.session.add(entrada)
+
+        # Bônus de boas-vindas: +10 pontos
+        cliente.pontos_fidelidade = 10
+
+        db.session.commit()
+        registrar_log('criar', 'cliente', cliente.id_cliente,
+                       f'Auto-cadastro via totem: {cliente.nome}')
+
+        return jsonify({
+            'id_cliente': cliente.id_cliente,
+            'nome': cliente.nome,
+            'pontos_fidelidade': cliente.pontos_fidelidade,
+            'mensagem': 'Cadastro realizado com sucesso!'
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'erro': 'Erro interno. Tente novamente.'}), 500
+
+
+# =============================================================================
 # ROTAS - GESTÃO DE USUÁRIOS (admin only)
 # =============================================================================
 

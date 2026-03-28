@@ -348,3 +348,115 @@ class TestFidelidade:
         ranking = resp.get_json()
         assert len(ranking) >= 1
         assert ranking[0]['pontos'] > 0
+
+
+class TestTotemAutoCadastro:
+    """Testa o fluxo de auto-cadastro público via totem."""
+
+    def test_pagina_totem_publica(self, app):
+        """Totem acessível SEM autenticação."""
+        c = app.test_client()
+        resp = c.get('/totem')
+        assert resp.status_code == 200
+        assert 'Combina' in resp.data.decode()
+
+    def test_cadastro_totem_sucesso(self, app):
+        """Auto-cadastro com dados válidos e consentimento."""
+        c = app.test_client()
+        resp = c.post('/api/totem/cadastro', json={
+            'nome': 'Cliente Totem',
+            'telefone': '(12) 99999-0001',
+            'email': 'totem@teste.com',
+            'consentimento_lgpd': True,
+            'versao_politica': 'v1.0',
+        })
+        assert resp.status_code == 201
+        data = resp.get_json()
+        assert data['nome'] == 'Cliente Totem'
+        assert data['pontos_fidelidade'] == 10  # bônus de boas-vindas
+        assert data['id_cliente'] > 0
+
+    def test_cadastro_totem_sem_nome(self, app):
+        """Rejeita cadastro sem nome."""
+        c = app.test_client()
+        resp = c.post('/api/totem/cadastro', json={
+            'consentimento_lgpd': True,
+        })
+        assert resp.status_code == 400
+        assert 'Nome' in resp.get_json()['erro']
+
+    def test_cadastro_totem_sem_consentimento(self, app):
+        """Rejeita cadastro sem aceite LGPD."""
+        c = app.test_client()
+        resp = c.post('/api/totem/cadastro', json={
+            'nome': 'Sem LGPD',
+            'consentimento_lgpd': False,
+        })
+        assert resp.status_code == 400
+        assert 'Consentimento' in resp.get_json()['erro']
+
+    def test_cadastro_totem_email_duplicado(self, app):
+        """Rejeita cadastro com email já existente."""
+        c = app.test_client()
+        c.post('/api/totem/cadastro', json={
+            'nome': 'Primeiro',
+            'email': 'dup@teste.com',
+            'consentimento_lgpd': True,
+        })
+        resp = c.post('/api/totem/cadastro', json={
+            'nome': 'Segundo',
+            'email': 'dup@teste.com',
+            'consentimento_lgpd': True,
+        })
+        assert resp.status_code == 409
+        assert 'cadastrado' in resp.get_json()['erro']
+
+    def test_cadastro_totem_telefone_duplicado(self, app):
+        """Rejeita cadastro com telefone já existente."""
+        c = app.test_client()
+        c.post('/api/totem/cadastro', json={
+            'nome': 'Primeiro Tel',
+            'telefone': '(12) 98888-0001',
+            'consentimento_lgpd': True,
+        })
+        resp = c.post('/api/totem/cadastro', json={
+            'nome': 'Segundo Tel',
+            'telefone': '(12) 98888-0001',
+            'consentimento_lgpd': True,
+        })
+        assert resp.status_code == 409
+
+    def test_cadastro_totem_email_invalido(self, app):
+        """Rejeita e-mail inválido."""
+        c = app.test_client()
+        resp = c.post('/api/totem/cadastro', json={
+            'nome': 'Email Ruim',
+            'email': 'sem-arroba',
+            'consentimento_lgpd': True,
+        })
+        assert resp.status_code == 400
+
+    def test_cadastro_totem_somente_nome(self, app):
+        """Cadastro mínimo: apenas nome + consentimento."""
+        c = app.test_client()
+        resp = c.post('/api/totem/cadastro', json={
+            'nome': 'Minimalista',
+            'consentimento_lgpd': True,
+        })
+        assert resp.status_code == 201
+        assert resp.get_json()['pontos_fidelidade'] == 10
+
+    def test_cliente_totem_visivel_no_sistema(self, client, app):
+        """Cliente cadastrado pelo totem aparece na lista de clientes."""
+        c = app.test_client()
+        c.post('/api/totem/cadastro', json={
+            'nome': 'Visivel No CRM',
+            'telefone': '(12) 97777-0001',
+            'consentimento_lgpd': True,
+        })
+        # Buscar via API autenticada
+        resp = client.get('/api/clientes?busca=Visivel')
+        assert resp.status_code == 200
+        clientes = resp.get_json()['clientes']
+        assert any(c['nome'] == 'Visivel No CRM' for c in clientes)
+
