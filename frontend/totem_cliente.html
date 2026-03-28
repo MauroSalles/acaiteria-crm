@@ -413,11 +413,13 @@
         function mostrarMsg(texto, tipo) {
             msgEl.textContent = texto;
             msgEl.className = 'totem-msg ' + tipo;
+            msgEl.style.display = 'block';
         }
 
         function esconderMsg() {
             msgEl.className = 'totem-msg';
             msgEl.style.display = 'none';
+            msgEl.textContent = '';
         }
 
         function escapeHtml(t) {
