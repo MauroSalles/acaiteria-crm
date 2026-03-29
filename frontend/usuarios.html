@@ -13,6 +13,10 @@
         <!-- Navbar -->
         <nav class="navbar">
             <div class="navbar-brand">🍇 <strong>Combina Açaí</strong></div>
+            <div class="navbar-search">
+                <input type="text" id="globalSearch" placeholder="Buscar clientes, produtos…" autocomplete="off" aria-label="Busca global">
+                <div class="search-results" id="searchResults"></div>
+            </div>
             <button class="navbar-toggle" onclick="document.getElementById('navMenu').classList.toggle('open')" aria-label="Menu">☰</button>
             <ul class="navbar-menu" id="navMenu">
                 <li><a href="/">🏠 Início</a></li>
@@ -44,6 +48,7 @@
                 {% endif %}
                 <li class="nav-separator"></li>
                 <li class="nav-user-info">👤 {{ usuario_nome }}</li>
+                <li><button class="dark-toggle" id="darkToggle" aria-label="Alternar tema escuro">🌙</button></li>
                 <li><a href="/logout" class="nav-logout">⬅ Sair</a></li>
             </ul>
         </nav>
@@ -57,20 +62,25 @@
                 <h2 id="form-titulo">Cadastrar Novo Usuário</h2>
                 <form id="form-usuario">
                     <div class="form-group">
-                        <label for="nome">Nome *</label>
-                        <input type="text" id="nome" name="nome" required placeholder="Nome completo">
+                        <label for="nome">Nome <span aria-hidden="true">*</span></label>
+                        <input type="text" id="nome" name="nome" required placeholder="Nome completo" aria-required="true">
                     </div>
                     <div class="form-group">
-                        <label for="email">Email *</label>
-                        <input type="email" id="email" name="email" required placeholder="usuario@email.com">
+                        <label for="email">Email <span aria-hidden="true">*</span></label>
+                        <input type="email" id="email" name="email" required placeholder="usuario@email.com" aria-required="true">
                     </div>
                     <div class="form-group">
-                        <label for="senha">Senha *</label>
-                        <input type="password" id="senha" name="senha" placeholder="Mínimo 4 caracteres" minlength="4">
+                        <label for="senha">Senha <span aria-hidden="true">*</span></label>
+                        <input type="password" id="senha" name="senha" placeholder="Mínimo 4 caracteres" minlength="4" aria-describedby="senha-help" oninput="atualizarForcaSenha(this.value)">
+                        <small id="senha-help">Mínimo 4 caracteres</small>
+                        <div class="password-strength" id="password-strength">
+                            <div class="strength-bar"><div class="strength-fill" id="strength-fill"></div></div>
+                            <span class="strength-label" id="strength-label"></span>
+                        </div>
                     </div>
                     <div class="form-group">
-                        <label for="papel">Papel *</label>
-                        <select id="papel" name="papel">
+                        <label for="papel">Papel <span aria-hidden="true">*</span></label>
+                        <select id="papel" name="papel" aria-required="true">
                             <option value="operador">Operador (vendas e consultas)</option>
                             <option value="admin">Administrador (acesso total)</option>
                         </select>
@@ -185,14 +195,15 @@
         }
 
         async function desativarUsuario(id, nome) {
-            if (!confirm(`Desativar o usuário "${nome}"?`)) return;
-            try {
-                await requisicao(`/api/usuarios/${id}`, { method: 'DELETE' });
-                mostrarAlerta(`Usuário "${nome}" desativado`, 'sucesso');
-                carregarUsuarios();
-            } catch (erro) {
-                mostrarAlerta('Erro: ' + erro.message, 'erro');
-            }
+            confirmar('Desativar Usuário', `Tem certeza que deseja desativar "${nome}"? Essa ação pode ser revertida.`, async () => {
+                try {
+                    await requisicao(`/api/usuarios/${id}`, { method: 'DELETE' });
+                    mostrarAlerta(`Usuário "${nome}" desativado`, 'sucesso');
+                    carregarUsuarios();
+                } catch (erro) {
+                    mostrarAlerta('Erro: ' + erro.message, 'erro');
+                }
+            }, '🗑️');
         }
 
         async function carregarUsuarios() {
@@ -221,6 +232,31 @@
             } catch (erro) {
                 tbody.innerHTML = `<tr><td colspan="6" class="text-center" style="color:red;">Erro: ${erro.message}</td></tr>`;
             }
+        }
+
+        function atualizarForcaSenha(senha) {
+            const fill = document.getElementById('strength-fill');
+            const label = document.getElementById('strength-label');
+            if (!fill || !label) return;
+            if (!senha) { fill.style.width = '0'; label.textContent = ''; return; }
+            let score = 0;
+            if (senha.length >= 4) score++;
+            if (senha.length >= 8) score++;
+            if (/[A-Z]/.test(senha)) score++;
+            if (/[0-9]/.test(senha)) score++;
+            if (/[^A-Za-z0-9]/.test(senha)) score++;
+            const levels = [
+                { w: '20%', c: '#F44336', t: 'Muito fraca' },
+                { w: '40%', c: '#FF9800', t: 'Fraca' },
+                { w: '60%', c: '#FFC107', t: 'Razoável' },
+                { w: '80%', c: '#8BC34A', t: 'Boa' },
+                { w: '100%', c: '#00C853', t: 'Forte' },
+            ];
+            const level = levels[Math.min(score, 4)];
+            fill.style.width = level.w;
+            fill.style.background = level.c;
+            label.textContent = level.t;
+            label.style.color = level.c;
         }
     </script>
 </body>

@@ -13,6 +13,10 @@
         <!-- Navbar -->
         <nav class="navbar">
             <div class="navbar-brand">🍇 <strong>Combina Açaí</strong></div>
+            <div class="navbar-search">
+                <input type="text" id="globalSearch" placeholder="Buscar clientes, produtos…" autocomplete="off" aria-label="Busca global">
+                <div class="search-results" id="searchResults"></div>
+            </div>
             <button class="navbar-toggle" onclick="document.getElementById('navMenu').classList.toggle('open')" aria-label="Menu">☰</button>
             <ul class="navbar-menu" id="navMenu">
                 <li><a href="/">🏠 Início</a></li>
@@ -44,6 +48,7 @@
                 {% endif %}
                 <li class="nav-separator"></li>
                 <li class="nav-user-info">👤 {{ usuario_nome }}</li>
+                <li><button class="dark-toggle" id="darkToggle" aria-label="Alternar tema escuro">🌙</button></li>
                 <li><a href="/logout" class="nav-logout">⬅ Sair</a></li>
             </ul>
         </nav>
@@ -102,6 +107,9 @@
                     <button id="btn-exportar-clientes" class="btn btn-success" style="margin-top: 15px;">
                         📥 Exportar Lista de Clientes (CSV)
                     </button>
+                    <a href="/api/exportar/clientes-xlsx" class="btn btn-info" style="margin-top: 15px;" target="_blank">
+                        📊 Exportar Excel (.xlsx)
+                    </a>
                 </div>
             </section>
 
@@ -187,7 +195,8 @@
                 const resposta = await fetch('/api/relatorios/clientes-frequentes');
                 if (!resposta.ok) throw new Error('Erro ao carregar clientes');
                 
-                const clientes = await resposta.json();
+                const json = await resposta.json();
+                const clientes = json.dados || json;
                 const tbody = document.querySelector('#tabela-clientes tbody');
                 
                 if (clientes.length === 0) {
@@ -197,8 +206,8 @@
                 
                 tbody.innerHTML = clientes.map(c => `
                     <tr>
-                        <td><strong>${c.nome}</strong></td>
-                        <td>${c.telefone || '-'}</td>
+                        <td><strong>${escapeHtml(c.nome)}</strong></td>
+                        <td>${escapeHtml(c.telefone || '-')}</td>
                         <td>${c.total_compras}</td>
                         <td>R$ ${c.faturamento.toFixed(2)}</td>
                         <td>${new Date(c.ultima_compra).toLocaleDateString('pt-BR') || '-'}</td>
@@ -215,7 +224,8 @@
                 const resposta = await fetch('/api/relatorios/produtos-ranking');
                 if (!resposta.ok) throw new Error('Erro ao carregar produtos');
                 
-                const produtos = await resposta.json();
+                const json = await resposta.json();
+                const produtos = json.dados || json;
                 const tbody = document.querySelector('#tabela-produtos tbody');
                 
                 if (produtos.length === 0) {
@@ -225,7 +235,7 @@
                 
                 tbody.innerHTML = produtos.map(p => `
                     <tr>
-                        <td><strong>${p.nome_produto}</strong></td>
+                        <td><strong>${escapeHtml(p.nome_produto)}</strong></td>
                         <td>${p.quantidade_vendida}</td>
                         <td>R$ ${p.faturamento.toFixed(2)}</td>
                         <td>R$ ${(p.faturamento / p.quantidade_vendida).toFixed(2)}</td>

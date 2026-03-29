@@ -15,6 +15,10 @@
         <!-- Navbar -->
         <nav class="navbar">
             <div class="navbar-brand">🍇 <strong>Combina Açaí</strong></div>
+            <div class="navbar-search">
+                <input type="text" id="globalSearch" placeholder="Buscar clientes, produtos…" autocomplete="off" aria-label="Busca global">
+                <div class="search-results" id="searchResults"></div>
+            </div>
             <button class="navbar-toggle" onclick="document.getElementById('navMenu').classList.toggle('open')" aria-label="Menu">☰</button>
             <ul class="navbar-menu" id="navMenu">
                 <li><a href="/" class="active">🏠 Início</a></li>
@@ -46,6 +50,7 @@
                 {% endif %}
                 <li class="nav-separator"></li>
                 <li class="nav-user-info">👤 {{ usuario_nome }}</li>
+                <li><button class="dark-toggle" id="darkToggle" aria-label="Alternar tema escuro">🌙</button></li>
                 <li><a href="/logout" class="nav-logout">⬅ Sair</a></li>
             </ul>
         </nav>
@@ -59,7 +64,7 @@
             </section>
 
             <!-- Cards de Estatísticas -->
-            <div class="stats-grid">
+            <div class="stats-grid" role="region" aria-label="Estatísticas gerais">
                 <div class="card stats-card">
                     <div class="card-icon">👥</div>
                     <div class="card-content">
@@ -98,21 +103,21 @@
             </div>
 
             <!-- Gráficos do Dashboard -->
-            <section class="charts-section">
+            <section class="charts-section" role="region" aria-label="Gráficos do dashboard">
                 <div class="stats-grid" style="grid-template-columns: 1fr 1fr;">
                     <div class="card">
                         <h2>📈 Vendas — Últimos 7 Dias</h2>
-                        <canvas id="chartVendasDia" height="220"></canvas>
+                        <canvas id="chartVendasDia" height="220" role="img" aria-label="Gráfico de vendas dos últimos 7 dias"></canvas>
                     </div>
                     <div class="card">
                         <h2>💳 Vendas por Forma de Pagamento</h2>
-                        <canvas id="chartPagamento" height="220"></canvas>
+                        <canvas id="chartPagamento" height="220" role="img" aria-label="Gráfico de vendas por forma de pagamento"></canvas>
                     </div>
                 </div>
                 <div class="stats-grid" style="grid-template-columns: 1fr; max-width: 600px; margin: 1rem auto;">
                     <div class="card">
                         <h2>🏆 Top 5 Produtos Mais Vendidos</h2>
-                        <canvas id="chartProdutos" height="200"></canvas>
+                        <canvas id="chartProdutos" height="200" role="img" aria-label="Gráfico dos 5 produtos mais vendidos"></canvas>
                     </div>
                 </div>
             </section>

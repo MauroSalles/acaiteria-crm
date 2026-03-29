@@ -36,14 +36,20 @@ class TestRelatorioClientesFrequentes:
     def test_clientes_frequentes_vazio(self, client):
         resp = client.get('/api/relatorios/clientes-frequentes')
         assert resp.status_code == 200
-        assert resp.get_json() == []
+        data = resp.get_json()
+        assert data['dados'] == []
+        assert data['total'] == 0
+        assert data['pagina'] == 1
 
 
 class TestRelatorioProdutosRanking:
     def test_produtos_ranking_vazio(self, client):
         resp = client.get('/api/relatorios/produtos-ranking')
         assert resp.status_code == 200
-        assert resp.get_json() == []
+        data = resp.get_json()
+        assert data['dados'] == []
+        assert data['total'] == 0
+        assert data['pagina'] == 1
 
 
 class TestPaginasHTML:

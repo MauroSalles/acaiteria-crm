@@ -28,28 +28,53 @@ document.addEventListener('click', function(e) {
     }
 });
 
-// Função para mostrar alertas personalizados
+// Função para mostrar alertas personalizados (Toast System)
 function mostrarAlerta(mensagem, tipo = 'info') {
-    const alertIds = {
-        'sucesso': 'alertSucesso',
-        'erro': 'alertErro',
-        'info': 'alertInfo',
-        'aviso': 'alertAviso'
-    };
-
-    const div = document.getElementById('mensagem');
-    if (!div) return;
-
-    div.textContent = mensagem;
-    div.className = `alert alert-${tipo}`;
-    div.style.display = 'block';
-
-    // Auto-hide após 5 segundos
-    if (tipo === 'sucesso' || tipo === 'info') {
-        setTimeout(() => {
-            div.style.display = 'none';
-        }, 5000);
+    // Garantir container de toasts
+    let container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        document.body.appendChild(container);
     }
+
+    const icones = { sucesso: '✅', erro: '❌', info: 'ℹ️', aviso: '⚠️' };
+
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${tipo}`;
+    toast.setAttribute('role', 'alert');
+    toast.innerHTML = `<span class="toast-icon">${icones[tipo] || 'ℹ️'}</span><span class="toast-msg">${escapeHtml(mensagem)}</span><button class="toast-close" aria-label="Fechar">&times;</button>`;
+
+    toast.querySelector('.toast-close').addEventListener('click', () => removerToast(toast));
+
+    container.appendChild(toast);
+    // Trigger reflow for animation
+    toast.offsetHeight;
+    toast.classList.add('toast-show');
+
+    // Auto-hide
+    const duracao = (tipo === 'erro' || tipo === 'aviso') ? 8000 : 4000;
+    setTimeout(() => removerToast(toast), duracao);
+
+    // Fallback: also update legacy div#mensagem if present
+    const div = document.getElementById('mensagem');
+    if (div) {
+        div.textContent = mensagem;
+        div.className = `alert alert-${tipo}`;
+        div.style.display = 'block';
+        if (tipo === 'sucesso' || tipo === 'info') {
+            setTimeout(() => { div.style.display = 'none'; }, 5000);
+        }
+    }
+}
+
+function removerToast(toast) {
+    if (!toast || toast._removing) return;
+    toast._removing = true;
+    toast.classList.remove('toast-show');
+    toast.classList.add('toast-hide');
+    toast.addEventListener('animationend', () => toast.remove(), { once: true });
+    setTimeout(() => toast.remove(), 500); // fallback
 }
 
 // Formatador de moeda
@@ -299,6 +324,112 @@ window.addEventListener('beforeunload', (evento) => {
         return '';
     }
 });
+
+// =============================================================================
+// DARK MODE
+// =============================================================================
+(function() {
+    const saved = localStorage.getItem('theme');
+    if (saved) document.documentElement.setAttribute('data-theme', saved);
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const btn = document.getElementById('darkToggle');
+        if (!btn) return;
+        btn.textContent = (document.documentElement.getAttribute('data-theme') === 'dark') ? '☀️' : '🌙';
+        btn.addEventListener('click', function() {
+            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+            const newTheme = isDark ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            btn.textContent = isDark ? '🌙' : '☀️';
+        });
+    });
+})();
+
+// =============================================================================
+// CONFIRMATION MODAL
+// =============================================================================
+function confirmar(titulo, mensagem, callbackSim, icone = '⚠️') {
+    // Remove modal anterior se existir
+    const old = document.getElementById('confirmModal');
+    if (old) old.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'confirmModal';
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+        <div class="modal-box" role="alertdialog" aria-modal="true" aria-labelledby="modal-titulo" aria-describedby="modal-msg">
+            <div class="modal-icon">${icone}</div>
+            <h3 id="modal-titulo">${escapeHtml(titulo)}</h3>
+            <p id="modal-msg">${escapeHtml(mensagem)}</p>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" id="modal-cancel">Cancelar</button>
+                <button class="btn btn-danger" id="modal-confirm">Confirmar</button>
+            </div>
+        </div>`;
+    document.body.appendChild(overlay);
+
+    // Trigger reflow then open
+    overlay.offsetHeight;
+    overlay.classList.add('open');
+
+    const fechar = () => { overlay.classList.remove('open'); setTimeout(() => overlay.remove(), 300); };
+
+    overlay.querySelector('#modal-cancel').addEventListener('click', fechar);
+    overlay.querySelector('#modal-confirm').addEventListener('click', () => { fechar(); callbackSim(); });
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) fechar(); });
+    // ESC key
+    const escHandler = (e) => { if (e.key === 'Escape') { fechar(); document.removeEventListener('keydown', escHandler); } };
+    document.addEventListener('keydown', escHandler);
+
+    // Focus trap
+    overlay.querySelector('#modal-cancel').focus();
+}
+
+// =============================================================================
+// GLOBAL SEARCH
+// =============================================================================
+(function() {
+    document.addEventListener('DOMContentLoaded', function() {
+        const input = document.getElementById('globalSearch');
+        const results = document.getElementById('searchResults');
+        if (!input || !results) return;
+
+        const buscar = debounce(async function(q) {
+            if (q.length < 2) { results.classList.remove('open'); return; }
+            try {
+                const resp = await fetch('/api/busca?q=' + encodeURIComponent(q));
+                if (!resp.ok) { results.classList.remove('open'); return; }
+                const dados = await resp.json();
+                let html = '';
+                if (dados.clientes.length) {
+                    html += '<div class="search-results-group"><h4>👥 Clientes</h4>';
+                    dados.clientes.forEach(function(c) {
+                        html += '<a href="/clientes"><span class="sr-name">' + escapeHtml(c.nome) + '</span><span class="sr-detail">' + escapeHtml(c.telefone || c.email || '') + '</span></a>';
+                    });
+                    html += '</div>';
+                }
+                if (dados.produtos.length) {
+                    html += '<div class="search-results-group"><h4>📦 Produtos</h4>';
+                    dados.produtos.forEach(function(p) {
+                        html += '<a href="/produtos"><span class="sr-name">' + escapeHtml(p.nome) + '</span><span class="sr-detail">' + formatarMoeda(p.preco) + (p.categoria ? ' · ' + escapeHtml(p.categoria) : '') + '</span></a>';
+                    });
+                    html += '</div>';
+                }
+                if (!html) html = '<div class="search-no-results">Nenhum resultado para "' + escapeHtml(q) + '"</div>';
+                results.innerHTML = html;
+                results.classList.add('open');
+            } catch (_) {
+                results.classList.remove('open');
+            }
+        }, 300);
+
+        input.addEventListener('input', function() { buscar(this.value.trim()); });
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.navbar-search')) results.classList.remove('open');
+        });
+    });
+})();
 
 // =============================================================================
 // API CLIENT MODULE — Mapeamento completo JS → Flask REST API

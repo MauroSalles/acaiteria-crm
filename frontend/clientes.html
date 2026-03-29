@@ -13,6 +13,10 @@
         <!-- Navbar -->
         <nav class="navbar">
             <div class="navbar-brand">🍇 <strong>Combina Açaí</strong></div>
+            <div class="navbar-search">
+                <input type="text" id="globalSearch" placeholder="Buscar clientes, produtos…" autocomplete="off" aria-label="Busca global">
+                <div class="search-results" id="searchResults"></div>
+            </div>
             <button class="navbar-toggle" onclick="document.getElementById('navMenu').classList.toggle('open')" aria-label="Menu">☰</button>
             <ul class="navbar-menu" id="navMenu">
                 <li><a href="/">🏠 Início</a></li>
@@ -44,6 +48,7 @@
                 {% endif %}
                 <li class="nav-separator"></li>
                 <li class="nav-user-info">👤 {{ usuario_nome }}</li>
+                <li><button class="dark-toggle" id="darkToggle" aria-label="Alternar tema escuro">🌙</button></li>
                 <li><a href="/logout" class="nav-logout">⬅ Sair</a></li>
             </ul>
         </nav>
@@ -190,17 +195,17 @@
         }
 
         async function deletarCliente(id) {
-            if (!confirm('⚠️ Tem certeza? O cliente será anonimizado conforme LGPD.')) return;
-
-            try {
-                const res = await fetch(`/api/clientes/${id}`, { method: 'DELETE' });
-                if (res.ok) {
-                    mostrarAlerta('✅ Cliente anonimizado conforme LGPD', 'sucesso');
-                    carregarClientes(paginaAtual);
+            confirmar('Anonimizar Cliente', 'Tem certeza? O cliente será anonimizado conforme LGPD. Essa ação não pode ser desfeita.', async () => {
+                try {
+                    const res = await fetch(`/api/clientes/${id}`, { method: 'DELETE' });
+                    if (res.ok) {
+                        mostrarAlerta('✅ Cliente anonimizado conforme LGPD', 'sucesso');
+                        carregarClientes(paginaAtual);
+                    }
+                } catch (e) {
+                    mostrarAlerta('❌ Erro: ' + e.message, 'erro');
                 }
-            } catch (e) {
-                mostrarAlerta('❌ Erro: ' + e.message, 'erro');
-            }
+            }, '🔒');
         }
 
         document.getElementById('btn-atualizar').addEventListener('click', () => carregarClientes(1));

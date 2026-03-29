@@ -1173,6 +1173,47 @@ def ranking_fidelidade():
 
 
 # =============================================================================
+# ROTAS - BUSCA GLOBAL
+# =============================================================================
+
+@app.route('/api/busca', methods=['GET'])
+@limiter.limit("60 per minute")
+@api_login_required
+def busca_global():
+    """Busca global: pesquisa clientes e produtos simultaneamente"""
+    try:
+        q = request.args.get('q', '').strip()
+        if len(q) < 2:
+            return jsonify({'clientes': [], 'produtos': []})
+
+        filtro = f'%{q}%'
+
+        clientes = Cliente.query.filter(
+            Cliente.ativo == True,
+            db.or_(
+                Cliente.nome.ilike(filtro),
+                Cliente.telefone.ilike(filtro),
+                Cliente.email.ilike(filtro)
+            )
+        ).order_by(Cliente.nome).limit(5).all()
+
+        produtos = Produto.query.filter(
+            Produto.ativo == True,
+            db.or_(
+                Produto.nome_produto.ilike(filtro),
+                Produto.categoria.ilike(filtro)
+            )
+        ).order_by(Produto.nome_produto).limit(5).all()
+
+        return jsonify({
+            'clientes': [{'id': c.id_cliente, 'nome': c.nome, 'telefone': c.telefone, 'email': c.email} for c in clientes],
+            'produtos': [{'id': p.id_produto, 'nome': p.nome_produto, 'preco': float(p.preco), 'categoria': p.categoria} for p in produtos],
+        })
+    except Exception as e:
+        return _erro_interno(e)
+
+
+# =============================================================================
 # ROTAS - DASHBOARD GRÁFICOS
 # =============================================================================
 
@@ -1331,11 +1372,18 @@ def relatorio_por_data():
 @app.route('/api/relatorios/clientes-frequentes', methods=['GET'])
 @api_login_required
 def relatorio_clientes_frequentes():
-    """Clientes mais frequentes (últimos 30 dias)"""
+    """Clientes mais frequentes (últimos 30 dias) — com paginação"""
     try:
-        data_limite = datetime.now(timezone.utc) - timedelta(days=30)
-        
-        clientes_freq = db.session.query(
+        dias = request.args.get('dias', 30, type=int)
+        dias = min(max(dias, 1), 365)
+        limite = request.args.get('limite', 10, type=int)
+        limite = min(max(limite, 1), 100)
+        pagina = request.args.get('pagina', 1, type=int)
+        pagina = max(pagina, 1)
+
+        data_limite = datetime.now(timezone.utc) - timedelta(days=dias)
+
+        base_query = db.session.query(
             Cliente.id_cliente,
             Cliente.nome,
             Cliente.telefone,
@@ -1351,8 +1399,11 @@ def relatorio_clientes_frequentes():
             Cliente.telefone
         ).order_by(
             db.func.count(Venda.id_venda).desc()
-        ).limit(10).all()
-        
+        )
+
+        total = base_query.count()
+        clientes_freq = base_query.offset((pagina - 1) * limite).limit(limite).all()
+
         resultado = []
         for cliente in clientes_freq:
             resultado.append({
@@ -1363,8 +1414,14 @@ def relatorio_clientes_frequentes():
                 'faturamento': float(cliente.faturamento),
                 'ultima_compra': cliente.ultima_compra.isoformat() if cliente.ultima_compra else None
             })
-        
-        return jsonify(resultado)
+
+        return jsonify({
+            'dados': resultado,
+            'total': total,
+            'pagina': pagina,
+            'limite': limite,
+            'total_paginas': (total + limite - 1) // limite if total else 0,
+        })
     except Exception as e:
         return _erro_interno(e)
 
@@ -1372,9 +1429,14 @@ def relatorio_clientes_frequentes():
 @app.route('/api/relatorios/produtos-ranking', methods=['GET'])
 @api_login_required
 def relatorio_produtos_ranking():
-    """Produtos mais vendidos"""
+    """Produtos mais vendidos — com paginação"""
     try:
-        produtos_rank = db.session.query(
+        limite = request.args.get('limite', 15, type=int)
+        limite = min(max(limite, 1), 100)
+        pagina = request.args.get('pagina', 1, type=int)
+        pagina = max(pagina, 1)
+
+        base_query = db.session.query(
             Produto.id_produto,
             Produto.nome_produto,
             db.func.count(ItemVenda.id_item).label('quantidade'),
@@ -1386,8 +1448,11 @@ def relatorio_produtos_ranking():
             Produto.nome_produto
         ).order_by(
             db.func.count(ItemVenda.id_item).desc()
-        ).limit(15).all()
-        
+        )
+
+        total = base_query.count()
+        produtos_rank = base_query.offset((pagina - 1) * limite).limit(limite).all()
+
         resultado = []
         for produto in produtos_rank:
             resultado.append({
@@ -1396,8 +1461,14 @@ def relatorio_produtos_ranking():
                 'quantidade_vendida': produto.quantidade,
                 'faturamento': float(produto.faturamento)
             })
-        
-        return jsonify(resultado)
+
+        return jsonify({
+            'dados': resultado,
+            'total': total,
+            'pagina': pagina,
+            'limite': limite,
+            'total_paginas': (total + limite - 1) // limite if total else 0,
+        })
     except Exception as e:
         return _erro_interno(e)
 
@@ -1528,6 +1599,60 @@ def exportar_relatorio_pdf():
             as_attachment=True,
             download_name=f'relatorio_{data_ref.strftime("%Y%m%d")}.pdf'
         )
+    except Exception as e:
+        return _erro_interno(e)
+
+
+@app.route('/api/exportar/clientes-xlsx', methods=['GET'])
+@api_login_required
+def exportar_clientes_xlsx():
+    """Exporta clientes com consentimento LGPD em formato Excel (.xlsx)"""
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment
+
+        clientes = Cliente.query.filter_by(ativo=True, consentimento_lgpd=True).order_by(Cliente.nome).all()
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = 'Clientes'
+
+        # Header style
+        header_font = Font(bold=True, color='FFFFFF', size=11)
+        header_fill = PatternFill(start_color='7B1FA2', end_color='7B1FA2', fill_type='solid')
+        headers = ['ID', 'Nome', 'Telefone', 'Email', 'Pontos', 'Data Cadastro', 'Consentimento LGPD']
+        for col, h in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=h)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal='center')
+
+        for i, c in enumerate(clientes, 2):
+            ws.cell(row=i, column=1, value=c.id_cliente)
+            ws.cell(row=i, column=2, value=c.nome)
+            ws.cell(row=i, column=3, value=c.telefone or '')
+            ws.cell(row=i, column=4, value=c.email or '')
+            ws.cell(row=i, column=5, value=getattr(c, 'pontos_fidelidade', 0) or 0)
+            ws.cell(row=i, column=6, value=c.data_cadastro.strftime('%d/%m/%Y') if c.data_cadastro else '')
+            ws.cell(row=i, column=7, value='Sim' if c.consentimento_lgpd else 'Não')
+
+        # Auto-width columns
+        for col in ws.columns:
+            max_len = max((len(str(cell.value or '')) for cell in col), default=10)
+            ws.column_dimensions[col[0].column_letter].width = min(max_len + 3, 40)
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+
+        return send_file(
+            buf,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=f'clientes_{datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")}.xlsx'
+        )
+    except ImportError:
+        return jsonify({'erro': 'openpyxl não instalado. Execute: pip install openpyxl'}), 500
     except Exception as e:
         return _erro_interno(e)
 
@@ -1824,12 +1949,16 @@ def usuario_atual():
 
 @app.errorhandler(404)
 def nao_encontrado(erro):
-    return jsonify({'erro': 'Endpoint não encontrado'}), 404
+    if request.path.startswith('/api/'):
+        return jsonify({'erro': 'Endpoint não encontrado'}), 404
+    return render_template('404.html'), 404
 
 
 @app.errorhandler(500)
 def erro_interno(erro):
-    return jsonify({'erro': 'Erro interno do servidor'}), 500
+    if request.path.startswith('/api/'):
+        return jsonify({'erro': 'Erro interno do servidor'}), 500
+    return render_template('500.html'), 500
 
 
 # =============================================================================
