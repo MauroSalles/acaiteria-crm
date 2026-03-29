@@ -261,3 +261,60 @@ class LogAcao(db.Model):
             'ip': self.ip,
             'data_hora': self.data_hora.isoformat() if self.data_hora else None,
         }
+
+
+class TicketSuporte(db.Model):
+    """Ticket de suporte — dúvidas, problemas, contato com admin/operador"""
+    __tablename__ = 'ticket_suporte'
+
+    id_ticket = db.Column(db.Integer, primary_key=True)
+    id_usuario = db.Column(db.Integer, db.ForeignKey('usuario.id_usuario'), nullable=False)
+    assunto = db.Column(db.String(200), nullable=False)
+    categoria = db.Column(db.String(50), nullable=False, default='duvida')  # 'duvida' | 'problema' | 'sugestao' | 'outro'
+    status = db.Column(db.String(20), nullable=False, default='aberto')     # 'aberto' | 'em_andamento' | 'resolvido' | 'fechado'
+    prioridade = db.Column(db.String(20), nullable=False, default='normal') # 'baixa' | 'normal' | 'alta' | 'urgente'
+    data_criacao = db.Column(db.DateTime, default=_utcnow)
+    data_atualizacao = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
+
+    criador = db.relationship('Usuario', backref='tickets_criados', lazy=True)
+    mensagens = db.relationship('MensagemTicket', backref='ticket', lazy=True,
+                                cascade='all, delete-orphan', order_by='MensagemTicket.data_envio')
+
+    def to_dict(self):
+        return {
+            'id_ticket': self.id_ticket,
+            'id_usuario': self.id_usuario,
+            'criador_nome': self.criador.nome if self.criador else None,
+            'assunto': self.assunto,
+            'categoria': self.categoria,
+            'status': self.status,
+            'prioridade': self.prioridade,
+            'data_criacao': self.data_criacao.isoformat() if self.data_criacao else None,
+            'data_atualizacao': self.data_atualizacao.isoformat() if self.data_atualizacao else None,
+            'mensagens': [m.to_dict() for m in self.mensagens],
+            'total_mensagens': len(self.mensagens),
+        }
+
+
+class MensagemTicket(db.Model):
+    """Mensagem dentro de um ticket de suporte (chat)"""
+    __tablename__ = 'mensagem_ticket'
+
+    id_mensagem = db.Column(db.Integer, primary_key=True)
+    id_ticket = db.Column(db.Integer, db.ForeignKey('ticket_suporte.id_ticket'), nullable=False)
+    id_usuario = db.Column(db.Integer, db.ForeignKey('usuario.id_usuario'), nullable=False)
+    conteudo = db.Column(db.Text, nullable=False)
+    data_envio = db.Column(db.DateTime, default=_utcnow)
+
+    autor = db.relationship('Usuario', lazy=True)
+
+    def to_dict(self):
+        return {
+            'id_mensagem': self.id_mensagem,
+            'id_ticket': self.id_ticket,
+            'id_usuario': self.id_usuario,
+            'autor_nome': self.autor.nome if self.autor else None,
+            'autor_papel': self.autor.papel if self.autor else None,
+            'conteudo': self.conteudo,
+            'data_envio': self.data_envio.isoformat() if self.data_envio else None,
+        }

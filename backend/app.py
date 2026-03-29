@@ -21,7 +21,7 @@ import hashlib
 import secrets
 from pydantic import BaseModel, EmailStr, ValidationError, field_validator
 
-from .models import db, Usuario, Cliente, Produto, Venda, ItemVenda, Pagamento, ConsentimentoHistorico, LogAcao
+from .models import db, Usuario, Cliente, Produto, Venda, ItemVenda, Pagamento, ConsentimentoHistorico, LogAcao, TicketSuporte, MensagemTicket
 
 # =============================================================================
 # CONFIGURAÇÃO INICIAL
@@ -1940,6 +1940,204 @@ def usuario_atual():
             return jsonify({'erro': 'Usuário não encontrado'}), 404
         return jsonify(usuario.to_dict())
     except Exception as e:
+        return _erro_interno(e)
+
+
+# =============================================================================
+# ROTAS - SUPORTE (Tickets + Chat)
+# =============================================================================
+
+@app.route('/suporte')
+@login_required
+def pagina_suporte():
+    return render_template('suporte.html')
+
+
+class TicketCreateSchema(BaseModel):
+    assunto: str
+    categoria: str = 'duvida'
+    prioridade: str = 'normal'
+    mensagem: str
+
+    @field_validator('assunto')
+    @classmethod
+    def assunto_valido(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) < 3:
+            raise ValueError('Assunto deve ter ao menos 3 caracteres')
+        if len(v) > 200:
+            raise ValueError('Assunto deve ter no máximo 200 caracteres')
+        return v
+
+    @field_validator('categoria')
+    @classmethod
+    def categoria_valida(cls, v: str) -> str:
+        if v not in ('duvida', 'problema', 'sugestao', 'outro'):
+            raise ValueError('Categoria inválida')
+        return v
+
+    @field_validator('prioridade')
+    @classmethod
+    def prioridade_valida(cls, v: str) -> str:
+        if v not in ('baixa', 'normal', 'alta', 'urgente'):
+            raise ValueError('Prioridade inválida')
+        return v
+
+    @field_validator('mensagem')
+    @classmethod
+    def mensagem_valida(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) < 5:
+            raise ValueError('Mensagem deve ter ao menos 5 caracteres')
+        return v
+
+
+@app.route('/api/suporte/tickets', methods=['GET'])
+@api_login_required
+def listar_tickets():
+    """Lista tickets: admin vê todos, operador vê os próprios"""
+    try:
+        pagina = request.args.get('pagina', 1, type=int)
+        limite = min(request.args.get('limite', 20, type=int), 100)
+        status_filtro = request.args.get('status')
+
+        query = TicketSuporte.query
+        if session.get('papel') != 'admin':
+            query = query.filter_by(id_usuario=session['usuario_id'])
+        if status_filtro:
+            query = query.filter_by(status=status_filtro)
+
+        query = query.order_by(TicketSuporte.data_atualizacao.desc())
+        total = query.count()
+        tickets = query.offset((pagina - 1) * limite).limit(limite).all()
+
+        return jsonify({
+            'dados': [t.to_dict() for t in tickets],
+            'total': total,
+            'pagina': pagina,
+            'limite': limite,
+            'total_paginas': (total + limite - 1) // limite,
+        })
+    except Exception as e:
+        return _erro_interno(e)
+
+
+@app.route('/api/suporte/tickets', methods=['POST'])
+@limiter.limit("10 per minute")
+@api_login_required
+def criar_ticket():
+    """Abre um novo ticket de suporte"""
+    try:
+        dados = validar_payload(TicketCreateSchema)
+
+        ticket = TicketSuporte(
+            id_usuario=session['usuario_id'],
+            assunto=dados['assunto'],
+            categoria=dados['categoria'],
+            prioridade=dados['prioridade'],
+        )
+        db.session.add(ticket)
+        db.session.flush()
+
+        msg = MensagemTicket(
+            id_ticket=ticket.id_ticket,
+            id_usuario=session['usuario_id'],
+            conteudo=dados['mensagem'],
+        )
+        db.session.add(msg)
+        db.session.commit()
+
+        registrar_log('criar', 'ticket_suporte', ticket.id_ticket, dados['assunto'])
+        return jsonify(ticket.to_dict()), 201
+    except ValueError as e:
+        return jsonify({'erro': 'Dados inválidos', 'detalhes': str(e)}), 400
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
+@app.route('/api/suporte/tickets/<int:id_ticket>', methods=['GET'])
+@api_login_required
+def obter_ticket(id_ticket):
+    """Retorna ticket com mensagens (chat)"""
+    try:
+        ticket = TicketSuporte.query.get(id_ticket)
+        if not ticket:
+            return jsonify({'erro': 'Ticket não encontrado'}), 404
+
+        if session.get('papel') != 'admin' and ticket.id_usuario != session.get('usuario_id'):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        return jsonify(ticket.to_dict())
+    except Exception as e:
+        return _erro_interno(e)
+
+
+@app.route('/api/suporte/tickets/<int:id_ticket>/mensagens', methods=['POST'])
+@limiter.limit("30 per minute")
+@api_login_required
+def enviar_mensagem_ticket(id_ticket):
+    """Envia mensagem em um ticket (chat)"""
+    try:
+        ticket = TicketSuporte.query.get(id_ticket)
+        if not ticket:
+            return jsonify({'erro': 'Ticket não encontrado'}), 404
+
+        if session.get('papel') != 'admin' and ticket.id_usuario != session.get('usuario_id'):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        if ticket.status == 'fechado':
+            return jsonify({'erro': 'Este ticket está fechado'}), 400
+
+        dados = request.get_json(silent=True) or {}
+        conteudo = (dados.get('conteudo') or '').strip()
+        if len(conteudo) < 1:
+            return jsonify({'erro': 'Mensagem não pode ser vazia'}), 400
+
+        msg = MensagemTicket(
+            id_ticket=id_ticket,
+            id_usuario=session['usuario_id'],
+            conteudo=conteudo,
+        )
+        db.session.add(msg)
+
+        if ticket.status == 'aberto' and session.get('papel') == 'admin':
+            ticket.status = 'em_andamento'
+
+        db.session.commit()
+        return jsonify(msg.to_dict()), 201
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
+@app.route('/api/suporte/tickets/<int:id_ticket>/status', methods=['PUT'])
+@api_login_required
+def atualizar_status_ticket(id_ticket):
+    """Atualiza status do ticket (admin pode tudo, operador só pode fechar os próprios)"""
+    try:
+        ticket = TicketSuporte.query.get(id_ticket)
+        if not ticket:
+            return jsonify({'erro': 'Ticket não encontrado'}), 404
+
+        dados = request.get_json(silent=True) or {}
+        novo_status = dados.get('status')
+        if novo_status not in ('aberto', 'em_andamento', 'resolvido', 'fechado'):
+            return jsonify({'erro': 'Status inválido'}), 400
+
+        if session.get('papel') != 'admin':
+            if ticket.id_usuario != session.get('usuario_id'):
+                return jsonify({'erro': 'Acesso negado'}), 403
+            if novo_status not in ('fechado',):
+                return jsonify({'erro': 'Operador só pode fechar o próprio ticket'}), 403
+
+        ticket.status = novo_status
+        db.session.commit()
+
+        registrar_log('atualizar', 'ticket_suporte', id_ticket, f'status → {novo_status}')
+        return jsonify(ticket.to_dict())
+    except Exception as e:
+        db.session.rollback()
         return _erro_interno(e)
 
 
