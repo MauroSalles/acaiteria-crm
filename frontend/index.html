@@ -43,6 +43,7 @@
                         <li><a href="/fechamento">🔐 Fechamento de Caixa</a></li>
                     </ul>
                 </li>
+                <li><a href="/suporte">🎧 Suporte</a></li>
                 <li><a href="/politica-privacidade">🔒 LGPD</a></li>
                 {% if papel == 'admin' %}
                 <li><a href="/usuarios">👤 Usuários</a></li>
@@ -143,6 +144,9 @@
                     <tbody id="tbody-ranking-fidelidade"></tbody>
                 </table>
             </section>
+
+            <!-- Cartão Fidelidade Visual (Top Client) -->
+            <div id="fidelity-section" style="display:none; margin: 1rem 0;"></div>
 
             <!-- LGPD Compliance Stats -->
             <section class="lgpd-section">
@@ -384,6 +388,47 @@
             section.style.display = 'block';
         } catch (e) {
             console.warn('Ranking fidelidade não carregado:', e);
+        }
+    })();
+
+    // Cartão Fidelidade Visual — mostra top cliente como "cartão gamificado"
+    (async function carregarCartaoFidelidade() {
+        try {
+            const resp = await fetch('/api/fidelidade/ranking');
+            if (!resp.ok) return;
+            const clientes = await resp.json();
+            if (!clientes.length) return;
+            const top = clientes[0]; // top client
+            const pontos = top.pontos || 0;
+            const stamps = 10;
+            const filled = Math.min(pontos % stamps, stamps);
+            const totalRewards = Math.floor(pontos / stamps);
+            const pct = Math.round((filled / stamps) * 100);
+            const desconto = (Math.floor(pontos / 100) * 5).toFixed(2);
+
+            const section = document.getElementById('fidelity-section');
+            section.innerHTML = `
+                <div class="fidelity-card">
+                    <div class="fidelity-header">
+                        <h4>🌟 Cliente Top Fidelidade</h4>
+                        <div class="fidelity-points">${pontos} <small>pontos</small></div>
+                    </div>
+                    <div style="font-size:1.1rem;font-weight:600;margin-bottom:.5rem">${escapeHtml(top.nome)}</div>
+                    <div class="fidelity-stamps">
+                        ${Array.from({length: stamps}, (_, i) =>
+                            '<div class="stamp ' + (i < filled ? 'filled' : '') + '">' + (i < filled ? '🍇' : '') + '</div>'
+                        ).join('')}
+                    </div>
+                    <div class="fidelity-progress"><div class="fidelity-progress-bar" style="width:${pct}%"></div></div>
+                    <div class="fidelity-next-reward">
+                        ${totalRewards > 0 ? '🎁 ' + totalRewards + ' recompensa(s) acumulada(s)' : ''}
+                        · Desconto acumulado: R$ ${desconto}
+                    </div>
+                </div>
+            `;
+            section.style.display = 'block';
+        } catch (e) {
+            console.warn('Cartão fidelidade não carregado:', e);
         }
     })();
     </script>

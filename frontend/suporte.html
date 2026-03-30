@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Suporte - Açaiteria CRM</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <meta name="theme-color" content="#7B1FA2">
+</head>
+<body>
+    <div class="container">
+        <nav class="navbar">
+            <div class="navbar-brand">🍇 <strong>Combina Açaí</strong></div>
+            <div class="navbar-search">
+                <input type="text" id="globalSearch" placeholder="Buscar clientes, produtos…" autocomplete="off" aria-label="Busca global">
+                <div class="search-results" id="searchResults"></div>
+            </div>
+            <button class="navbar-toggle" onclick="document.getElementById('navMenu').classList.toggle('open')" aria-label="Menu">☰</button>
+            <ul class="navbar-menu" id="navMenu">
+                <li><a href="/">🏠 Início</a></li>
+                <li class="has-dropdown">
+                    <a href="#" onclick="navDropdown(this);return false">🛒 Vendas <span class="arrow">▾</span></a>
+                    <ul class="dropdown">
+                        <li><a href="/nova-venda">➕ Registrar Venda</a></li>
+                    </ul>
+                </li>
+                <li class="has-dropdown">
+                    <a href="#" onclick="navDropdown(this);return false">👥 Clientes <span class="arrow">▾</span></a>
+                    <ul class="dropdown">
+                        <li><a href="/cadastro-cliente">➕ Cadastrar Cliente</a></li>
+                        <li><a href="/clientes">📋 Lista de Clientes</a></li>
+                    </ul>
+                </li>
+                <li><a href="/produtos">📦 Produtos</a></li>
+                <li class="has-dropdown">
+                    <a href="#" onclick="navDropdown(this);return false">💰 Financeiro <span class="arrow">▾</span></a>
+                    <ul class="dropdown">
+                        <li><a href="/relatorios">📊 Relatórios</a></li>
+                        <li><a href="/fechamento">🔐 Fechamento de Caixa</a></li>
+                    </ul>
+                </li>
+                <li><a href="/suporte" class="active">🎧 Suporte</a></li>
+                <li><a href="/politica-privacidade">🔒 LGPD</a></li>
+                {% if papel == 'admin' %}
+                <li><a href="/usuarios">👤 Usuários</a></li>
+                <li><a href="/historico">📋 Histórico</a></li>
+                {% endif %}
+                <li class="nav-separator"></li>
+                <li class="nav-user-info">👤 {{ usuario_nome }}</li>
+                <li><button class="dark-toggle" id="darkToggle" aria-label="Alternar tema escuro">🌙</button></li>
+                <li><a href="/logout" class="nav-logout">⬅ Sair</a></li>
+            </ul>
+        </nav>
+
+        <main class="content">
+            <section class="hero">
+                <h1>🎧 Central de Suporte</h1>
+                <p>Dúvidas, problemas ou sugestões? Estamos aqui para ajudar!</p>
+            </section>
+
+            <!-- Painel dividido: lista tickets + chat -->
+            <div class="suporte-layout">
+                <!-- Sidebar: Lista de tickets -->
+                <aside class="suporte-sidebar">
+                    <div class="suporte-sidebar-header">
+                        <h3>Meus Tickets</h3>
+                        <button class="btn btn-sm btn-primary" onclick="abrirNovoTicket()">➕ Novo</button>
+                    </div>
+                    <div class="suporte-filtros">
+                        <select id="filtroStatus" onchange="carregarTickets()">
+                            <option value="">Todos</option>
+                            <option value="aberto">🟢 Abertos</option>
+                            <option value="em_andamento">🟡 Em andamento</option>
+                            <option value="resolvido">🔵 Resolvidos</option>
+                            <option value="fechado">⚫ Fechados</option>
+                        </select>
+                    </div>
+                    <div id="listaTickets" class="suporte-ticket-list">
+                        <div class="suporte-loading">Carregando tickets...</div>
+                    </div>
+                </aside>
+
+                <!-- Main: Chat do ticket ativo -->
+                <section class="suporte-chat" id="chatArea">
+                    <div class="suporte-empty-state" id="emptyState">
+                        <div class="suporte-empty-icon">💬</div>
+                        <h3>Selecione um ticket</h3>
+                        <p>Escolha um ticket existente ou abra um novo para iniciar a conversa.</p>
+                        <button class="btn btn-primary" onclick="abrirNovoTicket()">🎫 Abrir Novo Ticket</button>
+                    </div>
+                    <div class="suporte-chat-content" id="chatContent" style="display:none">
+                        <div class="suporte-chat-header" id="chatHeader"></div>
+                        <div class="suporte-mensagens" id="chatMensagens"></div>
+                        <div class="suporte-chat-input" id="chatInput">
+                            <textarea id="novaMensagem" placeholder="Digite sua mensagem..." rows="2" maxlength="2000"></textarea>
+                            <button class="btn btn-primary" onclick="enviarMensagem()">Enviar ➤</button>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Modal: Novo Ticket -->
+            <div class="modal-overlay" id="modalNovoTicket" style="display:none">
+                <div class="modal-box" style="max-width:500px">
+                    <h3>🎫 Novo Ticket de Suporte</h3>
+                    <form id="formNovoTicket" onsubmit="criarTicket(event)">
+                        <div class="form-group">
+                            <label for="ticketAssunto">Assunto</label>
+                            <input type="text" id="ticketAssunto" class="form-control" required minlength="3" maxlength="200" placeholder="Resumo do problema/dúvida">
+                        </div>
+                        <div class="form-group" style="display:flex;gap:.8rem">
+                            <div style="flex:1">
+                                <label for="ticketCategoria">Categoria</label>
+                                <select id="ticketCategoria" class="form-control">
+                                    <option value="duvida">❓ Dúvida</option>
+                                    <option value="problema">🐛 Problema</option>
+                                    <option value="sugestao">💡 Sugestão</option>
+                                    <option value="outro">📋 Outro</option>
+                                </select>
+                            </div>
+                            <div style="flex:1">
+                                <label for="ticketPrioridade">Prioridade</label>
+                                <select id="ticketPrioridade" class="form-control">
+                                    <option value="baixa">🟢 Baixa</option>
+                                    <option value="normal" selected>🟡 Normal</option>
+                                    <option value="alta">🟠 Alta</option>
+                                    <option value="urgente">🔴 Urgente</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="ticketMensagem">Descrição</label>
+                            <textarea id="ticketMensagem" class="form-control" required minlength="5" rows="4" placeholder="Descreva sua dúvida ou problema em detalhes..."></textarea>
+                        </div>
+                        <div style="display:flex;gap:.8rem;justify-content:flex-end;margin-top:1rem">
+                            <button type="button" class="btn btn-secondary" onclick="fecharModal()">Cancelar</button>
+                            <button type="submit" class="btn btn-primary">Enviar Ticket</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+    let ticketAtivo = null;
+    let pollingInterval = null;
+
+    // ====== CARREGAR TICKETS ======
+    async function carregarTickets() {
+        const status = document.getElementById('filtroStatus').value;
+        const url = '/api/suporte/tickets' + (status ? '?status=' + status : '');
+        try {
+            const resp = await fetch(url);
+            if (!resp.ok) throw new Error('Falha ao carregar');
+            const json = await resp.json();
+            const tickets = json.dados || [];
+            const lista = document.getElementById('listaTickets');
+            if (!tickets.length) {
+                lista.innerHTML = '<div class="suporte-no-tickets">Nenhum ticket encontrado.<br>Abra um novo para pedir ajuda!</div>';
+                return;
+            }
+            lista.innerHTML = tickets.map(t => `
+                <div class="suporte-ticket-item ${ticketAtivo === t.id_ticket ? 'ativo' : ''} prioridade-${t.prioridade}" onclick="abrirTicket(${t.id_ticket})">
+                    <div class="ticket-item-header">
+                        <span class="ticket-status status-${t.status}">${statusIcon(t.status)}</span>
+                        <span class="ticket-id">#${t.id_ticket}</span>
+                        <span class="ticket-data">${tempoRelativo(t.data_atualizacao)}</span>
+                    </div>
+                    <div class="ticket-assunto">${escapeHtml(t.assunto)}</div>
+                    <div class="ticket-meta">
+                        <span class="ticket-categoria">${categoriaIcon(t.categoria)} ${t.categoria}</span>
+                        <span class="ticket-msgs">${t.total_mensagens} 💬</span>
+                    </div>
+                </div>
+            `).join('');
+        } catch (e) {
+            document.getElementById('listaTickets').innerHTML = '<div class="suporte-no-tickets">Erro ao carregar tickets.</div>';
+        }
+    }
+
+    // ====== ABRIR TICKET (chat) ======
+    async function abrirTicket(id) {
+        ticketAtivo = id;
+        try {
+            const resp = await fetch('/api/suporte/tickets/' + id);
+            if (!resp.ok) throw new Error('Ticket não encontrado');
+            const ticket = await resp.json();
+
+            document.getElementById('emptyState').style.display = 'none';
+            document.getElementById('chatContent').style.display = 'flex';
+
+            // Header
+            const prioridadeTag = `<span class="badge badge-${ticket.prioridade}">${ticket.prioridade}</span>`;
+            document.getElementById('chatHeader').innerHTML = `
+                <div class="chat-header-info">
+                    <h3>${escapeHtml(ticket.assunto)} <span class="ticket-status status-${ticket.status}">${statusLabel(ticket.status)}</span></h3>
+                    <small>#${ticket.id_ticket} · ${categoriaIcon(ticket.categoria)} ${ticket.categoria} · ${prioridadeTag} · por ${escapeHtml(ticket.criador_nome)}</small>
+                </div>
+                <div class="chat-header-actions">
+                    ${ticket.status !== 'fechado' ? '<button class="btn btn-sm btn-secondary" onclick="fecharTicketAtivo()">Fechar Ticket</button>' : '<span class="badge badge-fechado">Fechado</span>'}
+                </div>
+            `;
+
+            // Mensagens
+            renderMensagens(ticket.mensagens);
+
+            // Input
+            document.getElementById('chatInput').style.display = ticket.status === 'fechado' ? 'none' : 'flex';
+
+            // Polling
+            if (pollingInterval) clearInterval(pollingInterval);
+            pollingInterval = setInterval(() => atualizarMensagens(id), 5000);
+
+            carregarTickets(); // refresh sidebar
+        } catch (e) {
+            mostrarAlerta('Erro ao abrir ticket', 'erro');
+        }
+    }
+
+    function renderMensagens(mensagens) {
+        const container = document.getElementById('chatMensagens');
+        container.innerHTML = mensagens.map(m => `
+            <div class="chat-msg ${m.autor_papel === 'admin' ? 'chat-msg-admin' : 'chat-msg-user'}">
+                <div class="chat-msg-avatar">${m.autor_papel === 'admin' ? '🛡️' : '👤'}</div>
+                <div class="chat-msg-body">
+                    <div class="chat-msg-header">
+                        <strong>${escapeHtml(m.autor_nome)}</strong>
+                        <span class="chat-msg-time">${formatarDataHora(m.data_envio)}</span>
+                    </div>
+                    <div class="chat-msg-text">${escapeHtml(m.conteudo)}</div>
+                </div>
+            </div>
+        `).join('');
+        container.scrollTop = container.scrollHeight;
+    }
+
+    async function atualizarMensagens(id) {
+        if (ticketAtivo !== id) return;
+        try {
+            const resp = await fetch('/api/suporte/tickets/' + id);
+            if (!resp.ok) return;
+            const ticket = await resp.json();
+            renderMensagens(ticket.mensagens);
+        } catch (_) {}
+    }
+
+    // ====== ENVIAR MENSAGEM ======
+    async function enviarMensagem() {
+        const textarea = document.getElementById('novaMensagem');
+        const conteudo = textarea.value.trim();
+        if (!conteudo || !ticketAtivo) return;
+        try {
+            const resp = await fetch(`/api/suporte/tickets/${ticketAtivo}/mensagens`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ conteudo })
+            });
+            if (!resp.ok) {
+                const err = await resp.json();
+                throw new Error(err.erro || 'Erro');
+            }
+            textarea.value = '';
+            abrirTicket(ticketAtivo);
+        } catch (e) {
+            mostrarAlerta(e.message, 'erro');
+        }
+    }
+
+    // ====== CRIAR TICKET ======
+    async function criarTicket(e) {
+        e.preventDefault();
+        try {
+            const resp = await fetch('/api/suporte/tickets', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    assunto: document.getElementById('ticketAssunto').value.trim(),
+                    categoria: document.getElementById('ticketCategoria').value,
+                    prioridade: document.getElementById('ticketPrioridade').value,
+                    mensagem: document.getElementById('ticketMensagem').value.trim()
+                })
+            });
+            if (!resp.ok) {
+                const err = await resp.json();
+                throw new Error(err.erro || 'Erro ao criar ticket');
+            }
+            const ticket = await resp.json();
+            fecharModal();
+            mostrarAlerta('Ticket #' + ticket.id_ticket + ' criado com sucesso!', 'sucesso');
+            document.getElementById('formNovoTicket').reset();
+            carregarTickets();
+            abrirTicket(ticket.id_ticket);
+        } catch (e) {
+            mostrarAlerta(e.message, 'erro');
+        }
+    }
+
+    // ====== FECHAR TICKET ======
+    async function fecharTicketAtivo() {
+        if (!ticketAtivo) return;
+        if (!confirm('Deseja fechar este ticket?')) return;
+        try {
+            const resp = await fetch(`/api/suporte/tickets/${ticketAtivo}/status`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: 'fechado' })
+            });
+            if (!resp.ok) {
+                const err = await resp.json();
+                throw new Error(err.erro || 'Erro');
+            }
+            mostrarAlerta('Ticket fechado', 'info');
+            abrirTicket(ticketAtivo);
+        } catch (e) {
+            mostrarAlerta(e.message, 'erro');
+        }
+    }
+
+    // ====== HELPERS ======
+    function abrirNovoTicket() { document.getElementById('modalNovoTicket').style.display = 'flex'; }
+    function fecharModal() { document.getElementById('modalNovoTicket').style.display = 'none'; }
+    function statusIcon(s) { return { aberto: '🟢', em_andamento: '🟡', resolvido: '🔵', fechado: '⚫' }[s] || '⚪'; }
+    function statusLabel(s) { return { aberto: 'Aberto', em_andamento: 'Em andamento', resolvido: 'Resolvido', fechado: 'Fechado' }[s] || s; }
+    function categoriaIcon(c) { return { duvida: '❓', problema: '🐛', sugestao: '💡', outro: '📋' }[c] || '📋'; }
+
+    function tempoRelativo(iso) {
+        const diff = Date.now() - new Date(iso).getTime();
+        const min = Math.floor(diff / 60000);
+        if (min < 1) return 'agora';
+        if (min < 60) return min + 'min';
+        const h = Math.floor(min / 60);
+        if (h < 24) return h + 'h';
+        const d = Math.floor(h / 24);
+        return d + 'd';
+    }
+
+    // Enter para enviar
+    document.getElementById('novaMensagem').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviarMensagem(); }
+    });
+
+    // ESC para fechar modal
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') fecharModal();
+    });
+
+    // Init
+    carregarTickets();
+    </script>
+</body>
+</html>

@@ -591,3 +591,179 @@ async function registrarVendaComLGPD(id_cliente, itens, forma_pagamento) {
 // =============================================================================
 // FIM DO API CLIENT MODULE
 // =============================================================================
+
+// =============================================================================
+// FAB — Floating Action Button (ações rápidas)
+// =============================================================================
+(function() {
+    document.addEventListener('DOMContentLoaded', function() {
+        // Não mostrar na página de login/totem
+        if (location.pathname === '/login' || location.pathname === '/totem') return;
+
+        const fab = document.createElement('div');
+        fab.className = 'fab-container';
+        fab.innerHTML = `
+            <div class="fab-menu">
+                <a href="/nova-venda" class="fab-action"><span class="fab-action-icon">🛒</span> Nova Venda</a>
+                <a href="/cadastro-cliente" class="fab-action"><span class="fab-action-icon">👤</span> Novo Cliente</a>
+                <a href="/suporte" class="fab-action"><span class="fab-action-icon">🎧</span> Suporte</a>
+                <a href="/relatorios" class="fab-action"><span class="fab-action-icon">📊</span> Relatórios</a>
+                <button class="fab-action" onclick="mostrarAtalhos()"><span class="fab-action-icon">⌨️</span> Atalhos</button>
+            </div>
+            <button class="fab-btn" aria-label="Ações rápidas" title="Ações rápidas">＋</button>
+        `;
+        document.body.appendChild(fab);
+
+        fab.querySelector('.fab-btn').addEventListener('click', function() {
+            fab.classList.toggle('open');
+            this.classList.toggle('open');
+        });
+
+        // Fechar ao clicar fora
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.fab-container')) {
+                fab.classList.remove('open');
+                fab.querySelector('.fab-btn').classList.remove('open');
+            }
+        });
+    });
+})();
+
+// =============================================================================
+// NOTIFICATION BADGES — Estoque baixo + Tickets abertos
+// =============================================================================
+(function() {
+    document.addEventListener('DOMContentLoaded', async function() {
+        if (location.pathname === '/login' || location.pathname === '/totem') return;
+
+        try {
+            // Badge estoque baixo no link Produtos
+            const respEstoque = await fetch('/api/produtos/estoque-baixo');
+            if (respEstoque.ok) {
+                const produtos = await respEstoque.json();
+                if (produtos.length > 0) {
+                    const linkProdutos = document.querySelector('a[href="/produtos"]');
+                    if (linkProdutos) {
+                        const badge = document.createElement('span');
+                        badge.className = 'nav-badge';
+                        badge.textContent = produtos.length;
+                        badge.title = produtos.length + ' produto(s) com estoque baixo';
+                        linkProdutos.appendChild(badge);
+                    }
+                }
+            }
+        } catch (_) {}
+
+        try {
+            // Badge tickets abertos no link Suporte (se existir)
+            const respTickets = await fetch('/api/suporte/tickets?status=aberto');
+            if (respTickets.ok) {
+                const json = await respTickets.json();
+                const total = json.total || 0;
+                if (total > 0) {
+                    const linkSuporte = document.querySelector('a[href="/suporte"]');
+                    if (linkSuporte) {
+                        const badge = document.createElement('span');
+                        badge.className = 'nav-badge';
+                        badge.textContent = total;
+                        badge.title = total + ' ticket(s) aberto(s)';
+                        linkSuporte.appendChild(badge);
+                    }
+                }
+            }
+        } catch (_) {}
+    });
+})();
+
+// =============================================================================
+// KEYBOARD SHORTCUTS — Atalhos globais de teclado
+// =============================================================================
+(function() {
+    const atalhos = [
+        { tecla: 'h', desc: 'Dashboard', acao: function() { location.href = '/'; } },
+        { tecla: 'v', desc: 'Nova Venda', acao: function() { location.href = '/nova-venda'; } },
+        { tecla: 'c', desc: 'Clientes', acao: function() { location.href = '/clientes'; } },
+        { tecla: 'p', desc: 'Produtos', acao: function() { location.href = '/produtos'; } },
+        { tecla: 'r', desc: 'Relatórios', acao: function() { location.href = '/relatorios'; } },
+        { tecla: 's', desc: 'Suporte', acao: function() { location.href = '/suporte'; } },
+        { tecla: '/', desc: 'Busca global', acao: function() { var el = document.getElementById('globalSearch'); if (el) el.focus(); } },
+        { tecla: '?', desc: 'Ver atalhos', acao: function() { mostrarAtalhos(); } },
+    ];
+
+    document.addEventListener('keydown', function(e) {
+        // Ignorar se está digitando em input/textarea/select
+        var tag = (e.target.tagName || '').toLowerCase();
+        if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable) return;
+        // Ignorar se Ctrl/Cmd/Alt pressionado
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+        var tecla = e.key.toLowerCase();
+        for (var i = 0; i < atalhos.length; i++) {
+            if (atalhos[i].tecla === tecla) {
+                e.preventDefault();
+                atalhos[i].acao();
+                return;
+            }
+        }
+    });
+
+    window.mostrarAtalhos = function() {
+        var overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.style.display = 'flex';
+        overlay.innerHTML = `
+            <div class="modal-box" style="max-width:480px">
+                <h3>⌨️ Atalhos de Teclado</h3>
+                <div class="shortcuts-grid">
+                    ${atalhos.map(function(a) {
+                        return '<div class="shortcut-item"><kbd>' + a.tecla + '</kbd><span>' + a.desc + '</span></div>';
+                    }).join('')}
+                </div>
+                <div style="text-align:right;margin-top:1rem;">
+                    <button class="btn btn-primary" onclick="this.closest('.modal-overlay').remove()">Fechar</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+        overlay.addEventListener('click', function(e) {
+            if (e.target === overlay) overlay.remove();
+        });
+        document.addEventListener('keydown', function handler(e) {
+            if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', handler); }
+        });
+    };
+})();
+
+// =============================================================================
+// WELCOME BANNER — Saudação personalizada com hora do dia
+// =============================================================================
+(function() {
+    document.addEventListener('DOMContentLoaded', function() {
+        var hero = document.querySelector('.hero');
+        if (!hero || location.pathname !== '/') return;
+
+        var h = new Date().getHours();
+        var saudacao, emoji;
+        if (h < 6) { saudacao = 'Boa madrugada'; emoji = '🌙'; }
+        else if (h < 12) { saudacao = 'Bom dia'; emoji = '☀️'; }
+        else if (h < 18) { saudacao = 'Boa tarde'; emoji = '🌤️'; }
+        else { saudacao = 'Boa noite'; emoji = '🌙'; }
+
+        var nome = (document.querySelector('.nav-user-info') || {}).textContent || '';
+        nome = nome.replace(/^👤\s*/, '').trim();
+
+        if (!nome) return;
+
+        var banner = document.createElement('div');
+        banner.className = 'welcome-banner';
+        banner.innerHTML = `
+            <div class="welcome-emoji">${emoji}</div>
+            <div class="welcome-text">
+                <h2>${saudacao}, ${escapeHtml(nome)}!</h2>
+                <p>Pronto para mais um dia na Combina Açaí?</p>
+            </div>
+        `;
+
+        hero.parentNode.insertBefore(banner, hero);
+    });
+})();

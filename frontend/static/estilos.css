@@ -865,3 +865,259 @@ hr { border: none; border-top: 1px solid var(--cinza-200); margin: 1rem 0; }
     #toast-container { right: .5rem; top: 70px; max-width: calc(100% - 1rem); width: auto; }
     .toast { font-size: .85rem; padding: .7rem .9rem; }
 }
+
+/* ==========================================================================
+   SUPORTE — Layout chat / tickets
+   ========================================================================== */
+.suporte-layout {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 1.2rem;
+    min-height: 520px;
+    margin-top: 1.2rem;
+}
+@media (max-width: 860px) {
+    .suporte-layout { grid-template-columns: 1fr; }
+    .suporte-sidebar { max-height: 260px; overflow-y: auto; }
+}
+.suporte-sidebar {
+    background: var(--branco);
+    border-radius: var(--raio);
+    box-shadow: var(--sombra-sm);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.suporte-sidebar-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: .9rem 1rem; border-bottom: 1px solid var(--cinza-200);
+}
+.suporte-sidebar-header h3 { font-size: 1rem; margin: 0; }
+.suporte-filtros { padding: .6rem 1rem; }
+.suporte-filtros select { width: 100%; padding: .4rem .6rem; border-radius: var(--raio-sm); border: 1px solid var(--cinza-300); font-size: .85rem; }
+.suporte-ticket-list { flex: 1; overflow-y: auto; }
+.suporte-ticket-item {
+    padding: .75rem 1rem;
+    border-bottom: 1px solid var(--cinza-100);
+    cursor: pointer;
+    transition: background var(--fast);
+    border-left: 3px solid transparent;
+}
+.suporte-ticket-item:hover { background: var(--cinza-50); }
+.suporte-ticket-item.ativo { background: var(--cinza-100); border-left-color: var(--acai); }
+.suporte-ticket-item.prioridade-urgente { border-left-color: var(--vermelho); }
+.suporte-ticket-item.prioridade-alta { border-left-color: var(--amarelo); }
+.ticket-item-header { display: flex; align-items: center; gap: .4rem; font-size: .78rem; color: var(--cinza-600); margin-bottom: .25rem; }
+.ticket-id { font-weight: 600; }
+.ticket-data { margin-left: auto; }
+.ticket-assunto { font-weight: 600; font-size: .92rem; color: var(--cinza-900); margin-bottom: .2rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ticket-meta { display: flex; gap: .6rem; font-size: .78rem; color: var(--cinza-400); }
+.ticket-status { font-size: .75rem; }
+.status-aberto { color: var(--verde); }
+.status-em_andamento { color: var(--amarelo); }
+.status-resolvido { color: var(--azul); }
+.status-fechado { color: var(--cinza-400); }
+.suporte-no-tickets { padding: 2rem 1rem; text-align: center; color: var(--cinza-400); font-size: .9rem; }
+.suporte-loading { padding: 2rem 1rem; text-align: center; color: var(--cinza-400); }
+
+/* Chat area */
+.suporte-chat {
+    background: var(--branco);
+    border-radius: var(--raio);
+    box-shadow: var(--sombra-sm);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 400px;
+}
+.suporte-empty-state {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    flex: 1; padding: 3rem; text-align: center; color: var(--cinza-400);
+}
+.suporte-empty-icon { font-size: 3rem; margin-bottom: 1rem; }
+.suporte-empty-state h3 { margin-bottom: .4rem; color: var(--cinza-600); }
+.suporte-chat-content { display: flex; flex-direction: column; flex: 1; }
+.suporte-chat-header {
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    padding: .8rem 1.2rem; border-bottom: 1px solid var(--cinza-200); background: var(--cinza-50);
+}
+.chat-header-info h3 { font-size: .95rem; margin: 0; display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.chat-header-info small { color: var(--cinza-600); font-size: .78rem; }
+.suporte-mensagens {
+    flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: .8rem;
+    max-height: 380px; min-height: 200px;
+}
+.chat-msg { display: flex; gap: .6rem; max-width: 85%; }
+.chat-msg-user { align-self: flex-end; flex-direction: row-reverse; }
+.chat-msg-admin { align-self: flex-start; }
+.chat-msg-avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0; background: var(--cinza-100); }
+.chat-msg-body { background: var(--cinza-50); border-radius: var(--raio-sm); padding: .6rem .9rem; }
+.chat-msg-admin .chat-msg-body { background: #f3e5f5; }
+.chat-msg-header { display: flex; gap: .5rem; align-items: baseline; margin-bottom: .2rem; }
+.chat-msg-header strong { font-size: .82rem; }
+.chat-msg-time { font-size: .72rem; color: var(--cinza-400); }
+.chat-msg-text { font-size: .9rem; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+.suporte-chat-input {
+    display: flex; gap: .6rem; padding: .8rem 1rem; border-top: 1px solid var(--cinza-200); align-items: flex-end;
+}
+.suporte-chat-input textarea {
+    flex: 1; resize: none; border: 1px solid var(--cinza-300); border-radius: var(--raio-sm);
+    padding: .6rem .8rem; font-family: var(--font); font-size: .9rem;
+}
+.suporte-chat-input textarea:focus { outline: none; border-color: var(--acai); }
+.badge { display: inline-block; padding: .15rem .55rem; border-radius: 999px; font-size: .72rem; font-weight: 600; text-transform: capitalize; }
+.badge-baixa { background: #e8f5e9; color: #2e7d32; }
+.badge-normal { background: #fff8e1; color: #f57f17; }
+.badge-alta { background: #fff3e0; color: #e65100; }
+.badge-urgente { background: #ffebee; color: #c62828; }
+.badge-fechado { background: var(--cinza-200); color: var(--cinza-600); }
+
+/* Dark mode suporte overrides */
+[data-theme="dark"] .suporte-sidebar { background: #1e1e1e; }
+[data-theme="dark"] .suporte-chat { background: #1e1e1e; }
+[data-theme="dark"] .suporte-chat-header { background: #252525; }
+[data-theme="dark"] .chat-msg-body { background: #252525; }
+[data-theme="dark"] .chat-msg-admin .chat-msg-body { background: #2a1a3a; }
+[data-theme="dark"] .suporte-ticket-item:hover { background: #252525; }
+[data-theme="dark"] .suporte-ticket-item.ativo { background: #2a2a2a; }
+
+/* ==========================================================================
+   FAB — Floating Action Button (ações rápidas)
+   ========================================================================== */
+.fab-container {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    z-index: 1500;
+}
+.fab-btn {
+    width: 56px; height: 56px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--acai), var(--rosa));
+    color: white; border: none; font-size: 1.5rem; cursor: pointer;
+    box-shadow: 0 4px 12px rgba(108,46,185,.4);
+    transition: transform var(--fast), box-shadow var(--fast);
+    display: flex; align-items: center; justify-content: center;
+    position: relative; z-index: 2;
+}
+.fab-btn:hover { transform: scale(1.08); box-shadow: 0 6px 20px rgba(108,46,185,.5); }
+.fab-btn.open { transform: rotate(45deg); }
+.fab-menu {
+    position: absolute; bottom: 70px; right: 0;
+    display: flex; flex-direction: column; gap: .5rem; align-items: flex-end;
+    opacity: 0; pointer-events: none; transform: translateY(10px);
+    transition: opacity var(--fast), transform var(--fast);
+}
+.fab-container.open .fab-menu { opacity: 1; pointer-events: auto; transform: translateY(0); }
+.fab-action {
+    display: flex; align-items: center; gap: .5rem;
+    background: var(--branco); color: var(--cinza-800);
+    border: 1px solid var(--cinza-200); border-radius: 999px;
+    padding: .5rem 1rem .5rem .7rem; font-size: .85rem; font-weight: 500;
+    text-decoration: none; white-space: nowrap;
+    box-shadow: var(--sombra-md); transition: transform var(--fast), box-shadow var(--fast);
+    cursor: pointer;
+}
+.fab-action:hover { transform: translateX(-4px); box-shadow: var(--sombra-lg); text-decoration: none; }
+.fab-action-icon { font-size: 1.1rem; }
+[data-theme="dark"] .fab-action { background: #252525; border-color: #444; color: var(--cinza-800); }
+@media print { .fab-container { display: none !important; } }
+
+/* ==========================================================================
+   NOTIFICATION BADGE (navbar)
+   ========================================================================== */
+.nav-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 18px; height: 18px; border-radius: 999px;
+    background: var(--vermelho); color: white;
+    font-size: .65rem; font-weight: 700; padding: 0 5px;
+    position: relative; top: -6px; left: -4px;
+    animation: badgePulse 2s ease infinite;
+}
+.nav-badge:empty { display: none; }
+@keyframes badgePulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.15); }
+}
+
+/* ==========================================================================
+   SHORTCUTS MODAL (atalhos de teclado)
+   ========================================================================== */
+.shortcuts-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: .6rem;
+}
+.shortcut-item {
+    display: flex; align-items: center; gap: .6rem; padding: .4rem .6rem;
+    border-radius: var(--raio-sm); background: var(--cinza-50);
+}
+.shortcut-item kbd {
+    display: inline-block; padding: .15rem .45rem; border-radius: 4px;
+    background: var(--cinza-200); border: 1px solid var(--cinza-300);
+    font-family: monospace; font-size: .78rem; font-weight: 600;
+    min-width: 24px; text-align: center;
+}
+@media (max-width: 600px) {
+    .shortcuts-grid { grid-template-columns: 1fr; }
+}
+[data-theme="dark"] .shortcut-item { background: #252525; }
+[data-theme="dark"] .shortcut-item kbd { background: #333; border-color: #555; color: #e0e0e0; }
+
+/* ==========================================================================
+   FIDELITY CARD (cartão visual gamificado)
+   ========================================================================== */
+.fidelity-card {
+    background: linear-gradient(135deg, var(--acai-dark) 0%, var(--acai) 50%, var(--rosa) 100%);
+    border-radius: var(--raio); padding: 1.5rem; color: white;
+    position: relative; overflow: hidden;
+}
+.fidelity-card::before {
+    content: '🍇'; position: absolute; right: -10px; top: -10px; font-size: 6rem; opacity: .12; transform: rotate(15deg);
+}
+.fidelity-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+.fidelity-header h4 { font-size: 1rem; margin: 0; }
+.fidelity-points { font-size: 2rem; font-weight: 800; }
+.fidelity-points small { font-size: .7rem; font-weight: 400; opacity: .8; }
+.fidelity-stamps {
+    display: grid; grid-template-columns: repeat(10, 1fr); gap: .4rem; margin: 1rem 0;
+}
+.stamp {
+    aspect-ratio: 1; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: .9rem; border: 2px dashed rgba(255,255,255,.3);
+    transition: transform var(--fast), background var(--fast);
+}
+.stamp.filled {
+    background: rgba(255,255,255,.25); border-style: solid; border-color: rgba(255,255,255,.6);
+    animation: stampPop .3s ease;
+}
+.stamp.reward { background: var(--amarelo); border-color: var(--amarelo); }
+@keyframes stampPop { 0% { transform: scale(0); } 60% { transform: scale(1.2); } 100% { transform: scale(1); } }
+.fidelity-progress { height: 6px; background: rgba(255,255,255,.2); border-radius: 999px; overflow: hidden; }
+.fidelity-progress-bar { height: 100%; background: var(--verde); border-radius: 999px; transition: width .6s ease; }
+.fidelity-next-reward { font-size: .8rem; opacity: .8; margin-top: .5rem; }
+
+/* ==========================================================================
+   WELCOME BANNER (saudação personalizada)
+   ========================================================================== */
+.welcome-banner {
+    display: flex; align-items: center; gap: 1.2rem;
+    background: linear-gradient(135deg, var(--acai), var(--rosa));
+    border-radius: var(--raio); padding: 1.2rem 1.5rem; color: white; margin-bottom: 1.2rem;
+    position: relative; overflow: hidden;
+}
+.welcome-banner::after {
+    content: ''; position: absolute; right: -30px; top: -30px;
+    width: 120px; height: 120px; border-radius: 50%;
+    background: rgba(255,255,255,.08);
+}
+.welcome-emoji { font-size: 2.5rem; }
+.welcome-text h2 { font-size: 1.15rem; margin: 0 0 .2rem; font-weight: 600; }
+.welcome-text p { font-size: .85rem; opacity: .85; margin: 0; }
+.welcome-stats {
+    margin-left: auto; display: flex; gap: 1.5rem; flex-shrink: 0;
+}
+.welcome-stat { text-align: center; }
+.welcome-stat-value { font-size: 1.4rem; font-weight: 800; display: block; }
+.welcome-stat-label { font-size: .7rem; opacity: .7; }
+@media (max-width: 600px) {
+    .welcome-banner { flex-direction: column; text-align: center; }
+    .welcome-stats { margin-left: 0; }
+}
