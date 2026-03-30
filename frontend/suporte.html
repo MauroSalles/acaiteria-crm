@@ -105,7 +105,7 @@
             </div>
 
             <!-- Modal: Novo Ticket -->
-            <div class="modal-overlay" id="modalNovoTicket" style="display:none">
+            <div class="modal-overlay" id="modalNovoTicket">
                 <div class="modal-box" style="max-width:500px">
                     <h3>🎫 Novo Ticket de Suporte</h3>
                     <form id="formNovoTicket" onsubmit="criarTicket(event)">
@@ -147,17 +147,18 @@
             </div>
 
             <!-- Modal: Assistente IA -->
-            <div class="modal-overlay" id="modalIA" style="display:none">
-                <div class="modal-box" style="max-width:560px;text-align:left">
+            <div class="modal-overlay" id="modalIA">
+                <div class="modal-box" style="max-width:580px;text-align:left">
                     <h3>🤖 Assistente IA — Combina Açaí</h3>
-                    <p style="color:var(--cinza-600);font-size:.85rem;margin-bottom:1rem">Faça uma pergunta e a IA tentará responder automaticamente.</p>
-                    <div class="form-group">
-                        <textarea id="iaInput" class="form-control" rows="3" placeholder="Ex: Como registrar uma venda? / Esqueci minha senha / O que é LGPD?" maxlength="500"></textarea>
+                    <p style="color:var(--cinza-600);font-size:.82rem;margin-bottom:.5rem">Motor ML: <strong>TF-IDF + Cosine Similarity</strong> · Faça suas perguntas abaixo</p>
+                    <div id="iaConversation" style="max-height:320px;overflow-y:auto;margin-bottom:.8rem;padding:.5rem;border-radius:8px;background:var(--cinza-100)"></div>
+                    <div style="display:flex;gap:.5rem">
+                        <textarea id="iaInput" class="form-control" rows="2" placeholder="Ex: Como registrar uma venda? / Esqueci minha senha / O que é LGPD?" maxlength="500" style="flex:1;resize:none"></textarea>
+                        <button class="btn btn-primary" id="iaBtnPerguntar" onclick="perguntarIA()" style="align-self:flex-end">🧠 Perguntar</button>
                     </div>
-                    <button class="btn btn-primary" id="iaBtnPerguntar" onclick="perguntarIA()">🧠 Perguntar</button>
-                    <div id="iaResultado" style="margin-top:1rem"></div>
-                    <div style="text-align:right;margin-top:1rem">
-                        <button class="btn btn-secondary" onclick="document.getElementById('modalIA').style.display='none'">Fechar</button>
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.8rem">
+                        <button class="btn btn-sm" style="font-size:.75rem;opacity:.7" onclick="document.getElementById('iaConversation').innerHTML='';iaHistorico=[]">Limpar conversa</button>
+                        <button class="btn btn-secondary" onclick="fecharModalIA()">Fechar</button>
                     </div>
                 </div>
             </div>
@@ -370,9 +371,10 @@
     }
 
     // ====== HELPERS ======
-    function abrirNovoTicket() { document.getElementById('modalNovoTicket').style.display = 'flex'; }
-    function fecharModal() { document.getElementById('modalNovoTicket').style.display = 'none'; }
-    function abrirAssistenteIA() { document.getElementById('modalIA').style.display = 'flex'; document.getElementById('iaInput').focus(); }
+    function abrirNovoTicket() { document.getElementById('modalNovoTicket').classList.add('open'); document.getElementById('ticketAssunto').focus(); }
+    function fecharModal() { document.getElementById('modalNovoTicket').classList.remove('open'); }
+    function abrirAssistenteIA() { document.getElementById('modalIA').classList.add('open'); setTimeout(()=>document.getElementById('iaInput').focus(),100); }
+    function fecharModalIA() { document.getElementById('modalIA').classList.remove('open'); }
     function statusIcon(s) { return { aberto: '🟢', em_andamento: '🟡', resolvido: '🔵', fechado: '⚫' }[s] || '⚪'; }
     function statusLabel(s) { return { aberto: 'Aberto', em_andamento: 'Em andamento', resolvido: 'Resolvido', fechado: 'Fechado' }[s] || s; }
     function categoriaIcon(c) { return { duvida: '❓', problema: '🐛', sugestao: '💡', outro: '📋' }[c] || '📋'; }
@@ -395,16 +397,37 @@
 
     // ESC para fechar modal
     document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') { fecharModal(); document.getElementById('modalIA').style.display = 'none'; }
+        if (e.key === 'Escape') { fecharModal(); fecharModalIA(); }
     });
 
-    // ====== ASSISTENTE IA ======
+    // Click fora do modal fecha
+    document.getElementById('modalNovoTicket').addEventListener('click', function(e) {
+        if (e.target === this) fecharModal();
+    });
+    document.getElementById('modalIA').addEventListener('click', function(e) {
+        if (e.target === this) fecharModalIA();
+    });
+
+    // ====== ASSISTENTE IA (ML: TF-IDF + Cosine Similarity) ======
+    var iaHistorico = [];
+
     async function perguntarIA() {
         var input = document.getElementById('iaInput');
         var mensagem = input.value.trim();
         if (!mensagem || mensagem.length < 2) { mostrarAlerta('Digite uma pergunta', 'aviso'); return; }
         var btn = document.getElementById('iaBtnPerguntar');
-        btn.disabled = true; btn.textContent = '🧠 Pensando...';
+        var conv = document.getElementById('iaConversation');
+        btn.disabled = true; btn.textContent = '🧠 ...';
+        input.value = '';
+
+        // Adiciona pergunta do usuário
+        conv.innerHTML += '<div style="text-align:right;margin-bottom:.5rem"><span style="display:inline-block;background:var(--acai);color:#fff;padding:.4rem .8rem;border-radius:12px 12px 2px 12px;max-width:85%;font-size:.88rem">' + escapeHtml(mensagem) + '</span></div>';
+        conv.scrollTop = conv.scrollHeight;
+
+        // Indicador de digitação
+        conv.innerHTML += '<div id="iaTyping" style="margin-bottom:.5rem"><span style="display:inline-block;background:var(--cinza-200);padding:.4rem .8rem;border-radius:12px 12px 12px 2px;font-size:.85rem;animation:pulse 1s infinite">🤖 Analisando...</span></div>';
+        conv.scrollTop = conv.scrollHeight;
+
         try {
             var resp = await fetch('/api/suporte/ia-resposta', {
                 method: 'POST',
@@ -413,21 +436,40 @@
             });
             if (!resp.ok) throw new Error('Erro HTTP ' + resp.status);
             var data = await resp.json();
-            var confClass = data.confianca >= 0.5 ? 'ia-conf-high' : data.confianca >= 0.2 ? 'ia-conf-mid' : 'ia-conf-low';
-            var confLabel = data.confianca >= 0.5 ? 'Alta confiança' : data.confianca >= 0.2 ? 'Média' : 'Baixa';
-            document.getElementById('iaResultado').innerHTML =
-                '<div class="ia-bubble">' +
-                '<div class="ia-bubble-header">🤖 Resposta da IA <span class="ia-bubble-confidence ' + confClass + '">' + confLabel + ' (' + Math.round(data.confianca * 100) + '%)</span></div>' +
-                '<div style="white-space:pre-wrap">' + escapeHtml(data.resposta).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') + '</div>' +
-                '</div>';
+            iaHistorico.push({ pergunta: mensagem, resposta: data });
+
+            // Remove typing indicator
+            var typing = document.getElementById('iaTyping');
+            if (typing) typing.remove();
+
+            var confPct = Math.round(data.confianca * 100);
+            var confClass = confPct >= 50 ? 'ia-conf-high' : confPct >= 20 ? 'ia-conf-mid' : 'ia-conf-low';
+            var confLabel = confPct >= 50 ? '✅ Alta' : confPct >= 20 ? '⚠️ Média' : '❓ Baixa';
+            var metodoLabel = data.metodo === 'tfidf_cosine_similarity' ? 'TF-IDF' : 'Heurística';
+            var respostaHtml = escapeHtml(data.resposta).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+            conv.innerHTML +=
+                '<div style="margin-bottom:.8rem">' +
+                '<div class="ia-bubble" style="display:inline-block;max-width:90%">' +
+                '<div style="white-space:pre-wrap;font-size:.88rem">' + respostaHtml + '</div>' +
+                '<div style="margin-top:.4rem;font-size:.68rem;opacity:.65;display:flex;gap:.6rem;flex-wrap:wrap">' +
+                '<span class="' + confClass + '">' + confLabel + ' ' + confPct + '%</span>' +
+                '<span>📊 ' + metodoLabel + '</span>' +
+                '<span>Sim: ' + (data.similaridade * 100).toFixed(1) + '%</span>' +
+                '<span>Cat: ' + data.categoria_sugerida + '</span>' +
+                '</div></div></div>';
+            conv.scrollTop = conv.scrollHeight;
         } catch (err) {
-            document.getElementById('iaResultado').innerHTML = '<div class="alert alert-erro">Erro: ' + escapeHtml(err.message) + '</div>';
+            var typing = document.getElementById('iaTyping');
+            if (typing) typing.remove();
+            conv.innerHTML += '<div style="margin-bottom:.5rem"><span style="display:inline-block;background:#fee;color:#c00;padding:.4rem .8rem;border-radius:8px;font-size:.85rem">❌ ' + escapeHtml(err.message) + '</span></div>';
         } finally {
             btn.disabled = false; btn.textContent = '🧠 Perguntar';
+            input.focus();
         }
     }
 
-    // IA suggestion while typing ticket description
+    // IA suggestion while typing ticket description (auto-suggest + auto-category)
     var _iaDebounce = null;
     document.getElementById('ticketMensagem').addEventListener('input', function() {
         clearTimeout(_iaDebounce);
@@ -442,14 +484,24 @@
                 });
                 if (!resp.ok) return;
                 var data = await resp.json();
-                if (data.confianca >= 0.3) {
+                if (data.confianca >= 0.15) {
+                    // Auto-fill categoria se confiança alta
+                    if (data.confianca >= 0.3 && data.categoria_sugerida) {
+                        var catSelect = document.getElementById('ticketCategoria');
+                        if (catSelect.value !== data.categoria_sugerida) {
+                            catSelect.value = data.categoria_sugerida;
+                            catSelect.style.transition = 'box-shadow .3s';
+                            catSelect.style.boxShadow = '0 0 0 2px var(--acai)';
+                            setTimeout(function() { catSelect.style.boxShadow = ''; }, 1500);
+                        }
+                    }
+                    var preview = escapeHtml(data.resposta).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                    if (preview.length > 350) preview = preview.substring(0, 350) + '...';
                     document.getElementById('iaSugestaoTicket').innerHTML =
                         '<div class="ia-bubble" style="margin-top:.8rem">' +
-                        '<div class="ia-bubble-header">🤖 A IA pode ajudar:</div>' +
-                        '<div style="white-space:pre-wrap;font-size:.83rem">' +
-                        escapeHtml(data.resposta).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').substring(0, 300) +
-                        (data.resposta.length > 300 ? '...' : '') +
-                        '</div></div>';
+                        '<div class="ia-bubble-header">🤖 A IA pode ajudar: <span style="font-size:.7rem;opacity:.7">(confiança ' + Math.round(data.confianca * 100) + '%)</span></div>' +
+                        '<div style="white-space:pre-wrap;font-size:.83rem">' + preview + '</div>' +
+                        '</div>';
                 } else {
                     document.getElementById('iaSugestaoTicket').innerHTML = '';
                 }

@@ -1325,7 +1325,22 @@ hr { border: none; border-top: 1px solid var(--cinza-200); margin: 1rem 0; }
 .ia-conf-mid { background: #fff8e1; color: #f57f17; }
 .ia-conf-low { background: #ffebee; color: #c62828; }
 [data-theme="dark"] .ia-bubble { background: linear-gradient(135deg, #2a1a3a, #1a2332); }
+[data-theme="dark"] .ia-conf-high { background: #1b5e20; color: #a5d6a7; }
+[data-theme="dark"] .ia-conf-mid { background: #e65100; color: #ffe0b2; }
+[data-theme="dark"] .ia-conf-low { background: #b71c1c; color: #ffcdd2; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .5; } }
+
+/* IA Conversation chat styles */
+#iaConversation:empty::before {
+    content: '🤖 Olá! Sou a IA do Combina Açaí.\A\ASou movida por TF-IDF + Cosine Similarity.\APergunte sobre vendas, clientes, estoque, LGPD...';
+    white-space: pre-wrap;
+    color: var(--cinza-500);
+    font-size: .82rem;
+    display: block;
+    text-align: center;
+    padding: 2rem 1rem;
+}
 
 /* ==========================================================================
    ENHANCED FOCUS STYLES (Accessibility)

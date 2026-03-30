@@ -2151,48 +2151,210 @@ def atualizar_status_ticket(id_ticket):
 
 
 # =============================================================================
-# AGENTE IA — Respostas automáticas para suporte (NLP baseado em regras)
+# AGENTE IA — Machine Learning com TF-IDF + Cosine Similarity
+# =============================================================================
+# Implementação de NLP/ML sem dependências externas (scikit-learn-free).
+# Usa TF-IDF (Term Frequency–Inverse Document Frequency) para vetorizar
+# textos e Cosine Similarity para medir semelhança semântica.
 # =============================================================================
 
-# Base de conhecimento para respostas automáticas da IA
+import math
+import re as _re
+import unicodedata
+
+# ---- Pré-processamento de texto (NLP pipeline) ----
+
+_STOPWORDS_PT = frozenset([
+    'a', 'ao', 'aos', 'aquela', 'aquele', 'as', 'até', 'com', 'como', 'da',
+    'das', 'de', 'dela', 'dele', 'do', 'dos', 'e', 'ela', 'ele', 'em', 'entre',
+    'era', 'essa', 'esse', 'esta', 'este', 'eu', 'foi', 'for', 'há', 'isso',
+    'isto', 'já', 'lhe', 'lhes', 'mas', 'me', 'meu', 'minha', 'muito', 'na',
+    'nas', 'nem', 'no', 'nos', 'nossa', 'nosso', 'nós', 'num', 'numa', 'o',
+    'os', 'ou', 'para', 'pela', 'pelo', 'por', 'qual', 'quando', 'que', 'quem',
+    'se', 'sem', 'ser', 'seu', 'sua', 'são', 'só', 'também', 'te', 'tem',
+    'tinha', 'toda', 'todo', 'tu', 'tua', 'tudo', 'um', 'uma', 'uns', 'vai',
+    'você', 'vos', 'à', 'é',
+])
+
+# Stemmer RSLP simplificado para português
+_SUFIXOS_PT = [
+    'amentos', 'imento', 'amente', 'idades', 'ização', 'ações',
+    'mente', 'idade', 'ação', 'ância', 'ência', 'ável', 'ível',
+    'ante', 'ente', 'ando', 'endo', 'indo', 'ções', 'ores',
+    'ados', 'idos', 'ando', 'endo', 'indo', 'aram', 'eram',
+    'iram', 'avam', 'ário', 'ária', 'eiro', 'eira',
+    'ado', 'ido', 'ção', 'oso', 'osa', 'dor', 'tor', 'nte',
+    'ais', 'eis', 'ões', 'ais', 'mos', 'ria', 'ndo',
+    'ar', 'er', 'ir', 'ou', 'am', 'em', 'ia', 'as', 'es', 'os',
+]
+
+
+def _normalizar_texto(texto):
+    """Remove acentos e normaliza para lowercase ASCII."""
+    nfkd = unicodedata.normalize('NFKD', texto)
+    return ''.join(c for c in nfkd if not unicodedata.combining(c)).lower()
+
+
+def _stem_pt(palavra):
+    """Stemmer simplificado para português — remove sufixos comuns."""
+    if len(palavra) <= 3:
+        return palavra
+    for sufixo in _SUFIXOS_PT:
+        if len(palavra) - len(sufixo) >= 3 and palavra.endswith(sufixo):
+            return palavra[:-len(sufixo)]
+    return palavra
+
+
+def _tokenizar(texto):
+    """Pipeline NLP: normaliza → tokeniza → remove stopwords → stem."""
+    texto_norm = _normalizar_texto(texto)
+    tokens = _re.findall(r'[a-z0-9]+', texto_norm)
+    return [_stem_pt(t) for t in tokens if t not in _STOPWORDS_PT and len(t) > 1]
+
+
+# ---- TF-IDF Engine ----
+
+class _TFIDFEngine:
+    """Motor TF-IDF + Cosine Similarity para classificação de texto."""
+
+    def __init__(self):
+        self.documentos = []      # Lista de dicts originais
+        self.doc_tokens = []      # Tokens processados por documento
+        self.idf = {}             # IDF por termo
+        self.tfidf_matrix = []    # Vetores TF-IDF dos documentos
+        self.vocabulario = {}     # termo → index
+
+    def treinar(self, base_conhecimento):
+        """Treina o modelo com a base de conhecimento (fit)."""
+        self.documentos = base_conhecimento
+        self.doc_tokens = []
+
+        # Gerar corpus: combina palavras-chave + texto da resposta para cada doc
+        for item in base_conhecimento:
+            corpus_text = ' '.join(item['palavras']) + ' ' + item.get('treino', '')
+            tokens = _tokenizar(corpus_text)
+            self.doc_tokens.append(tokens)
+
+        n_docs = len(self.doc_tokens)
+        if n_docs == 0:
+            return
+
+        # Construir vocabulário
+        all_terms = set()
+        for tokens in self.doc_tokens:
+            all_terms.update(tokens)
+        self.vocabulario = {term: i for i, term in enumerate(sorted(all_terms))}
+
+        # Calcular IDF: log(N / df_t) + 1  (suavizado)
+        df = {}
+        for tokens in self.doc_tokens:
+            for term in set(tokens):
+                df[term] = df.get(term, 0) + 1
+        self.idf = {
+            term: math.log(n_docs / df.get(term, 1)) + 1.0
+            for term in self.vocabulario
+        }
+
+        # Calcular TF-IDF matrix
+        self.tfidf_matrix = []
+        for tokens in self.doc_tokens:
+            vec = self._calcular_tfidf(tokens)
+            self.tfidf_matrix.append(vec)
+
+    def _calcular_tfidf(self, tokens):
+        """Calcula vetor TF-IDF para uma lista de tokens."""
+        tf = {}
+        for t in tokens:
+            tf[t] = tf.get(t, 0) + 1
+        # Normalizar TF: tf / max_tf
+        max_tf = max(tf.values()) if tf else 1
+        vec = {}
+        for term, count in tf.items():
+            if term in self.idf:
+                vec[term] = (count / max_tf) * self.idf[term]
+        return vec
+
+    def _cosine_similarity(self, vec_a, vec_b):
+        """Calcula similaridade do cosseno entre dois vetores esparsos."""
+        # Dot product
+        termos_comuns = set(vec_a.keys()) & set(vec_b.keys())
+        if not termos_comuns:
+            return 0.0
+        dot = sum(vec_a[t] * vec_b[t] for t in termos_comuns)
+        # Normas
+        norm_a = math.sqrt(sum(v * v for v in vec_a.values()))
+        norm_b = math.sqrt(sum(v * v for v in vec_b.values()))
+        if norm_a == 0 or norm_b == 0:
+            return 0.0
+        return dot / (norm_a * norm_b)
+
+    def classificar(self, texto):
+        """Classifica texto usando cosine similarity com os documentos treinados (predict)."""
+        tokens = _tokenizar(texto)
+        if not tokens:
+            return None, 0.0
+
+        query_vec = self._calcular_tfidf(tokens)
+        if not query_vec:
+            return None, 0.0
+
+        melhor_idx = -1
+        melhor_sim = 0.0
+
+        for i, doc_vec in enumerate(self.tfidf_matrix):
+            sim = self._cosine_similarity(query_vec, doc_vec)
+            if sim > melhor_sim:
+                melhor_sim = sim
+                melhor_idx = i
+
+        if melhor_idx >= 0 and melhor_sim > 0.05:
+            return self.documentos[melhor_idx], melhor_sim
+        return None, 0.0
+
+
+# ---- Base de Conhecimento (Training Data) ----
+
 _IA_KNOWLEDGE_BASE = [
     {
-        'palavras': ['senha', 'password', 'login', 'acessar', 'entrar', 'não consigo logar'],
+        'palavras': ['senha', 'password', 'login', 'acessar', 'entrar', 'logar', 'autenticar'],
+        'treino': 'esqueci minha senha como faco login nao consigo entrar acessar sistema autenticacao credenciais email usuario',
         'resposta': '🔑 **Problemas com login?**\n\n'
                     '1. Verifique se o email está correto (tudo minúsculo)\n'
                     '2. Confira se o Caps Lock está desativado\n'
-                    '3. Tente limpar os cookies do navegador\n'
-                    '4. Se persistir, peça ao administrador para redefinir sua senha\n\n'
+                    '3. A senha deve ter no mínimo **8 caracteres**\n'
+                    '4. Tente limpar os cookies do navegador\n'
+                    '5. Se persistir, peça ao administrador para redefinir sua senha\n\n'
                     '💡 Dica: use um gerenciador de senhas para não esquecer!',
         'categoria': 'duvida',
-        'confianca': 0,
     },
     {
-        'palavras': ['venda', 'registrar venda', 'nova venda', 'como vender', 'fazer venda'],
+        'palavras': ['venda', 'registrar', 'vender', 'compra', 'pedido', 'carrinho'],
+        'treino': 'como registrar nova venda fazer vender produto pedido cliente compra carrinho finalizar forma pagamento pix dinheiro cartao',
         'resposta': '🛒 **Como registrar uma venda:**\n\n'
-                    '1. Vá em **Vendas → Registrar Venda**\n'
+                    '1. Vá em **Vendas → Registrar Venda** (ou atalho **V**)\n'
                     '2. Selecione o cliente (precisa ter consentimento LGPD)\n'
                     '3. Adicione os produtos e quantidade\n'
                     '4. Aplique desconto % ou taxa se necessário\n'
-                    '5. Escolha a forma de pagamento\n'
+                    '5. Escolha a forma de pagamento (Pix, Dinheiro, Cartão)\n'
                     '6. Clique em **Finalizar Venda**\n\n'
                     '⚠️ O cliente precisa ter consentimento LGPD ativo!',
         'categoria': 'duvida',
-        'confianca': 0,
     },
     {
-        'palavras': ['cliente', 'cadastrar cliente', 'novo cliente', 'cadastro'],
+        'palavras': ['cliente', 'cadastrar', 'cadastro', 'novo', 'registrar'],
+        'treino': 'como cadastrar novo cliente registro formulario nome telefone email totem autocadastro dados pessoais',
         'resposta': '👤 **Cadastro de clientes:**\n\n'
                     '1. Vá em **Clientes → Cadastrar Cliente**\n'
                     '2. Preencha nome, telefone e email\n'
                     '3. O cliente deve aceitar o consentimento LGPD\n'
-                    '4. Clique em **Cadastrar**\n\n'
-                    '📋 Sem consentimento LGPD, não é possível registrar vendas para o cliente.',
+                    '4. Clique em **Cadastrar**\n'
+                    '5. Ou use o **Totem de Auto-Cadastro** para o próprio cliente se cadastrar!\n\n'
+                    '📋 Sem consentimento LGPD, não é possível registrar vendas.',
         'categoria': 'duvida',
-        'confianca': 0,
     },
     {
-        'palavras': ['lgpd', 'privacidade', 'dados', 'consentimento', 'exclusão', 'esquecimento'],
+        'palavras': ['lgpd', 'privacidade', 'dados', 'consentimento', 'exclusao', 'esquecimento', 'anonimizar'],
+        'treino': 'lei geral protecao dados pessoais consentimento revogar direito esquecimento anonimizacao privacidade politica termos lgpd compliance',
         'resposta': '🔒 **LGPD — Lei Geral de Proteção de Dados:**\n\n'
                     '• Todo cliente tem direito a saber quais dados coletamos\n'
                     '• O consentimento pode ser revogado a qualquer momento\n'
@@ -2201,56 +2363,60 @@ _IA_KNOWLEDGE_BASE = [
                     '• Histórico de consentimentos fica registrado por auditoria\n\n'
                     '📋 Acesse: Menu → LGPD para ver a política completa.',
         'categoria': 'duvida',
-        'confianca': 0,
     },
     {
-        'palavras': ['estoque', 'produto', 'acabou', 'falta', 'estoque baixo'],
+        'palavras': ['estoque', 'produto', 'acabou', 'falta', 'minimo', 'repor'],
+        'treino': 'estoque baixo produto acabou faltando reposicao controle estoque minimo quantidade disponivel acabando alerta inventario',
         'resposta': '📦 **Gestão de estoque:**\n\n'
-                    '• Vá em **Produtos** no menu\n'
+                    '• Vá em **Produtos** no menu (ou atalho **P**)\n'
                     '• Cada produto tem estoque atual e mínimo\n'
                     '• Quando estoque fica abaixo do mínimo, aparece alerta no Dashboard\n'
-                    '• O estoque é decrementado automaticamente a cada venda\n\n'
+                    '• O estoque é decrementado automaticamente a cada venda\n'
+                    '• Edite o produto para ajustar quantidades\n\n'
                     '💡 Configure o estoque mínimo para receber alertas!',
         'categoria': 'duvida',
-        'confianca': 0,
     },
     {
-        'palavras': ['relatório', 'relatorio', 'financeiro', 'faturamento', 'fechamento', 'caixa'],
+        'palavras': ['relatorio', 'financeiro', 'faturamento', 'fechamento', 'caixa', 'grafico'],
+        'treino': 'relatorio financeiro faturamento vendas dia fechamento caixa exportar csv pdf xlsx grafico dashboard estatistica receita lucro',
         'resposta': '📊 **Relatórios e Financeiro:**\n\n'
                     '• **Relatórios** → Vendas do dia, clientes frequentes, ranking de produtos\n'
                     '• **Fechamento de Caixa** → Consolidação por data e forma de pagamento\n'
                     '• Exporte em **CSV**, **PDF** ou **XLSX**\n'
-                    '• Gráficos interativos no Dashboard\n\n'
+                    '• Gráficos interativos no Dashboard\n'
+                    '• Use atalho **R** para acessar rápido\n\n'
                     '💰 O Dashboard mostra estatísticas em tempo real!',
         'categoria': 'duvida',
-        'confianca': 0,
     },
     {
-        'palavras': ['erro', 'bug', 'não funciona', 'travou', 'problema', 'falha', 'quebrado'],
+        'palavras': ['erro', 'bug', 'funciona', 'travou', 'problema', 'falha', 'quebrado', 'crash'],
+        'treino': 'erro bug nao funciona travou problema falha quebrado tela branca pagina carregando crash lento devagar congelou sistema fora',
         'resposta': '🐛 **Problemas técnicos:**\n\n'
-                    '1. Tente recarregar a página (F5 ou Ctrl+R)\n'
+                    '1. Tente recarregar a página (**F5** ou **Ctrl+R**)\n'
                     '2. Limpe o cache do navegador\n'
                     '3. Verifique se está usando um navegador atualizado\n'
                     '4. Tente outro navegador (Chrome, Firefox, Edge)\n'
-                    '5. Se persistir, descreva o erro em detalhe neste ticket\n\n'
+                    '5. Verifique sua conexão com a internet\n'
+                    '6. Se persistir, descreva o erro em detalhe neste ticket\n\n'
                     '📸 Se possível, envie uma captura de tela do erro.',
         'categoria': 'problema',
-        'confianca': 0,
     },
     {
-        'palavras': ['whatsapp', 'compartilhar', 'comprovante', 'recibo', 'enviar'],
-        'resposta': '📱 **Compartilhamento:**\n\n'
+        'palavras': ['whatsapp', 'compartilhar', 'comprovante', 'recibo', 'enviar', 'imprimir'],
+        'treino': 'whatsapp compartilhar comprovante recibo enviar impressao imprimir nota fiscal cupom mensagem zap zapzap',
+        'resposta': '📱 **Compartilhamento e impressão:**\n\n'
                     '• Após registrar uma venda, clique no botão **WhatsApp** para compartilhar o comprovante\n'
                     '• O sistema gera automaticamente um recibo formatado\n'
-                    '• Você também pode exportar relatórios em PDF/CSV\n\n'
+                    '• Você também pode exportar relatórios em PDF/CSV\n'
+                    '• Para imprimir, use **Ctrl+P** na página de relatórios\n\n'
                     '💡 Use o atalho de teclado **V** para ir direto para Nova Venda!',
         'categoria': 'duvida',
-        'confianca': 0,
     },
     {
-        'palavras': ['atalho', 'teclado', 'shortcut', 'tecla'],
+        'palavras': ['atalho', 'teclado', 'shortcut', 'tecla', 'rapido'],
+        'treino': 'atalho teclado shortcut tecla rapido acesso direto hotkey key press combinacao comando',
         'resposta': '⌨️ **Atalhos de teclado disponíveis:**\n\n'
-                    '• **H** → Dashboard\n'
+                    '• **H** → Dashboard (Início)\n'
                     '• **V** → Nova Venda\n'
                     '• **C** → Clientes\n'
                     '• **P** → Produtos\n'
@@ -2260,10 +2426,10 @@ _IA_KNOWLEDGE_BASE = [
                     '• **?** → Lista de atalhos\n\n'
                     '⚡ Funciona em qualquer página (exceto campos de texto)!',
         'categoria': 'duvida',
-        'confianca': 0,
     },
     {
-        'palavras': ['fidelidade', 'pontos', 'desconto', 'recompensa', 'benefício'],
+        'palavras': ['fidelidade', 'pontos', 'desconto', 'recompensa', 'beneficio', 'programa'],
+        'treino': 'programa fidelidade pontos desconto recompensa beneficio bonus cashback rede ranking cliente fiel vantagem',
         'resposta': '🌟 **Programa de Fidelidade:**\n\n'
                     '• A cada R$1 gasto, o cliente ganha 1 ponto\n'
                     '• 100 pontos = R$5,00 de desconto\n'
@@ -2271,41 +2437,63 @@ _IA_KNOWLEDGE_BASE = [
                     '• Veja o ranking no Dashboard (Top Fidelidade)\n\n'
                     '💜 Clientes fiéis são o coração do negócio!',
         'categoria': 'duvida',
-        'confianca': 0,
+    },
+    {
+        'palavras': ['acai', 'sabor', 'cardapio', 'menu', 'tamanho', 'copo', 'tigela'],
+        'treino': 'acai sabor cardapio menu tamanho copo tigela 300ml 500ml 700ml fruta topping cobertura complemento granola banana morango',
+        'resposta': '🍇 **Sobre o Cardápio Açaí:**\n\n'
+                    '• Os produtos e tamanhos são cadastrados em **Produtos**\n'
+                    '• Cada item tem nome, preço, categoria e estoque\n'
+                    '• Categorias ajudam a organizar: Açaí, Complementos, Bebidas\n'
+                    '• Edite preços e disponibilidade a qualquer momento\n\n'
+                    '🛍️ Gerencie tudo em: Menu → Produtos',
+        'categoria': 'duvida',
+    },
+    {
+        'palavras': ['suporte', 'ticket', 'ajuda', 'contato', 'atendimento', 'chat'],
+        'treino': 'suporte ticket ajuda contato falar alguem atendimento chat conversar mensagem resposta demora urgente',
+        'resposta': '🎧 **Central de Suporte:**\n\n'
+                    '• Crie um **ticket** descrevendo sua dúvida ou problema\n'
+                    '• Escolha a categoria e prioridade adequadas\n'
+                    '• A equipe responderá o mais rápido possível\n'
+                    '• Use a **IA** para respostas rápidas automáticas\n'
+                    '• Acompanhe o status do ticket nesta página\n\n'
+                    '⚡ Tickets urgentes têm prioridade na fila!',
+        'categoria': 'duvida',
     },
 ]
 
+# ---- Instância global do motor ML (treinado no startup) ----
+_ia_engine = _TFIDFEngine()
+_ia_engine.treinar(_IA_KNOWLEDGE_BASE)
+logger.info('IA ML Engine treinada: %d documentos, %d termos no vocabulário',
+            len(_IA_KNOWLEDGE_BASE), len(_ia_engine.vocabulario))
+
 
 def _ia_classificar_mensagem(texto):
-    """Classifica a mensagem do usuário usando NLP baseado em regras com scoring."""
-    texto_lower = texto.lower()
-    melhor_resposta = None
-    melhor_score = 0
+    """Classifica a mensagem usando TF-IDF + Cosine Similarity (ML)."""
+    doc, similaridade = _ia_engine.classificar(texto)
 
-    for item in _IA_KNOWLEDGE_BASE:
-        score = 0
-        for palavra in item['palavras']:
-            if palavra.lower() in texto_lower:
-                score += len(palavra)  # palavras mais longas = match mais específico
-        if score > melhor_score:
-            melhor_score = score
-            melhor_resposta = item
-
-    if melhor_score >= 3:
+    if doc and similaridade > 0.08:
         return {
-            'resposta': melhor_resposta['resposta'],
-            'confianca': min(melhor_score / 15, 1.0),
-            'categoria_sugerida': melhor_resposta['categoria'],
+            'resposta': doc['resposta'],
+            'confianca': min(similaridade * 1.5, 1.0),  # Escala: 0-1.0
+            'categoria_sugerida': doc['categoria'],
+            'metodo': 'tfidf_cosine_similarity',
+            'similaridade_bruta': round(similaridade, 4),
         }
 
     return {
         'resposta': '🤖 Não encontrei uma resposta automática para sua pergunta.\n\n'
-                    'Um membro da equipe responderá em breve! Enquanto isso:\n'
-                    '• Tente reformular com mais detalhes\n'
-                    '• Verifique o guia rápido no Dashboard (Menu → Início)\n'
-                    '• Use **?** para ver atalhos disponíveis',
+                    'Sugestões:\n'
+                    '• Tente reformular usando palavras-chave (ex: "senha", "venda", "estoque")\n'
+                    '• Abra um ticket para a equipe responder pessoalmente\n'
+                    '• Use **?** para ver atalhos disponíveis\n\n'
+                    '📝 A IA aprende com as perguntas mais frequentes!',
         'confianca': 0.0,
         'categoria_sugerida': 'duvida',
+        'metodo': 'nenhum_match',
+        'similaridade_bruta': 0.0,
     }
 
 
@@ -2313,7 +2501,7 @@ def _ia_classificar_mensagem(texto):
 @limiter.limit("20 per minute")
 @api_login_required
 def ia_resposta():
-    """Agente IA — responde automaticamente perguntas de suporte"""
+    """Agente IA — classifica perguntas via TF-IDF + Cosine Similarity (ML)"""
     try:
         dados = request.get_json(silent=True) or {}
         mensagem = (dados.get('mensagem') or '').strip()
@@ -2323,8 +2511,10 @@ def ia_resposta():
         resultado = _ia_classificar_mensagem(mensagem)
         return jsonify({
             'resposta': resultado['resposta'],
-            'confianca': resultado['confianca'],
+            'confianca': round(resultado['confianca'], 3),
             'categoria_sugerida': resultado['categoria_sugerida'],
+            'metodo': resultado.get('metodo', 'tfidf'),
+            'similaridade': resultado.get('similaridade_bruta', 0.0),
             'ia': True,
         })
     except Exception as e:

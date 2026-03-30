@@ -281,7 +281,7 @@ class TestSuportePaginaHTML:
 
 
 class TestIAAutoResponder:
-    """Testes do endpoint /api/suporte/ia-resposta — Agente IA de suporte."""
+    """Testes do endpoint /api/suporte/ia-resposta — Agente IA ML (TF-IDF + Cosine Similarity)."""
 
     def test_ia_resposta_match_senha(self, client):
         """Pergunta sobre senha deve retornar resposta sobre login."""
@@ -294,6 +294,8 @@ class TestIAAutoResponder:
         assert data['confianca'] > 0
         assert 'senha' in data['resposta'].lower() or 'login' in data['resposta'].lower()
         assert 'categoria_sugerida' in data
+        assert 'metodo' in data
+        assert 'similaridade' in data
 
     def test_ia_resposta_match_venda(self, client):
         """Pergunta sobre vendas deve retornar resposta sobre registro de vendas."""
@@ -304,6 +306,7 @@ class TestIAAutoResponder:
         data = resp.get_json()
         assert data['ia'] is True
         assert data['confianca'] > 0
+        assert data['metodo'] == 'tfidf_cosine_similarity'
 
     def test_ia_resposta_match_lgpd(self, client):
         """Pergunta sobre LGPD deve retornar resposta sobre proteção de dados."""
@@ -318,12 +321,13 @@ class TestIAAutoResponder:
     def test_ia_resposta_sem_match(self, client):
         """Pergunta sem match deve retornar confianca 0 com fallback."""
         resp = client.post('/api/suporte/ia-resposta', json={
-            'mensagem': 'xyz lorem ipsum',
+            'mensagem': 'xyz lorem ipsum blah',
         })
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['confianca'] == 0.0
         assert data['ia'] is True
+        assert data['metodo'] == 'nenhum_match'
 
     def test_ia_resposta_mensagem_curta(self, client):
         """Mensagem com menos de 2 chars deve retornar 400."""
@@ -369,3 +373,20 @@ class TestIAAutoResponder:
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['confianca'] > 0
+
+    def test_ia_retorna_similaridade_numerica(self, client):
+        """Campo similaridade deve ser float entre 0 e 1."""
+        resp = client.post('/api/suporte/ia-resposta', json={
+            'mensagem': 'relatório financeiro fechamento de caixa',
+        })
+        data = resp.get_json()
+        assert isinstance(data['similaridade'], float)
+        assert 0.0 <= data['similaridade'] <= 1.0
+
+    def test_ia_categoria_sugerida_valida(self, client):
+        """Categoria sugerida deve ser um valor válido."""
+        resp = client.post('/api/suporte/ia-resposta', json={
+            'mensagem': 'erro bug o sistema não funciona travou',
+        })
+        data = resp.get_json()
+        assert data['categoria_sugerida'] in ('duvida', 'problema', 'sugestao', 'outro')
