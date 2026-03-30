@@ -146,6 +146,9 @@ def adicionar_headers_seguranca(response):
     )
     if os.environ.get('FLASK_ENV') == 'production':
         response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    # Cache-Control para assets estáticos (1 hora)
+    if request.path.startswith('/static/'):
+        response.headers['Cache-Control'] = 'public, max-age=3600, stale-while-revalidate=86400'
     return response
 
 
@@ -325,6 +328,12 @@ class HealthResource(Resource):
 # =============================================================================
 # ROTAS - AUTENTICAÇÃO
 # =============================================================================
+
+@app.route('/offline')
+def offline_page():
+    """Página offline para PWA"""
+    return render_template('offline.html')
+
 
 @app.route('/login', methods=['GET', 'POST'])
 @limiter.limit("5 per minute", methods=["POST"])
@@ -1823,8 +1832,8 @@ class UsuarioCreateSchema(BaseModel):
     @field_validator('senha')
     @classmethod
     def senha_forte(cls, v: str) -> str:
-        if len(v) < 4:
-            raise ValueError('Senha deve ter ao menos 4 caracteres')
+        if len(v) < 8:
+            raise ValueError('Senha deve ter ao menos 8 caracteres')
         return v
 
     @field_validator('papel')
@@ -1897,8 +1906,8 @@ def atualizar_usuario(id_usuario):
         if 'papel' in dados and dados['papel'] in ('admin', 'operador'):
             usuario.papel = dados['papel']
         if 'senha' in dados and dados['senha']:
-            if len(dados['senha']) < 4:
-                return jsonify({'erro': 'Senha deve ter ao menos 4 caracteres'}), 400
+            if len(dados['senha']) < 8:
+                return jsonify({'erro': 'Senha deve ter ao menos 8 caracteres'}), 400
             usuario.set_senha(dados['senha'])
         if 'ativo' in dados:
             usuario.ativo = bool(dados['ativo'])
@@ -2138,6 +2147,187 @@ def atualizar_status_ticket(id_ticket):
         return jsonify(ticket.to_dict())
     except Exception as e:
         db.session.rollback()
+        return _erro_interno(e)
+
+
+# =============================================================================
+# AGENTE IA — Respostas automáticas para suporte (NLP baseado em regras)
+# =============================================================================
+
+# Base de conhecimento para respostas automáticas da IA
+_IA_KNOWLEDGE_BASE = [
+    {
+        'palavras': ['senha', 'password', 'login', 'acessar', 'entrar', 'não consigo logar'],
+        'resposta': '🔑 **Problemas com login?**\n\n'
+                    '1. Verifique se o email está correto (tudo minúsculo)\n'
+                    '2. Confira se o Caps Lock está desativado\n'
+                    '3. Tente limpar os cookies do navegador\n'
+                    '4. Se persistir, peça ao administrador para redefinir sua senha\n\n'
+                    '💡 Dica: use um gerenciador de senhas para não esquecer!',
+        'categoria': 'duvida',
+        'confianca': 0,
+    },
+    {
+        'palavras': ['venda', 'registrar venda', 'nova venda', 'como vender', 'fazer venda'],
+        'resposta': '🛒 **Como registrar uma venda:**\n\n'
+                    '1. Vá em **Vendas → Registrar Venda**\n'
+                    '2. Selecione o cliente (precisa ter consentimento LGPD)\n'
+                    '3. Adicione os produtos e quantidade\n'
+                    '4. Aplique desconto % ou taxa se necessário\n'
+                    '5. Escolha a forma de pagamento\n'
+                    '6. Clique em **Finalizar Venda**\n\n'
+                    '⚠️ O cliente precisa ter consentimento LGPD ativo!',
+        'categoria': 'duvida',
+        'confianca': 0,
+    },
+    {
+        'palavras': ['cliente', 'cadastrar cliente', 'novo cliente', 'cadastro'],
+        'resposta': '👤 **Cadastro de clientes:**\n\n'
+                    '1. Vá em **Clientes → Cadastrar Cliente**\n'
+                    '2. Preencha nome, telefone e email\n'
+                    '3. O cliente deve aceitar o consentimento LGPD\n'
+                    '4. Clique em **Cadastrar**\n\n'
+                    '📋 Sem consentimento LGPD, não é possível registrar vendas para o cliente.',
+        'categoria': 'duvida',
+        'confianca': 0,
+    },
+    {
+        'palavras': ['lgpd', 'privacidade', 'dados', 'consentimento', 'exclusão', 'esquecimento'],
+        'resposta': '🔒 **LGPD — Lei Geral de Proteção de Dados:**\n\n'
+                    '• Todo cliente tem direito a saber quais dados coletamos\n'
+                    '• O consentimento pode ser revogado a qualquer momento\n'
+                    '• O "direito ao esquecimento" anonimiza os dados do cliente\n'
+                    '• Revogação de consentimento bloqueia novas vendas\n'
+                    '• Histórico de consentimentos fica registrado por auditoria\n\n'
+                    '📋 Acesse: Menu → LGPD para ver a política completa.',
+        'categoria': 'duvida',
+        'confianca': 0,
+    },
+    {
+        'palavras': ['estoque', 'produto', 'acabou', 'falta', 'estoque baixo'],
+        'resposta': '📦 **Gestão de estoque:**\n\n'
+                    '• Vá em **Produtos** no menu\n'
+                    '• Cada produto tem estoque atual e mínimo\n'
+                    '• Quando estoque fica abaixo do mínimo, aparece alerta no Dashboard\n'
+                    '• O estoque é decrementado automaticamente a cada venda\n\n'
+                    '💡 Configure o estoque mínimo para receber alertas!',
+        'categoria': 'duvida',
+        'confianca': 0,
+    },
+    {
+        'palavras': ['relatório', 'relatorio', 'financeiro', 'faturamento', 'fechamento', 'caixa'],
+        'resposta': '📊 **Relatórios e Financeiro:**\n\n'
+                    '• **Relatórios** → Vendas do dia, clientes frequentes, ranking de produtos\n'
+                    '• **Fechamento de Caixa** → Consolidação por data e forma de pagamento\n'
+                    '• Exporte em **CSV**, **PDF** ou **XLSX**\n'
+                    '• Gráficos interativos no Dashboard\n\n'
+                    '💰 O Dashboard mostra estatísticas em tempo real!',
+        'categoria': 'duvida',
+        'confianca': 0,
+    },
+    {
+        'palavras': ['erro', 'bug', 'não funciona', 'travou', 'problema', 'falha', 'quebrado'],
+        'resposta': '🐛 **Problemas técnicos:**\n\n'
+                    '1. Tente recarregar a página (F5 ou Ctrl+R)\n'
+                    '2. Limpe o cache do navegador\n'
+                    '3. Verifique se está usando um navegador atualizado\n'
+                    '4. Tente outro navegador (Chrome, Firefox, Edge)\n'
+                    '5. Se persistir, descreva o erro em detalhe neste ticket\n\n'
+                    '📸 Se possível, envie uma captura de tela do erro.',
+        'categoria': 'problema',
+        'confianca': 0,
+    },
+    {
+        'palavras': ['whatsapp', 'compartilhar', 'comprovante', 'recibo', 'enviar'],
+        'resposta': '📱 **Compartilhamento:**\n\n'
+                    '• Após registrar uma venda, clique no botão **WhatsApp** para compartilhar o comprovante\n'
+                    '• O sistema gera automaticamente um recibo formatado\n'
+                    '• Você também pode exportar relatórios em PDF/CSV\n\n'
+                    '💡 Use o atalho de teclado **V** para ir direto para Nova Venda!',
+        'categoria': 'duvida',
+        'confianca': 0,
+    },
+    {
+        'palavras': ['atalho', 'teclado', 'shortcut', 'tecla'],
+        'resposta': '⌨️ **Atalhos de teclado disponíveis:**\n\n'
+                    '• **H** → Dashboard\n'
+                    '• **V** → Nova Venda\n'
+                    '• **C** → Clientes\n'
+                    '• **P** → Produtos\n'
+                    '• **R** → Relatórios\n'
+                    '• **S** → Suporte\n'
+                    '• **/** → Busca global\n'
+                    '• **?** → Lista de atalhos\n\n'
+                    '⚡ Funciona em qualquer página (exceto campos de texto)!',
+        'categoria': 'duvida',
+        'confianca': 0,
+    },
+    {
+        'palavras': ['fidelidade', 'pontos', 'desconto', 'recompensa', 'benefício'],
+        'resposta': '🌟 **Programa de Fidelidade:**\n\n'
+                    '• A cada R$1 gasto, o cliente ganha 1 ponto\n'
+                    '• 100 pontos = R$5,00 de desconto\n'
+                    '• Os pontos são creditados automaticamente a cada venda\n'
+                    '• Veja o ranking no Dashboard (Top Fidelidade)\n\n'
+                    '💜 Clientes fiéis são o coração do negócio!',
+        'categoria': 'duvida',
+        'confianca': 0,
+    },
+]
+
+
+def _ia_classificar_mensagem(texto):
+    """Classifica a mensagem do usuário usando NLP baseado em regras com scoring."""
+    texto_lower = texto.lower()
+    melhor_resposta = None
+    melhor_score = 0
+
+    for item in _IA_KNOWLEDGE_BASE:
+        score = 0
+        for palavra in item['palavras']:
+            if palavra.lower() in texto_lower:
+                score += len(palavra)  # palavras mais longas = match mais específico
+        if score > melhor_score:
+            melhor_score = score
+            melhor_resposta = item
+
+    if melhor_score >= 3:
+        return {
+            'resposta': melhor_resposta['resposta'],
+            'confianca': min(melhor_score / 15, 1.0),
+            'categoria_sugerida': melhor_resposta['categoria'],
+        }
+
+    return {
+        'resposta': '🤖 Não encontrei uma resposta automática para sua pergunta.\n\n'
+                    'Um membro da equipe responderá em breve! Enquanto isso:\n'
+                    '• Tente reformular com mais detalhes\n'
+                    '• Verifique o guia rápido no Dashboard (Menu → Início)\n'
+                    '• Use **?** para ver atalhos disponíveis',
+        'confianca': 0.0,
+        'categoria_sugerida': 'duvida',
+    }
+
+
+@app.route('/api/suporte/ia-resposta', methods=['POST'])
+@limiter.limit("20 per minute")
+@api_login_required
+def ia_resposta():
+    """Agente IA — responde automaticamente perguntas de suporte"""
+    try:
+        dados = request.get_json(silent=True) or {}
+        mensagem = (dados.get('mensagem') or '').strip()
+        if len(mensagem) < 2:
+            return jsonify({'erro': 'Mensagem muito curta'}), 400
+
+        resultado = _ia_classificar_mensagem(mensagem)
+        return jsonify({
+            'resposta': resultado['resposta'],
+            'confianca': resultado['confianca'],
+            'categoria_sugerida': resultado['categoria_sugerida'],
+            'ia': True,
+        })
+    except Exception as e:
         return _erro_interno(e)
 
 

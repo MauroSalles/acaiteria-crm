@@ -7,6 +7,28 @@
   "background_color": "#4A148C",
   "theme_color": "#7B1FA2",
   "orientation": "any",
+  "lang": "pt-BR",
+  "categories": ["business", "productivity"],
+  "shortcuts": [
+    {
+      "name": "Nova Venda",
+      "short_name": "Venda",
+      "url": "/nova-venda",
+      "icons": [{"src": "/static/icon-192.svg", "sizes": "192x192"}]
+    },
+    {
+      "name": "Clientes",
+      "short_name": "Clientes",
+      "url": "/clientes",
+      "icons": [{"src": "/static/icon-192.svg", "sizes": "192x192"}]
+    },
+    {
+      "name": "Suporte",
+      "short_name": "Suporte",
+      "url": "/suporte",
+      "icons": [{"src": "/static/icon-192.svg", "sizes": "192x192"}]
+    }
+  ],
   "icons": [
     {
       "src": "/static/icon-192.svg",

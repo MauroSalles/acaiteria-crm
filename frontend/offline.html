@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sem Conexão - Açaiteria CRM</title>
+    <meta name="theme-color" content="#7B1FA2">
+    <style>
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(135deg, #4A1D80 0%, #6C2EB9 50%, #E91E63 100%);
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 2rem;
+        }
+        .offline-card {
+            background: rgba(255,255,255,.12);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            padding: 3rem 2rem;
+            max-width: 420px;
+            width: 100%;
+            box-shadow: 0 10px 40px rgba(0,0,0,.25);
+        }
+        .offline-icon { font-size: 4rem; margin-bottom: 1rem; animation: float 3s ease-in-out infinite; }
+        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
+        h1 { font-size: 1.6rem; margin-bottom: .5rem; }
+        p { opacity: .85; font-size: .95rem; line-height: 1.5; margin-bottom: 1.5rem; }
+        .retry-btn {
+            display: inline-block; padding: .8rem 2rem; background: #fff; color: #6C2EB9;
+            border: none; border-radius: 999px; font-size: 1rem; font-weight: 600;
+            cursor: pointer; text-decoration: none;
+            transition: transform .2s, box-shadow .2s;
+        }
+        .retry-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,.2); }
+        .tips { margin-top: 2rem; font-size: .82rem; opacity: .7; text-align: left; }
+        .tips li { margin-bottom: .3rem; }
+    </style>
+</head>
+<body>
+    <div class="offline-card">
+        <div class="offline-icon">📡</div>
+        <h1>Sem conexão</h1>
+        <p>Parece que você está offline. Verifique sua internet e tente novamente.</p>
+        <button class="retry-btn" onclick="location.reload()">🔄 Tentar novamente</button>
+        <ul class="tips">
+            <li>💡 Verifique se o Wi-Fi ou dados móveis estão ativados</li>
+            <li>💡 O app voltará automaticamente quando reconectar</li>
+            <li>💡 Páginas visitadas recentemente estão salvas no cache</li>
+        </ul>
+    </div>
+    <script>
+        window.addEventListener('online', () => location.reload());
+    </script>
+</body>
+</html>

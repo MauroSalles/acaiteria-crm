@@ -88,6 +88,10 @@
                         <h3>Selecione um ticket</h3>
                         <p>Escolha um ticket existente ou abra um novo para iniciar a conversa.</p>
                         <button class="btn btn-primary" onclick="abrirNovoTicket()">🎫 Abrir Novo Ticket</button>
+                        <div style="margin-top:1.5rem">
+                            <button class="btn btn-info" onclick="abrirAssistenteIA()">🤖 Perguntar à IA</button>
+                            <p style="margin-top:.4rem;font-size:.8rem;color:var(--cinza-400)">Respostas rápidas automáticas</p>
+                        </div>
                     </div>
                     <div class="suporte-chat-content" id="chatContent" style="display:none">
                         <div class="suporte-chat-header" id="chatHeader"></div>
@@ -133,11 +137,28 @@
                             <label for="ticketMensagem">Descrição</label>
                             <textarea id="ticketMensagem" class="form-control" required minlength="5" rows="4" placeholder="Descreva sua dúvida ou problema em detalhes..."></textarea>
                         </div>
+                        <div id="iaSugestaoTicket"></div>
                         <div style="display:flex;gap:.8rem;justify-content:flex-end;margin-top:1rem">
                             <button type="button" class="btn btn-secondary" onclick="fecharModal()">Cancelar</button>
                             <button type="submit" class="btn btn-primary">Enviar Ticket</button>
                         </div>
                     </form>
+                </div>
+            </div>
+
+            <!-- Modal: Assistente IA -->
+            <div class="modal-overlay" id="modalIA" style="display:none">
+                <div class="modal-box" style="max-width:560px;text-align:left">
+                    <h3>🤖 Assistente IA — Combina Açaí</h3>
+                    <p style="color:var(--cinza-600);font-size:.85rem;margin-bottom:1rem">Faça uma pergunta e a IA tentará responder automaticamente.</p>
+                    <div class="form-group">
+                        <textarea id="iaInput" class="form-control" rows="3" placeholder="Ex: Como registrar uma venda? / Esqueci minha senha / O que é LGPD?" maxlength="500"></textarea>
+                    </div>
+                    <button class="btn btn-primary" id="iaBtnPerguntar" onclick="perguntarIA()">🧠 Perguntar</button>
+                    <div id="iaResultado" style="margin-top:1rem"></div>
+                    <div style="text-align:right;margin-top:1rem">
+                        <button class="btn btn-secondary" onclick="document.getElementById('modalIA').style.display='none'">Fechar</button>
+                    </div>
                 </div>
             </div>
         </main>
@@ -351,6 +372,7 @@
     // ====== HELPERS ======
     function abrirNovoTicket() { document.getElementById('modalNovoTicket').style.display = 'flex'; }
     function fecharModal() { document.getElementById('modalNovoTicket').style.display = 'none'; }
+    function abrirAssistenteIA() { document.getElementById('modalIA').style.display = 'flex'; document.getElementById('iaInput').focus(); }
     function statusIcon(s) { return { aberto: '🟢', em_andamento: '🟡', resolvido: '🔵', fechado: '⚫' }[s] || '⚪'; }
     function statusLabel(s) { return { aberto: 'Aberto', em_andamento: 'Em andamento', resolvido: 'Resolvido', fechado: 'Fechado' }[s] || s; }
     function categoriaIcon(c) { return { duvida: '❓', problema: '🐛', sugestao: '💡', outro: '📋' }[c] || '📋'; }
@@ -373,7 +395,71 @@
 
     // ESC para fechar modal
     document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') fecharModal();
+        if (e.key === 'Escape') { fecharModal(); document.getElementById('modalIA').style.display = 'none'; }
+    });
+
+    // ====== ASSISTENTE IA ======
+    async function perguntarIA() {
+        var input = document.getElementById('iaInput');
+        var mensagem = input.value.trim();
+        if (!mensagem || mensagem.length < 2) { mostrarAlerta('Digite uma pergunta', 'aviso'); return; }
+        var btn = document.getElementById('iaBtnPerguntar');
+        btn.disabled = true; btn.textContent = '🧠 Pensando...';
+        try {
+            var resp = await fetch('/api/suporte/ia-resposta', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mensagem: mensagem })
+            });
+            if (!resp.ok) throw new Error('Erro HTTP ' + resp.status);
+            var data = await resp.json();
+            var confClass = data.confianca >= 0.5 ? 'ia-conf-high' : data.confianca >= 0.2 ? 'ia-conf-mid' : 'ia-conf-low';
+            var confLabel = data.confianca >= 0.5 ? 'Alta confiança' : data.confianca >= 0.2 ? 'Média' : 'Baixa';
+            document.getElementById('iaResultado').innerHTML =
+                '<div class="ia-bubble">' +
+                '<div class="ia-bubble-header">🤖 Resposta da IA <span class="ia-bubble-confidence ' + confClass + '">' + confLabel + ' (' + Math.round(data.confianca * 100) + '%)</span></div>' +
+                '<div style="white-space:pre-wrap">' + escapeHtml(data.resposta).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') + '</div>' +
+                '</div>';
+        } catch (err) {
+            document.getElementById('iaResultado').innerHTML = '<div class="alert alert-erro">Erro: ' + escapeHtml(err.message) + '</div>';
+        } finally {
+            btn.disabled = false; btn.textContent = '🧠 Perguntar';
+        }
+    }
+
+    // IA suggestion while typing ticket description
+    var _iaDebounce = null;
+    document.getElementById('ticketMensagem').addEventListener('input', function() {
+        clearTimeout(_iaDebounce);
+        var texto = this.value.trim();
+        if (texto.length < 10) { document.getElementById('iaSugestaoTicket').innerHTML = ''; return; }
+        _iaDebounce = setTimeout(async function() {
+            try {
+                var resp = await fetch('/api/suporte/ia-resposta', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mensagem: texto })
+                });
+                if (!resp.ok) return;
+                var data = await resp.json();
+                if (data.confianca >= 0.3) {
+                    document.getElementById('iaSugestaoTicket').innerHTML =
+                        '<div class="ia-bubble" style="margin-top:.8rem">' +
+                        '<div class="ia-bubble-header">🤖 A IA pode ajudar:</div>' +
+                        '<div style="white-space:pre-wrap;font-size:.83rem">' +
+                        escapeHtml(data.resposta).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').substring(0, 300) +
+                        (data.resposta.length > 300 ? '...' : '') +
+                        '</div></div>';
+                } else {
+                    document.getElementById('iaSugestaoTicket').innerHTML = '';
+                }
+            } catch(_) {}
+        }, 800);
+    });
+
+    // Enter to submit IA question
+    document.getElementById('iaInput').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); perguntarIA(); }
     });
 
     // Init

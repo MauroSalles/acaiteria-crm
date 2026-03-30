@@ -8,6 +8,49 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/static/sw.js').catch(function() {});
 }
 
+// ---------- PWA: INSTALL PROMPT (A2HS) ----------
+let _deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', function(e) {
+    e.preventDefault();
+    _deferredInstallPrompt = e;
+    _mostrarBannerInstalar();
+});
+
+function _mostrarBannerInstalar() {
+    if (!_deferredInstallPrompt) return;
+    // Não mostrar se já instalado ou já dispensado
+    if (window.matchMedia('(display-mode: standalone)').matches) return;
+    if (localStorage.getItem('pwa-install-dismissed')) return;
+
+    var banner = document.createElement('div');
+    banner.id = 'pwa-install-banner';
+    banner.className = 'pwa-install-banner';
+    banner.innerHTML = '<div class="pwa-install-content">' +
+        '<span class="pwa-install-icon">📲</span>' +
+        '<div class="pwa-install-text"><strong>Instalar Combina Açaí</strong><br>' +
+        '<small>Acesse mais rápido direto da tela inicial</small></div>' +
+        '<button class="btn btn-primary btn-sm" id="pwa-install-btn">Instalar</button>' +
+        '<button class="pwa-install-close" aria-label="Fechar">&times;</button>' +
+        '</div>';
+    document.body.appendChild(banner);
+    setTimeout(function() { banner.classList.add('show'); }, 100);
+
+    document.getElementById('pwa-install-btn').addEventListener('click', function() {
+        _deferredInstallPrompt.prompt();
+        _deferredInstallPrompt.userChoice.then(function(res) {
+            if (res.outcome === 'accepted') {
+                mostrarAlerta('App instalado com sucesso! 🎉', 'sucesso');
+            }
+            _deferredInstallPrompt = null;
+            banner.remove();
+        });
+    });
+    banner.querySelector('.pwa-install-close').addEventListener('click', function() {
+        banner.remove();
+        localStorage.setItem('pwa-install-dismissed', '1');
+    });
+}
+
 // ---------- NAVBAR DROPDOWN (mobile) ----------
 function navDropdown(el) {
     if (window.innerWidth <= 860) {
@@ -752,6 +795,26 @@ async function registrarVendaComLGPD(id_cliente, itens, forma_pagamento) {
 
         if (!nome) return;
 
+        // Daily streak tracking
+        var hoje = new Date().toISOString().slice(0, 10);
+        var streak = JSON.parse(localStorage.getItem('daily-streak') || '{"dias":0,"ultimo":""}');
+        var ontem = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+        if (streak.ultimo === hoje) {
+            // já logou hoje
+        } else if (streak.ultimo === ontem) {
+            streak.dias++;
+            streak.ultimo = hoje;
+            localStorage.setItem('daily-streak', JSON.stringify(streak));
+        } else {
+            streak.dias = 1;
+            streak.ultimo = hoje;
+            localStorage.setItem('daily-streak', JSON.stringify(streak));
+        }
+
+        var streakHtml = streak.dias > 1
+            ? `<div class="welcome-stats"><div class="welcome-stat"><span class="welcome-stat-value">🔥 ${streak.dias}</span><span class="welcome-stat-label">dias seguidos</span></div></div>`
+            : '';
+
         var banner = document.createElement('div');
         banner.className = 'welcome-banner';
         banner.innerHTML = `
@@ -760,8 +823,146 @@ async function registrarVendaComLGPD(id_cliente, itens, forma_pagamento) {
                 <h2>${saudacao}, ${escapeHtml(nome)}!</h2>
                 <p>Pronto para mais um dia na Combina Açaí?</p>
             </div>
+            ${streakHtml}
         `;
 
         hero.parentNode.insertBefore(banner, hero);
     });
+})();
+
+// =============================================================================
+// MOBILE BOTTOM NAVIGATION BAR
+// =============================================================================
+(function() {
+    document.addEventListener('DOMContentLoaded', function() {
+        if (location.pathname === '/login' || location.pathname === '/totem' || location.pathname === '/offline') return;
+        // Only show on mobile
+        if (window.innerWidth > 860) return;
+
+        var path = location.pathname;
+        var items = [
+            { href: '/', icon: '🏠', label: 'Início', active: path === '/' },
+            { href: '/nova-venda', icon: '🛒', label: 'Vendas', active: path === '/nova-venda' },
+            { href: '/clientes', icon: '👥', label: 'Clientes', active: path === '/clientes' || path === '/cadastro-cliente' },
+            { href: '/produtos', icon: '📦', label: 'Produtos', active: path === '/produtos' },
+            { href: '/suporte', icon: '🎧', label: 'Suporte', active: path === '/suporte' },
+        ];
+
+        var nav = document.createElement('nav');
+        nav.className = 'bottom-nav';
+        nav.setAttribute('role', 'navigation');
+        nav.setAttribute('aria-label', 'Navegação rápida');
+        nav.innerHTML = items.map(function(item) {
+            return '<a href="' + item.href + '" class="bottom-nav-item' + (item.active ? ' active' : '') + '" aria-label="' + item.label + '">' +
+                '<span class="bottom-nav-icon">' + item.icon + '</span>' +
+                '<span class="bottom-nav-label">' + item.label + '</span>' +
+                '</a>';
+        }).join('');
+
+        document.body.appendChild(nav);
+        // Add body padding to avoid content hidden behind bottom nav
+        document.body.style.paddingBottom = '70px';
+    });
+})();
+
+// =============================================================================
+// ACCESSIBILITY — Skip to content + ARIA enhancements
+// =============================================================================
+(function() {
+    document.addEventListener('DOMContentLoaded', function() {
+        // Skip to content link
+        var mainContent = document.querySelector('main.content, .content');
+        if (mainContent) {
+            mainContent.id = mainContent.id || 'main-content';
+            mainContent.setAttribute('role', 'main');
+            var skip = document.createElement('a');
+            skip.href = '#' + mainContent.id;
+            skip.className = 'skip-to-content';
+            skip.textContent = 'Pular para o conteúdo';
+            document.body.insertBefore(skip, document.body.firstChild);
+        }
+
+        // Add aria-labels to navbar
+        var navbar = document.querySelector('.navbar');
+        if (navbar) {
+            navbar.setAttribute('role', 'navigation');
+            navbar.setAttribute('aria-label', 'Navegação principal');
+        }
+
+        // Add scope to table headers
+        document.querySelectorAll('th').forEach(function(th) {
+            if (!th.getAttribute('scope')) th.setAttribute('scope', 'col');
+        });
+
+        // Focus trap in modals — improve focus management
+        document.addEventListener('click', function(e) {
+            var modal = e.target.closest('.modal-overlay');
+            if (modal) {
+                var firstBtn = modal.querySelector('button, [tabindex="0"], a, input, select, textarea');
+                if (firstBtn && e.target === modal) firstBtn.focus();
+            }
+        });
+    });
+})();
+
+// =============================================================================
+// ONLINE/OFFLINE STATUS INDICATOR
+// =============================================================================
+(function() {
+    function updateStatus() {
+        var existing = document.getElementById('offline-indicator');
+        if (navigator.onLine) {
+            if (existing) { existing.classList.remove('show'); setTimeout(function() { existing.remove(); }, 400); }
+        } else {
+            if (!existing) {
+                var ind = document.createElement('div');
+                ind.id = 'offline-indicator';
+                ind.className = 'offline-indicator';
+                ind.setAttribute('role', 'alert');
+                ind.innerHTML = '📡 Sem conexão — modo offline';
+                document.body.appendChild(ind);
+                setTimeout(function() { ind.classList.add('show'); }, 50);
+            }
+        }
+    }
+    window.addEventListener('online', function() { updateStatus(); mostrarAlerta('Conexão restaurada! 🟢', 'sucesso'); });
+    window.addEventListener('offline', updateStatus);
+    if (!navigator.onLine) updateStatus();
+})();
+
+// =============================================================================
+// PULL TO REFRESH (mobile touch gesture)
+// =============================================================================
+(function() {
+    if (window.innerWidth > 860) return;
+    var startY = 0, pulling = false;
+    var indicator = null;
+
+    document.addEventListener('touchstart', function(e) {
+        if (window.scrollY === 0 && e.touches.length === 1) {
+            startY = e.touches[0].clientY;
+            pulling = true;
+        }
+    }, { passive: true });
+
+    document.addEventListener('touchmove', function(e) {
+        if (!pulling) return;
+        var dy = e.touches[0].clientY - startY;
+        if (dy > 60 && dy < 150 && !indicator) {
+            indicator = document.createElement('div');
+            indicator.className = 'pull-refresh-indicator';
+            indicator.textContent = '↓ Solte para atualizar';
+            document.body.prepend(indicator);
+            setTimeout(function() { if (indicator) indicator.classList.add('show'); }, 10);
+        }
+    }, { passive: true });
+
+    document.addEventListener('touchend', function() {
+        if (indicator) {
+            indicator.textContent = '⏳ Atualizando...';
+            setTimeout(function() { location.reload(); }, 300);
+        }
+        pulling = false;
+        startY = 0;
+    }, { passive: true });
 })();

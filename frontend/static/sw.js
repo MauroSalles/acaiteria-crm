@@ -1,9 +1,12 @@
-const CACHE_NAME = 'acai-crm-v1';
+const CACHE_NAME = 'acai-crm-v3';
 const STATIC_ASSETS = [
   '/',
   '/static/estilos.css',
   '/static/script.js',
   '/static/manifest.json',
+  '/static/icon-192.svg',
+  '/static/icon-512.svg',
+  '/offline',
 ];
 
 // Instalação — cacheia assets estáticos
@@ -24,7 +27,7 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Fetch — network first, fallback para cache
+// Fetch — network first, fallback para cache, offline page as ultimate fallback
 self.addEventListener('fetch', (event) => {
   // Ignorar requisições não-GET e API (sempre rede)
   if (event.request.method !== 'GET' || event.request.url.includes('/api/')) {
@@ -41,6 +44,35 @@ self.addEventListener('fetch', (event) => {
         }
         return response;
       })
-      .catch(() => caches.match(event.request))
+      .catch(() => {
+        return caches.match(event.request).then((cached) => {
+          if (cached) return cached;
+          // Se é navegação HTML, mostrar página offline
+          if (event.request.mode === 'navigate') {
+            return caches.match('/offline');
+          }
+          return new Response('Offline', { status: 503, statusText: 'Offline' });
+        });
+      })
   );
+});
+
+// Push Notifications (preparado para uso futuro)
+self.addEventListener('push', (event) => {
+  const data = event.data ? event.data.json() : { titulo: 'Combina Açaí', corpo: 'Nova notificação' };
+  event.waitUntil(
+    self.registration.showNotification(data.titulo || 'Combina Açaí CRM', {
+      body: data.corpo || '',
+      icon: '/static/icon-192.svg',
+      badge: '/static/icon-192.svg',
+      vibrate: [100, 50, 100],
+      data: { url: data.url || '/' },
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url || '/';
+  event.waitUntil(clients.openWindow(url));
 });

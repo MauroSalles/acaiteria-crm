@@ -278,3 +278,94 @@ class TestSuportePaginaHTML:
     def test_pagina_suporte_nao_autenticado(self, unauthenticated_client):
         resp = unauthenticated_client.get('/suporte')
         assert resp.status_code == 302  # Redireciona para login
+
+
+class TestIAAutoResponder:
+    """Testes do endpoint /api/suporte/ia-resposta — Agente IA de suporte."""
+
+    def test_ia_resposta_match_senha(self, client):
+        """Pergunta sobre senha deve retornar resposta sobre login."""
+        resp = client.post('/api/suporte/ia-resposta', json={
+            'mensagem': 'esqueci minha senha como faço login',
+        })
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data['ia'] is True
+        assert data['confianca'] > 0
+        assert 'senha' in data['resposta'].lower() or 'login' in data['resposta'].lower()
+        assert 'categoria_sugerida' in data
+
+    def test_ia_resposta_match_venda(self, client):
+        """Pergunta sobre vendas deve retornar resposta sobre registro de vendas."""
+        resp = client.post('/api/suporte/ia-resposta', json={
+            'mensagem': 'como posso registrar uma venda nova?',
+        })
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data['ia'] is True
+        assert data['confianca'] > 0
+
+    def test_ia_resposta_match_lgpd(self, client):
+        """Pergunta sobre LGPD deve retornar resposta sobre proteção de dados."""
+        resp = client.post('/api/suporte/ia-resposta', json={
+            'mensagem': 'quero saber sobre lgpd e privacidade dos dados',
+        })
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data['confianca'] > 0
+        assert 'lgpd' in data['resposta'].lower() or 'dados' in data['resposta'].lower()
+
+    def test_ia_resposta_sem_match(self, client):
+        """Pergunta sem match deve retornar confianca 0 com fallback."""
+        resp = client.post('/api/suporte/ia-resposta', json={
+            'mensagem': 'xyz lorem ipsum',
+        })
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data['confianca'] == 0.0
+        assert data['ia'] is True
+
+    def test_ia_resposta_mensagem_curta(self, client):
+        """Mensagem com menos de 2 chars deve retornar 400."""
+        resp = client.post('/api/suporte/ia-resposta', json={
+            'mensagem': 'a',
+        })
+        assert resp.status_code == 400
+
+    def test_ia_resposta_mensagem_vazia(self, client):
+        """Mensagem vazia deve retornar 400."""
+        resp = client.post('/api/suporte/ia-resposta', json={
+            'mensagem': '',
+        })
+        assert resp.status_code == 400
+
+    def test_ia_resposta_sem_corpo(self, client):
+        """Requisição sem JSON deve retornar 400."""
+        resp = client.post('/api/suporte/ia-resposta',
+                           data='', content_type='application/json')
+        assert resp.status_code == 400
+
+    def test_ia_resposta_nao_autenticado(self, unauthenticated_client):
+        """Endpoint deve exigir autenticação."""
+        resp = unauthenticated_client.post('/api/suporte/ia-resposta', json={
+            'mensagem': 'como faço login?',
+        })
+        assert resp.status_code == 401
+
+    def test_ia_resposta_match_estoque(self, client):
+        """Pergunta sobre estoque deve retornar resposta sobre controle de estoque."""
+        resp = client.post('/api/suporte/ia-resposta', json={
+            'mensagem': 'o estoque está acabando preciso repor produtos',
+        })
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data['confianca'] > 0
+
+    def test_ia_resposta_match_fidelidade(self, client):
+        """Pergunta sobre fidelidade deve retornar resposta sobre pontos."""
+        resp = client.post('/api/suporte/ia-resposta', json={
+            'mensagem': 'como funciona o programa de fidelidade e pontos?',
+        })
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data['confianca'] > 0

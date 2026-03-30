@@ -713,3 +713,57 @@ class TestRegistroLoginPage:
         })
         assert resp.status_code == 200
         assert 'incorretos' in resp.data.decode()
+
+
+class TestOfflinePage:
+    """Testes da página offline PWA."""
+
+    def test_offline_page_sem_auth(self, unauthenticated_client):
+        """Página offline deve ser acessível sem autenticação."""
+        resp = unauthenticated_client.get('/offline')
+        assert resp.status_code == 200
+
+    def test_offline_page_com_auth(self, client):
+        """Página offline também funciona autenticado."""
+        resp = client.get('/offline')
+        assert resp.status_code == 200
+
+
+class TestSenhaMinima:
+    """Testes de segurança — senha mínima de 8 caracteres."""
+
+    def test_criar_usuario_senha_curta(self, client):
+        """Senha com menos de 8 chars deve ser rejeitada."""
+        resp = client.post('/api/usuarios', json={
+            'nome': 'Teste Senha',
+            'email': 'senhacurta@teste.com',
+            'senha': 'abc123',
+            'papel': 'operador',
+        })
+        assert resp.status_code == 400
+
+    def test_criar_usuario_senha_exata_8(self, client):
+        """Senha com exatamente 8 chars deve ser aceita."""
+        resp = client.post('/api/usuarios', json={
+            'nome': 'Teste Senha OK',
+            'email': 'senha8@teste.com',
+            'senha': '12345678',
+            'papel': 'operador',
+        })
+        assert resp.status_code == 201
+
+    def test_atualizar_senha_curta(self, client):
+        """Atualizar para senha curta deve falhar."""
+        # Cria usuario com senha válida
+        resp = client.post('/api/usuarios', json={
+            'nome': 'Update Senha',
+            'email': 'upsenha@teste.com',
+            'senha': 'senhavalida123',
+            'papel': 'operador',
+        })
+        uid = resp.get_json()['id_usuario']
+        # Tenta atualizar com senha curta
+        resp = client.put(f'/api/usuarios/{uid}', json={
+            'senha': 'abc',
+        })
+        assert resp.status_code == 400
