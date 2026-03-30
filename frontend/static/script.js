@@ -303,16 +303,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// Tratador global de erros
+// Tratador global de erros (apenas log, sem toast duplicado)
 window.addEventListener('error', (evento) => {
     console.error('Erro global:', evento.error);
-    mostrarAlerta('❌ Ocorreu um erro. Tente novamente.', 'erro');
 });
 
-// Tratador para promessas não capturadas
+// Tratador para promessas não capturadas (apenas log)
 window.addEventListener('unhandledrejection', (evento) => {
     console.error('Promise rejeitada não tratada:', evento.reason);
-    mostrarAlerta('❌ Erro na requisição. Tente novamente.', 'erro');
 });
 
 // Confirmação antes de sair se houver dados não salvos

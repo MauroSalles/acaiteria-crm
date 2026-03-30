@@ -152,12 +152,15 @@
     async function carregarTickets() {
         const status = document.getElementById('filtroStatus').value;
         const url = '/api/suporte/tickets' + (status ? '?status=' + status : '');
+        const lista = document.getElementById('listaTickets');
         try {
             const resp = await fetch(url);
-            if (!resp.ok) throw new Error('Falha ao carregar');
+            if (!resp.ok) {
+                if (resp.status === 401) { location.href = '/login'; return; }
+                throw new Error('HTTP ' + resp.status);
+            }
             const json = await resp.json();
             const tickets = json.dados || [];
-            const lista = document.getElementById('listaTickets');
             if (!tickets.length) {
                 lista.innerHTML = '<div class="suporte-no-tickets">Nenhum ticket encontrado.<br>Abra um novo para pedir ajuda!</div>';
                 return;
@@ -252,6 +255,9 @@
         const textarea = document.getElementById('novaMensagem');
         const conteudo = textarea.value.trim();
         if (!conteudo || !ticketAtivo) return;
+        const btnEnviar = document.querySelector('#chatInput .btn-primary');
+        btnEnviar.disabled = true;
+        btnEnviar.textContent = '⏳';
         try {
             const resp = await fetch(`/api/suporte/tickets/${ticketAtivo}/mensagens`, {
                 method: 'POST',
@@ -259,33 +265,51 @@
                 body: JSON.stringify({ conteudo })
             });
             if (!resp.ok) {
-                const err = await resp.json();
-                throw new Error(err.erro || 'Erro');
+                let errMsg = 'Erro ao enviar mensagem';
+                try { const errJson = await resp.json(); errMsg = errJson.erro || errMsg; } catch(_) {}
+                throw new Error(errMsg);
             }
             textarea.value = '';
             abrirTicket(ticketAtivo);
-        } catch (e) {
-            mostrarAlerta(e.message, 'erro');
+        } catch (err) {
+            mostrarAlerta(err.message, 'erro');
+        } finally {
+            btnEnviar.disabled = false;
+            btnEnviar.textContent = 'Enviar ➤';
         }
     }
 
     // ====== CRIAR TICKET ======
-    async function criarTicket(e) {
-        e.preventDefault();
+    async function criarTicket(evt) {
+        evt.preventDefault();
+        const btnSubmit = document.querySelector('#formNovoTicket button[type="submit"]');
+        const textoOriginal = btnSubmit.textContent;
+        btnSubmit.disabled = true;
+        btnSubmit.textContent = '⏳ Enviando...';
         try {
+            const payload = {
+                assunto: document.getElementById('ticketAssunto').value.trim(),
+                categoria: document.getElementById('ticketCategoria').value,
+                prioridade: document.getElementById('ticketPrioridade').value,
+                mensagem: document.getElementById('ticketMensagem').value.trim()
+            };
+            if (!payload.assunto || payload.assunto.length < 3) {
+                mostrarAlerta('Assunto deve ter ao menos 3 caracteres.', 'aviso');
+                return;
+            }
+            if (!payload.mensagem || payload.mensagem.length < 5) {
+                mostrarAlerta('Descrição deve ter ao menos 5 caracteres.', 'aviso');
+                return;
+            }
             const resp = await fetch('/api/suporte/tickets', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    assunto: document.getElementById('ticketAssunto').value.trim(),
-                    categoria: document.getElementById('ticketCategoria').value,
-                    prioridade: document.getElementById('ticketPrioridade').value,
-                    mensagem: document.getElementById('ticketMensagem').value.trim()
-                })
+                body: JSON.stringify(payload)
             });
             if (!resp.ok) {
-                const err = await resp.json();
-                throw new Error(err.erro || 'Erro ao criar ticket');
+                let errMsg = 'Erro ao criar ticket (HTTP ' + resp.status + ')';
+                try { const errJson = await resp.json(); errMsg = errJson.erro || errJson.detalhes || errMsg; } catch(_) {}
+                throw new Error(errMsg);
             }
             const ticket = await resp.json();
             fecharModal();
@@ -293,8 +317,12 @@
             document.getElementById('formNovoTicket').reset();
             carregarTickets();
             abrirTicket(ticket.id_ticket);
-        } catch (e) {
-            mostrarAlerta(e.message, 'erro');
+        } catch (err) {
+            console.error('Erro ao criar ticket:', err);
+            mostrarAlerta(err.message || 'Erro desconhecido ao criar ticket', 'erro');
+        } finally {
+            btnSubmit.disabled = false;
+            btnSubmit.textContent = textoOriginal;
         }
     }
 
@@ -309,13 +337,14 @@
                 body: JSON.stringify({ status: 'fechado' })
             });
             if (!resp.ok) {
-                const err = await resp.json();
-                throw new Error(err.erro || 'Erro');
+                let errMsg = 'Erro ao fechar ticket';
+                try { const errJson = await resp.json(); errMsg = errJson.erro || errMsg; } catch(_) {}
+                throw new Error(errMsg);
             }
             mostrarAlerta('Ticket fechado', 'info');
             abrirTicket(ticketAtivo);
-        } catch (e) {
-            mostrarAlerta(e.message, 'erro');
+        } catch (err) {
+            mostrarAlerta(err.message, 'erro');
         }
     }
 

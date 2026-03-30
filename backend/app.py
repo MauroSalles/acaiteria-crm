@@ -500,7 +500,7 @@ def criar_cliente():
 def obter_cliente(id_cliente):
     """Obter detalhes de um cliente"""
     try:
-        cliente = Cliente.query.get(id_cliente)
+        cliente = db.session.get(Cliente, id_cliente)
         if not cliente:
             return jsonify({'erro': 'Cliente não encontrado'}), 404
         
@@ -521,7 +521,7 @@ def obter_cliente(id_cliente):
 def atualizar_cliente(id_cliente):
     """Atualizar dados de um cliente"""
     try:
-        cliente = Cliente.query.get(id_cliente)
+        cliente = db.session.get(Cliente, id_cliente)
         if not cliente:
             return jsonify({'erro': 'Cliente não encontrado'}), 404
         if not cliente.ativo:
@@ -580,7 +580,7 @@ def atualizar_cliente(id_cliente):
 def deletar_cliente(id_cliente):
     """Deletar (anonimizar) um cliente - LGPD"""
     try:
-        cliente = Cliente.query.get(id_cliente)
+        cliente = db.session.get(Cliente, id_cliente)
         if not cliente:
             return jsonify({'erro': 'Cliente não encontrado'}), 404
         
@@ -611,7 +611,7 @@ def deletar_cliente(id_cliente):
 def atualizar_consentimento(id_cliente):
     """Concede ou revoga consentimento LGPD e registra no histórico de auditoria"""
     try:
-        cliente = Cliente.query.get(id_cliente)
+        cliente = db.session.get(Cliente, id_cliente)
         if not cliente:
             return jsonify({'erro': 'Cliente não encontrado'}), 404
 
@@ -650,7 +650,7 @@ def atualizar_consentimento(id_cliente):
 def historico_consentimento(id_cliente):
     """Retorna histórico completo de auditoria LGPD do cliente"""
     try:
-        cliente = Cliente.query.get(id_cliente)
+        cliente = db.session.get(Cliente, id_cliente)
         if not cliente:
             return jsonify({'erro': 'Cliente não encontrado'}), 404
 
@@ -752,7 +752,7 @@ def criar_produto():
 def obter_produto(id_produto):
     """Obter detalhes de um produto"""
     try:
-        produto = Produto.query.get(id_produto)
+        produto = db.session.get(Produto, id_produto)
         if not produto:
             return jsonify({'erro': 'Produto não encontrado'}), 404
         return jsonify(produto.to_dict())
@@ -766,7 +766,7 @@ def obter_produto(id_produto):
 def atualizar_produto(id_produto):
     """Atualizar dados de um produto"""
     try:
-        produto = Produto.query.get(id_produto)
+        produto = db.session.get(Produto, id_produto)
         if not produto:
             return jsonify({'erro': 'Produto não encontrado'}), 404
 
@@ -801,7 +801,7 @@ def atualizar_produto(id_produto):
 def deletar_produto(id_produto):
     """Desativar produto (soft delete)"""
     try:
-        produto = Produto.query.get(id_produto)
+        produto = db.session.get(Produto, id_produto)
         if not produto:
             return jsonify({'erro': 'Produto não encontrado'}), 404
 
@@ -928,7 +928,7 @@ def criar_venda():
             return jsonify({'erro': 'Venda deve ter pelo menos um item'}), 400
         
         # Verificar se cliente existe
-        cliente = Cliente.query.get(dados['id_cliente'])
+        cliente = db.session.get(Cliente, dados['id_cliente'])
         if not cliente:
             return jsonify({'erro': 'Cliente não encontrado'}), 404
 
@@ -949,7 +949,7 @@ def criar_venda():
         
         # Adicionar itens
         for item_dados in dados['itens']:
-            produto = Produto.query.get(item_dados['id_produto'])
+            produto = db.session.get(Produto, item_dados['id_produto'])
             if not produto:
                 return jsonify({'erro': f'Produto {item_dados["id_produto"]} não encontrado'}), 404
 
@@ -997,7 +997,7 @@ def criar_venda():
         
         # Descontar estoque dos produtos vendidos (somente se controlado)
         for item in venda.itens:
-            prod = Produto.query.get(item.id_produto)
+            prod = db.session.get(Produto, item.id_produto)
             if prod and ((prod.estoque_atual or 0) > 0 or (prod.estoque_minimo or 0) > 0):
                 prod.estoque_atual = max(0, prod.estoque_atual - item.quantidade)
 
@@ -1026,7 +1026,7 @@ def criar_venda():
 def obter_venda(id_venda):
     """Obter detalhes de uma venda"""
     try:
-        venda = Venda.query.get(id_venda)
+        venda = db.session.get(Venda, id_venda)
         if not venda:
             return jsonify({'erro': 'Venda não encontrada'}), 404
         
@@ -1042,7 +1042,7 @@ def cancelar_venda(id_venda):
     """Cancelar (estornar) uma venda — somente admin.
     Restaura estoque e remove pontos de fidelidade do cliente."""
     try:
-        venda = Venda.query.get(id_venda)
+        venda = db.session.get(Venda, id_venda)
         if not venda:
             return jsonify({'erro': 'Venda não encontrada'}), 404
 
@@ -1056,13 +1056,13 @@ def cancelar_venda(id_venda):
 
         # Restaurar estoque dos itens
         for item in venda.itens:
-            prod = Produto.query.get(item.id_produto)
+            prod = db.session.get(Produto, item.id_produto)
             if prod:
                 prod.estoque_atual = (prod.estoque_atual or 0) + item.quantidade
 
         # Remover pontos de fidelidade concedidos
         pontos_remover = int(venda.valor_total)
-        cliente = Cliente.query.get(venda.id_cliente)
+        cliente = db.session.get(Cliente, venda.id_cliente)
         if cliente and pontos_remover > 0:
             cliente.pontos_fidelidade = max(0, (cliente.pontos_fidelidade or 0) - pontos_remover)
 
@@ -1098,7 +1098,7 @@ def cancelar_venda(id_venda):
 def obter_pontos_fidelidade(id_cliente):
     """Consultar pontos de fidelidade de um cliente"""
     try:
-        cliente = Cliente.query.get(id_cliente)
+        cliente = db.session.get(Cliente, id_cliente)
         if not cliente or not cliente.ativo:
             return jsonify({'erro': 'Cliente não encontrado'}), 404
         return jsonify({
@@ -1116,7 +1116,7 @@ def obter_pontos_fidelidade(id_cliente):
 def resgatar_pontos(id_cliente):
     """Resgatar pontos de fidelidade (cada 100 pontos = R$5 de desconto)"""
     try:
-        cliente = Cliente.query.get(id_cliente)
+        cliente = db.session.get(Cliente, id_cliente)
         if not cliente or not cliente.ativo:
             return jsonify({'erro': 'Cliente não encontrado'}), 404
 
@@ -1880,7 +1880,7 @@ def criar_usuario():
 def atualizar_usuario(id_usuario):
     """Atualizar usuário (admin only)"""
     try:
-        usuario = Usuario.query.get(id_usuario)
+        usuario = db.session.get(Usuario, id_usuario)
         if not usuario:
             return jsonify({'erro': 'Usuário não encontrado'}), 404
 
@@ -1918,7 +1918,7 @@ def deletar_usuario(id_usuario):
         if session.get('usuario_id') == id_usuario:
             return jsonify({'erro': 'Não é possível desativar seu próprio usuário'}), 400
 
-        usuario = Usuario.query.get(id_usuario)
+        usuario = db.session.get(Usuario, id_usuario)
         if not usuario:
             return jsonify({'erro': 'Usuário não encontrado'}), 404
 
@@ -1935,7 +1935,7 @@ def deletar_usuario(id_usuario):
 def usuario_atual():
     """Retorna dados do usuário logado"""
     try:
-        usuario = Usuario.query.get(session.get('usuario_id'))
+        usuario = db.session.get(Usuario, session.get('usuario_id'))
         if not usuario:
             return jsonify({'erro': 'Usuário não encontrado'}), 404
         return jsonify(usuario.to_dict())
@@ -2061,7 +2061,7 @@ def criar_ticket():
 def obter_ticket(id_ticket):
     """Retorna ticket com mensagens (chat)"""
     try:
-        ticket = TicketSuporte.query.get(id_ticket)
+        ticket = db.session.get(TicketSuporte, id_ticket)
         if not ticket:
             return jsonify({'erro': 'Ticket não encontrado'}), 404
 
@@ -2079,7 +2079,7 @@ def obter_ticket(id_ticket):
 def enviar_mensagem_ticket(id_ticket):
     """Envia mensagem em um ticket (chat)"""
     try:
-        ticket = TicketSuporte.query.get(id_ticket)
+        ticket = db.session.get(TicketSuporte, id_ticket)
         if not ticket:
             return jsonify({'erro': 'Ticket não encontrado'}), 404
 
@@ -2116,7 +2116,7 @@ def enviar_mensagem_ticket(id_ticket):
 def atualizar_status_ticket(id_ticket):
     """Atualiza status do ticket (admin pode tudo, operador só pode fechar os próprios)"""
     try:
-        ticket = TicketSuporte.query.get(id_ticket)
+        ticket = db.session.get(TicketSuporte, id_ticket)
         if not ticket:
             return jsonify({'erro': 'Ticket não encontrado'}), 404
 
