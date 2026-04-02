@@ -621,11 +621,14 @@
 
         /* ========== PRODUTOS ========== */
         function carregarProdutos(){
+            document.getElementById('menuGrid').innerHTML =
+                '<p style="text-align:center;color:#7B1FA2;padding:2rem;">⏳ Carregando cardápio...</p>';
             Promise.all([
                 fetch('/api/vitrine/produtos'),
                 fetch('/api/vitrine/categorias')
             ])
             .then(function(resps){
+                if(!resps[0].ok || !resps[1].ok) throw new Error('Resposta inválida do servidor');
                 return Promise.all([resps[0].json(), resps[1].json()]);
             })
             .then(function(results){

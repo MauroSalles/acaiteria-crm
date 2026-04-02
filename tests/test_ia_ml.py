@@ -501,17 +501,31 @@ class TestSeedProdutos:
             sorvetes = Produto.query.filter_by(categoria="Sorvete").count()
             assert sorvetes == 26
 
-    def test_seed_nao_duplica(self, app):
+    def test_seed_substitui_dados_teste(self, app):
         with app.app_context():
             from backend.app import _seed_produtos
-            # Se já tem produto, seed não roda
+            # Se tem poucos produtos (< 10), seed remove e recria
+            Produto.query.delete()
+            db.session.commit()
             db.session.add(Produto(
                 nome_produto="Teste", preco=1.0,
                 estoque_atual=0, estoque_minimo=0, ativo=True,
             ))
             db.session.commit()
-            _seed_produtos()  # não deve criar nada
             assert Produto.query.count() == 1
+            _seed_produtos()  # deve substituir
+            assert Produto.query.count() == 36
+
+    def test_seed_nao_duplica_catalogo_real(self, app):
+        with app.app_context():
+            from backend.app import _seed_produtos
+            # Se já tem >= 10 produtos, seed não roda
+            Produto.query.delete()
+            db.session.commit()
+            _seed_produtos()
+            assert Produto.query.count() == 36
+            _seed_produtos()  # não deve duplicar
+            assert Produto.query.count() == 36
 
     def test_seed_estoque_minimo_tradicional(self, app):
         with app.app_context():

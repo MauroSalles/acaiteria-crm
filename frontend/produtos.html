@@ -146,12 +146,16 @@
                 <div style="display:flex;gap:.8rem;align-items:center;flex-wrap:wrap;margin-bottom:1rem">
                     <h2 style="margin:0">📋 Produtos Cadastrados</h2>
                     <button id="btn-atualizar" class="btn btn-info" style="font-size:.8rem;padding:.4rem .8rem">🔄 Atualizar</button>
+                    <span id="totalFiltrados" style="font-size:.85rem;color:#888;margin-left:auto"></span>
                 </div>
-                <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem" id="filtrosCategoria">
+                <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.8rem" id="filtrosCategoria">
                     <button class="btn btn-primary" style="font-size:.8rem;padding:.3rem .8rem" onclick="filtrarProdutos('')" data-filtro="">Todos</button>
                     <button class="btn btn-info" style="font-size:.8rem;padding:.3rem .8rem" onclick="filtrarProdutos('Açaí')" data-filtro="Açaí">🍇 Açaí</button>
                     <button class="btn btn-info" style="font-size:.8rem;padding:.3rem .8rem" onclick="filtrarProdutos('Sorvete')" data-filtro="Sorvete">🍦 Sorvete</button>
                     <button class="btn btn-info" style="font-size:.8rem;padding:.3rem .8rem" onclick="filtrarProdutos('Complemento')" data-filtro="Complemento">🥣 Complemento</button>
+                </div>
+                <div style="margin-bottom:1rem">
+                    <input type="text" id="buscaProduto" placeholder="🔍 Buscar por nome..." style="width:100%;max-width:350px;padding:.5rem .8rem;border:1px solid #ccc;border-radius:8px;font-size:.9rem" autocomplete="off">
                 </div>
 
                 <div class="table-responsive">
@@ -187,6 +191,7 @@
         let editandoId = null;
         let todosProdutosAdmin = [];
         let filtroAtual = '';
+        let buscaAtual = '';
 
         document.addEventListener('DOMContentLoaded', () => {
             carregarProdutos();
@@ -196,6 +201,11 @@
         document.getElementById('btn-atualizar').addEventListener('click', () => {
             carregarProdutos();
             carregarEstoqueBaixo();
+        });
+
+        document.getElementById('buscaProduto').addEventListener('input', (e) => {
+            buscaAtual = e.target.value.trim().toLowerCase();
+            renderTabelaProdutos();
         });
 
         /* ========== FILTROS ========== */
@@ -211,9 +221,14 @@
         }
 
         function renderTabelaProdutos() {
-            const lista = filtroAtual
+            let lista = filtroAtual
                 ? todosProdutosAdmin.filter(p => (p.categoria || '').toLowerCase() === filtroAtual.toLowerCase())
                 : todosProdutosAdmin;
+            if (buscaAtual) {
+                lista = lista.filter(p => (p.nome_produto || '').toLowerCase().includes(buscaAtual));
+            }
+            const counterEl = document.getElementById('totalFiltrados');
+            counterEl.textContent = `Mostrando ${lista.length} de ${todosProdutosAdmin.length}`;
             const tbody = document.querySelector('#tabela-produtos tbody');
             if (!lista.length) {
                 tbody.innerHTML = '<tr><td colspan="7" class="text-center">Nenhum produto encontrado</td></tr>';

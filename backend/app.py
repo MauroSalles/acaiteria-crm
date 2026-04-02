@@ -136,6 +136,7 @@ with app.app_context():
     _migracoes = [
         ("produto", "estoque_atual", "INTEGER DEFAULT 0"),
         ("produto", "estoque_minimo", "INTEGER DEFAULT 0"),
+        ("produto", "volume", "VARCHAR(20)"),
         ("cliente", "pontos_fidelidade", "INTEGER DEFAULT 0"),
         ("cliente", "senha_hash", "VARCHAR(256)"),
     ]
@@ -4496,9 +4497,20 @@ def _seed_admin():
 
 
 def _seed_produtos():
-    """Semeia catálogo real Combina Açaí se a tabela estiver vazia."""
-    if Produto.query.first() is not None:
-        return
+    """Semeia catálogo real Combina Açaí.
+
+    Se a tabela tiver dados antigos de teste (< 10 produtos),
+    remove-os e insere o catálogo real completo.
+    """
+    total = Produto.query.count()
+    if total >= 10:
+        return  # catálogo real já presente
+
+    # Limpar produtos de teste antigos
+    if total > 0:
+        Produto.query.delete()
+        db.session.commit()
+        logger.info("Removidos %d produtos de teste antigos", total)
 
     _acais = [
         ("Açaí Tradicional", "10L", 15.90,
