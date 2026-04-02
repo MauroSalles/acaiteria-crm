@@ -1,0 +1,40 @@
+# =============================================================================
+# pyproject.toml — AcaiteriaCRM (Grupo 22 - UNIVESP 2026)
+# Configuração moderna PEP 621 do projeto Python
+# =============================================================================
+
+[project]
+name = "acaiteria-crm"
+version = "1.0.0"
+description = "Sistema CRM para Açaiteria Combina Açaí — Projeto Integrador UNIVESP"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.11"
+authors = [
+    {name = "Grupo 22 - UNIVESP"},
+]
+keywords = ["crm", "flask", "acaiteria", "univesp", "projeto-integrador"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short --strict-markers --cov=backend --cov-report=term-missing"
+
+[tool.coverage.run]
+source = ["backend"]
+omit = ["tests/*", "**/__pycache__/*"]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 70
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.",
+    "pass",
+]
+
+[tool.flake8]
+max-line-length = 120
+exclude = [".git", "__pycache__", "venv", "venv313", ".eggs"]

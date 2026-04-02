@@ -55,3 +55,8 @@ npm-debug.log
 *.tmp
 *.temp
 .cache/
+
+# Cobertura de testes
+.coverage
+coverage.xml
+htmlcov/

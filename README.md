@@ -1,5 +1,11 @@
 # CRM Simples - Açaiteria Combina Açaí
 
+[![CI](https://github.com/MauroSalles/acaiteria-crm/actions/workflows/ci.yml/badge.svg)](https://github.com/MauroSalles/acaiteria-crm/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/MauroSalles/acaiteria-crm/branch/main/graph/badge.svg)](https://codecov.io/gh/MauroSalles/acaiteria-crm)
+[![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Deploy: Render](https://img.shields.io/badge/deploy-Render-blueviolet.svg)](https://acaiteria-crm.onrender.com)
+
 ## Descrição do Projeto
 
 Sistema Web de Gestão de Clientes e Vendas para a Açaiteria **Combina Açaí**, localizada em Lorena/SP. A solução centraliza o registro de vendas e o cadastro de clientes em uma aplicação web com banco de dados relacional, habilitando gestão de relacionamento (fidelização, métricas de recorrência/churn) e fechamento de caixa integrado.
