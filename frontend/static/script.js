@@ -156,6 +156,12 @@ async function requisicao(url, opcoes = {}) {
             ...opcoes
         });
 
+        // Sessão expirou — redirecionar ao login
+        if (resposta.status === 401) {
+            window.location.href = '/login';
+            throw new Error('Sessão expirada. Redirecionando ao login...');
+        }
+
         if (!resposta.ok) {
             const erro = await resposta.json();
             throw new Error(erro.erro || `Erro HTTP: ${resposta.status}`);

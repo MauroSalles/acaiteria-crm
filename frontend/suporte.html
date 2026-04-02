@@ -210,7 +210,7 @@
     async function abrirTicket(id) {
         ticketAtivo = id;
         try {
-            const resp = await fetch('/api/suporte/tickets/' + id);
+            const resp = await requisicao('/api/suporte/tickets/' + id);
             if (!resp.ok) throw new Error('Ticket não encontrado');
             const ticket = await resp.json();
 
@@ -265,7 +265,7 @@
     async function atualizarMensagens(id) {
         if (ticketAtivo !== id) return;
         try {
-            const resp = await fetch('/api/suporte/tickets/' + id);
+            const resp = await requisicao('/api/suporte/tickets/' + id);
             if (!resp.ok) return;
             const ticket = await resp.json();
             renderMensagens(ticket.mensagens);
@@ -281,7 +281,7 @@
         btnEnviar.disabled = true;
         btnEnviar.textContent = '⏳';
         try {
-            const resp = await fetch(`/api/suporte/tickets/${ticketAtivo}/mensagens`, {
+            const resp = await requisicao(`/api/suporte/tickets/${ticketAtivo}/mensagens`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ conteudo })
@@ -323,7 +323,7 @@
                 mostrarAlerta('Descrição deve ter ao menos 5 caracteres.', 'aviso');
                 return;
             }
-            const resp = await fetch('/api/suporte/tickets', {
+            const resp = await requisicao('/api/suporte/tickets', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -353,7 +353,7 @@
         if (!ticketAtivo) return;
         if (!confirm('Deseja fechar este ticket?')) return;
         try {
-            const resp = await fetch(`/api/suporte/tickets/${ticketAtivo}/status`, {
+            const resp = await requisicao(`/api/suporte/tickets/${ticketAtivo}/status`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status: 'fechado' })
@@ -429,7 +429,7 @@
         conv.scrollTop = conv.scrollHeight;
 
         try {
-            var resp = await fetch('/api/suporte/ia-resposta', {
+            var resp = await requisicao('/api/suporte/ia-resposta', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ mensagem: mensagem })
@@ -477,7 +477,7 @@
         if (texto.length < 10) { document.getElementById('iaSugestaoTicket').innerHTML = ''; return; }
         _iaDebounce = setTimeout(async function() {
             try {
-                var resp = await fetch('/api/suporte/ia-resposta', {
+                var resp = await requisicao('/api/suporte/ia-resposta', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ mensagem: texto })

@@ -421,28 +421,5 @@ function cancelarVenda() {
     }
 }
 
-// Restaurar venda incompleta ao carregar página
-window.addEventListener('load', () => {
-    const itensRestaurados = obterLocal('vendaItens');
-    const clienteRestaurado = obterLocal('vendaClienteAtual');
-    
-    if (itensRestaurados && itensRestaurados.length > 0) {
-        const confirmar = confirm('📌 Você tem uma venda incompleta. Deseja continuar?');
-        
-        if (confirmar) {
-            itensVenda = itensRestaurados;
-            clienteSelecionado = clienteRestaurado;
-            
-            // Restaurar seleção do cliente
-            if (clienteSelecionado && clienteSelecionado.id_cliente) {
-                document.getElementById('cliente-select').value = clienteSelecionado.id_cliente;
-            }
-            
-            renderizarItens();
-            recalcularTotais();
-        } else {
-            removerLocal('vendaItens');
-            removerLocal('vendaClienteAtual');
-        }
-    }
-});
+// NOTA: a restauração do carrinho já é feita no DOMContentLoaded acima.
+// Não duplicar com window.addEventListener('load') para evitar conflitos.

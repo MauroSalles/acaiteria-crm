@@ -1280,16 +1280,8 @@ hr { border: none; border-top: 1px solid var(--cinza-200); margin: 1rem 0; }
 .pull-refresh-indicator.show { transform: translateX(-50%) translateY(0); }
 
 /* ==========================================================================
-   STICKY TABLE HEADERS
+   TABLE HEADERS (sem position:sticky para evitar overlap com overflow-x:auto)
    ========================================================================== */
-.table-responsive { position: relative; }
-.table thead th {
-    position: sticky;
-    top: 64px;
-    z-index: 10;
-    background: var(--cinza-100);
-}
-[data-theme="dark"] .table thead th { background: var(--cinza-200); }
 
 /* ==========================================================================
    AI CHATBOT SUGGESTION BUBBLE (suporte)

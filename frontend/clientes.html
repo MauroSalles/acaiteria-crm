@@ -142,6 +142,10 @@
                 if (busca) url += `&busca=${encodeURIComponent(busca)}`;
 
                 const resposta = await fetch(url);
+                if (resposta.status === 401) {
+                    window.location.href = '/login';
+                    return;
+                }
                 const dados = await resposta.json();
                 const tbody = document.querySelector('#tabela-clientes tbody');
 
@@ -218,7 +222,7 @@
             if (e.key === 'Enter') carregarClientes(1);
         });
 
-        window.addEventListener('load', carregarClientes);
+        window.addEventListener('load', () => carregarClientes());
 
         // ============= EDIÇÃO DE CLIENTE =============
         function abrirEdicao(cliente) {

@@ -173,11 +173,15 @@
                     document.querySelector('#form-produto button[type="submit"]').textContent = 'Cadastrar Produto';
                 } else {
                     // Criar novo
-                    await requisicao('/api/produtos', {
+                    const resp = await requisicao('/api/produtos', {
                         method: 'POST',
                         body: JSON.stringify(dados)
                     });
                     mostrarAlerta('Produto cadastrado com sucesso!', 'sucesso');
+                    // Inovação: emitir evento para outras abas/páginas
+                    try {
+                        localStorage.setItem('novo_produto', JSON.stringify({ nome: resp.nome_produto, id: resp.id_produto, ts: Date.now() }));
+                    } catch (e) {}
                 }
                 document.getElementById('form-produto').reset();
                 carregarProdutos();

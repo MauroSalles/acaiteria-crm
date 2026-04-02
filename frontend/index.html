@@ -265,7 +265,7 @@
     <script>
     (async function carregarGraficos() {
         try {
-            const resp = await fetch('/api/dashboard/graficos');
+            const resp = await requisicao('/api/dashboard/graficos');
             if (!resp.ok) return;
             const dados = await resp.json();
 
@@ -349,7 +349,7 @@
     // Carregar alerta de estoque baixo
     (async function carregarEstoqueBaixo() {
         try {
-            const resp = await fetch('/api/produtos/estoque-baixo');
+            const resp = await requisicao('/api/produtos/estoque-baixo');
             if (!resp.ok) return;
             const produtos = await resp.json();
             if (!produtos.length) return;
@@ -357,8 +357,8 @@
             const tbody = document.getElementById('tbody-estoque-baixo');
             tbody.innerHTML = produtos.map(p => `
                 <tr style="background: #fff3e0;">
-                    <td><strong>${p.nome_produto}</strong></td>
-                    <td>${p.categoria || '-'}</td>
+                    <td><strong>${escapeHtml(p.nome_produto)}</strong></td>
+                    <td>${escapeHtml(p.categoria || '-')}</td>
                     <td style="color:#c62828;font-weight:bold;">${p.estoque_atual}</td>
                     <td>${p.estoque_minimo}</td>
                 </tr>
@@ -372,7 +372,7 @@
     // Carregar ranking de fidelidade
     (async function carregarRankingFidelidade() {
         try {
-            const resp = await fetch('/api/fidelidade/ranking');
+            const resp = await requisicao('/api/fidelidade/ranking');
             if (!resp.ok) return;
             const clientes = await resp.json();
             if (!clientes.length) return;
@@ -380,7 +380,7 @@
             const tbody = document.getElementById('tbody-ranking-fidelidade');
             tbody.innerHTML = clientes.map((c, i) => `
                 <tr>
-                    <td>${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '⭐'} <strong>${c.nome}</strong></td>
+                    <td>${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '⭐'} <strong>${escapeHtml(c.nome)}</strong></td>
                     <td style="color:#7B1FA2;font-weight:bold;">${c.pontos}</td>
                     <td>R$ ${(Math.floor(c.pontos / 100) * 5).toFixed(2)}</td>
                 </tr>
@@ -394,7 +394,7 @@
     // Cartão Fidelidade Visual — mostra top cliente como "cartão gamificado"
     (async function carregarCartaoFidelidade() {
         try {
-            const resp = await fetch('/api/fidelidade/ranking');
+            const resp = await requisicao('/api/fidelidade/ranking');
             if (!resp.ok) return;
             const clientes = await resp.json();
             if (!clientes.length) return;
