@@ -153,6 +153,7 @@ class Produto(db.Model):
     categoria = db.Column(db.String(50))
     descricao = db.Column(db.Text)
     preco = db.Column(db.DECIMAL(10, 2), nullable=False)
+    volume = db.Column(db.String(20))  # "10L", "5L" — recipiente
     estoque_atual = db.Column(db.Integer, default=0)
     estoque_minimo = db.Column(db.Integer, default=0)
     ativo = db.Column(db.Boolean, default=True)
@@ -174,8 +175,40 @@ class Produto(db.Model):
             "categoria": self.categoria,
             "descricao": self.descricao,
             "preco": float(self.preco),
+            "volume": self.volume,
             "estoque_atual": self.estoque_atual,
             "estoque_minimo": self.estoque_minimo,
+            "ativo": self.ativo,
+        }
+
+
+class Complemento(db.Model):
+    """Modelo de Complemento/Topping para self-service"""
+
+    __tablename__ = "complemento"
+
+    id_complemento = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(100), nullable=False)
+    categoria = db.Column(db.String(50))  # Fruta, Calda, Farináceo, Extra
+    unidade_medida = db.Column(db.String(30))  # g, ml, unidade
+    preco_adicional = db.Column(db.DECIMAL(10, 2), default=0)
+    ativo = db.Column(db.Boolean, default=True)
+    data_criacao = db.Column(db.DateTime, default=_utcnow)
+
+    def __repr__(self):
+        return f"<Complemento {self.nome}>"
+
+    def to_dict(self):
+        return {
+            "id_complemento": self.id_complemento,
+            "nome": self.nome,
+            "categoria": self.categoria,
+            "unidade_medida": self.unidade_medida,
+            "preco_adicional": (
+                float(self.preco_adicional)
+                if self.preco_adicional
+                else 0
+            ),
             "ativo": self.ativo,
         }
 

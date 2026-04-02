@@ -300,12 +300,16 @@
         /* ========== UTILITÁRIOS ========== */
         var isLoggedIn = {{ 'true' if session.get('cliente_id') else 'false' }};
         var emojisPorCategoria = {
-            'açaí':'🍇','acai':'🍇','premium':'🍇',
-            'sorvete':'🍦','gelato':'🍦',
+            'açaí':'🍇','acai':'🍇','premium':'🍇','black':'🍇','grego':'🍇',
+            'sorvete':'🍦','gelato':'🍦','pistache':'🍦','chocolate':'🍫',
+            'menta':'🌿','cappuccino':'☕','café':'☕','unicórnio':'🦄',
+            'pitaya':'🐉','limão':'🍋','morango':'🍓','manga':'🥭',
+            'abacaxi':'🍍','banana':'🍌','côco':'🥥','coco':'🥥',
+            'goiaba':'🍈','mamão':'🍈','milho':'🌽','laranja':'🍊',
             'suco':'🧃','bebida':'🥤',
             'lanche':'🥪','salgado':'🥧',
-            'doce':'🍰','sobremesa':'🍮',
-            'fruta':'🍓','bowl':'🥣'
+            'doce':'🍰','sobremesa':'🍮','algodão':'🍭',
+            'fruta':'🍓','bowl':'🥣','complemento':'🥣'
         };
         function getEmoji(nome,cat){
             var t=((cat||'')+' '+(nome||'')).toLowerCase();
@@ -671,9 +675,10 @@
             var html = '';
             for(var i=0;i<lista.length;i++){
                 var p = lista[i];
+                var volTag = p.volume ? '<span style="display:inline-block;background:#F3E5F5;color:#7B1FA2;font-size:.7rem;font-weight:700;padding:.15rem .5rem;border-radius:12px;margin-left:.3rem">'+escapeHtml(p.volume)+'</span>' : '';
                 html += '<div class="product-card">' +
                     '<span class="product-emoji">'+getEmoji(p.nome_produto, p.categoria)+'</span>' +
-                    '<span class="product-category">'+escapeHtml(p.categoria || 'Geral')+'</span>' +
+                    '<span class="product-category">'+escapeHtml(p.categoria || 'Geral')+volTag+'</span>' +
                     '<span class="product-name">'+escapeHtml(p.nome_produto)+'</span>' +
                     '<span class="product-desc">'+escapeHtml(p.descricao || '')+'</span>' +
                     '<div class="product-footer">' +

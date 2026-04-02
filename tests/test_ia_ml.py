@@ -339,3 +339,188 @@ class TestCheckoutLGPD:
             })
             assert r.status_code == 403
             assert "LGPD" in r.get_json()["erro"]
+
+
+# ── Testes de Complementos ───────────────────────────────────────────
+
+
+class TestComplementos:
+    """CRUD de complementos (admin)."""
+
+    def test_criar_complemento(self, client, app):
+        with app.app_context():
+            r = client.post("/api/complementos", json={
+                "nome": "Granola",
+                "categoria": "Farináceo",
+                "unidade_medida": "g",
+                "preco_adicional": 2.50,
+            })
+            assert r.status_code == 201
+            data = r.get_json()
+            assert data["nome"] == "Granola"
+            assert data["categoria"] == "Farináceo"
+            assert data["preco_adicional"] == 2.50
+
+    def test_criar_complemento_sem_nome(self, client, app):
+        with app.app_context():
+            r = client.post("/api/complementos", json={
+                "categoria": "Fruta"
+            })
+            assert r.status_code == 400
+
+    def test_listar_complementos(self, client, app):
+        with app.app_context():
+            from backend.models import Complemento
+            from decimal import Decimal
+            db.session.add(Complemento(
+                nome="Leite Condensado", categoria="Calda",
+                unidade_medida="ml", preco_adicional=Decimal("3.00"),
+            ))
+            db.session.commit()
+            r = client.get("/api/complementos")
+            assert r.status_code == 200
+            data = r.get_json()
+            assert len(data) >= 1
+            assert data[0]["nome"] == "Leite Condensado"
+
+    def test_atualizar_complemento(self, client, app):
+        with app.app_context():
+            from backend.models import Complemento
+            from decimal import Decimal
+            comp = Complemento(
+                nome="Morango", categoria="Fruta",
+                unidade_medida="g", preco_adicional=Decimal("2.00"),
+            )
+            db.session.add(comp)
+            db.session.commit()
+            cid = comp.id_complemento
+
+            r = client.put(f"/api/complementos/{cid}", json={
+                "preco_adicional": 3.50
+            })
+            assert r.status_code == 200
+            assert r.get_json()["preco_adicional"] == 3.50
+
+    def test_deletar_complemento(self, client, app):
+        with app.app_context():
+            from backend.models import Complemento
+            comp = Complemento(nome="Paçoca", categoria="Farináceo")
+            db.session.add(comp)
+            db.session.commit()
+            cid = comp.id_complemento
+
+            r = client.delete(f"/api/complementos/{cid}")
+            assert r.status_code == 200
+            # Verificar soft delete
+            assert db.session.get(Complemento, cid).ativo is False
+
+    def test_vitrine_complementos_publico(self, unauthenticated_client, app):
+        with app.app_context():
+            from backend.models import Complemento
+            db.session.add(Complemento(
+                nome="Banana", categoria="Fruta", ativo=True
+            ))
+            db.session.add(Complemento(
+                nome="Inativo", categoria="X", ativo=False
+            ))
+            db.session.commit()
+            r = unauthenticated_client.get("/api/vitrine/complementos")
+            assert r.status_code == 200
+            nomes = [c["nome"] for c in r.get_json()]
+            assert "Banana" in nomes
+            assert "Inativo" not in nomes
+
+
+# ── Testes de Produto com Volume ─────────────────────────────────────
+
+
+class TestProdutoVolume:
+    """Verifica campo volume no CRUD de produtos."""
+
+    def test_criar_produto_com_volume(self, client, app):
+        with app.app_context():
+            r = client.post("/api/produtos", json={
+                "nome_produto": "Açaí Premium",
+                "preco": 19.90,
+                "categoria": "Açaí",
+                "volume": "10L",
+            })
+            assert r.status_code == 201
+            assert r.get_json()["volume"] == "10L"
+
+    def test_atualizar_volume(self, client, app):
+        with app.app_context():
+            p = Produto(
+                nome_produto="Sorvete X", preco=12.00,
+                categoria="Sorvete", volume="5L",
+                estoque_atual=1, estoque_minimo=1, ativo=True,
+            )
+            db.session.add(p)
+            db.session.commit()
+            pid = p.id_produto
+
+            r = client.put(f"/api/produtos/{pid}", json={
+                "volume": "10L"
+            })
+            assert r.status_code == 200
+            assert r.get_json()["volume"] == "10L"
+
+    def test_vitrine_retorna_volume(self, unauthenticated_client, app):
+        with app.app_context():
+            db.session.add(Produto(
+                nome_produto="Pitaya", preco=14.90,
+                categoria="Sorvete", volume="10L",
+                estoque_atual=1, estoque_minimo=1, ativo=True,
+            ))
+            db.session.commit()
+            r = unauthenticated_client.get("/api/vitrine/produtos")
+            assert r.status_code == 200
+            ps = r.get_json()
+            pitaya = [x for x in ps if x["nome_produto"] == "Pitaya"]
+            assert len(pitaya) == 1
+            assert pitaya[0]["volume"] == "10L"
+
+
+# ── Teste Seed de Produtos ───────────────────────────────────────────
+
+
+class TestSeedProdutos:
+    """Verifica se o seed de produtos funciona corretamente."""
+
+    def test_seed_cria_catalogo(self, app):
+        with app.app_context():
+            from backend.app import _seed_produtos
+            # Limpar tabela
+            Produto.query.delete()
+            db.session.commit()
+            _seed_produtos()
+            total = Produto.query.count()
+            assert total == 36  # 10 açaís + 26 sorvetes
+            acais = Produto.query.filter_by(categoria="Açaí").count()
+            assert acais == 10
+            sorvetes = Produto.query.filter_by(categoria="Sorvete").count()
+            assert sorvetes == 26
+
+    def test_seed_nao_duplica(self, app):
+        with app.app_context():
+            from backend.app import _seed_produtos
+            # Se já tem produto, seed não roda
+            db.session.add(Produto(
+                nome_produto="Teste", preco=1.0,
+                estoque_atual=0, estoque_minimo=0, ativo=True,
+            ))
+            db.session.commit()
+            _seed_produtos()  # não deve criar nada
+            assert Produto.query.count() == 1
+
+    def test_seed_estoque_minimo_tradicional(self, app):
+        with app.app_context():
+            from backend.app import _seed_produtos
+            Produto.query.delete()
+            db.session.commit()
+            _seed_produtos()
+            trad = Produto.query.filter_by(
+                nome_produto="Açaí Tradicional").first()
+            assert trad is not None
+            assert trad.estoque_minimo == 10
+            assert trad.volume == "10L"

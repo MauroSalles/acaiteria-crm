@@ -56,56 +56,103 @@
 
         <main class="content">
             <h1>🍨 Gerenciamento de Produtos</h1>
-            <p class="subtitle">Cadastre e visualize os produtos disponíveis na açaiteria</p>
+            <p class="subtitle">Catálogo completo — açaís, sorvetes, complementos e estoque</p>
+
+            <!-- Alerta de estoque baixo -->
+            <div class="card" id="card-estoque-alerta" style="display:none;border-left:4px solid #D32F2F;margin-bottom:1.5rem">
+                <h2 style="color:#D32F2F">⚠️ Alertas de Estoque</h2>
+                <p class="subtitle">Produtos abaixo do estoque mínimo — reposição necessária</p>
+                <div class="table-responsive">
+                    <table class="table" id="tabela-estoque-baixo">
+                        <thead><tr><th>Produto</th><th>Categoria</th><th>Volume</th><th>Atual</th><th>Mínimo</th><th>Ação</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Resumo rápido -->
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin-bottom:1.5rem" id="resumoProdutos">
+                <div class="card" style="text-align:center;padding:1rem"><span style="font-size:2rem">🍇</span><div id="countAcai" style="font-size:1.8rem;font-weight:800;color:#7B1FA2">-</div><small>Açaís</small></div>
+                <div class="card" style="text-align:center;padding:1rem"><span style="font-size:2rem">🍦</span><div id="countSorvete" style="font-size:1.8rem;font-weight:800;color:#7B1FA2">-</div><small>Sorvetes</small></div>
+                <div class="card" style="text-align:center;padding:1rem"><span style="font-size:2rem">📦</span><div id="countTotal" style="font-size:1.8rem;font-weight:800;color:#7B1FA2">-</div><small>Total Ativos</small></div>
+                <div class="card" style="text-align:center;padding:1rem"><span style="font-size:2rem">🔴</span><div id="countBaixo" style="font-size:1.8rem;font-weight:800;color:#D32F2F">-</div><small>Estoque Baixo</small></div>
+            </div>
 
             <!-- Formulário de cadastro -->
             <div class="card">
-                <h2>Cadastrar Novo Produto</h2>
+                <h2 id="formTitle">➕ Cadastrar Novo Produto</h2>
                 <form id="form-produto">
-                    <div class="form-group">
-                        <label for="nome_produto">Nome do Produto *</label>
-                        <input type="text" id="nome_produto" name="nome_produto" required
-                               placeholder="Ex: Açaí 500ml, Cupuaçu com granola...">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+                        <div class="form-group">
+                            <label for="nome_produto">Nome do Produto *</label>
+                            <input type="text" id="nome_produto" name="nome_produto" required
+                                   placeholder="Ex: Açaí Tradicional, Pistache...">
+                        </div>
+                        <div class="form-group">
+                            <label for="preco">Preço (R$) *</label>
+                            <input type="number" id="preco" name="preco" step="0.01" min="0.01" required
+                                   placeholder="Ex: 15.90">
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label for="preco">Preço (R$) *</label>
-                        <input type="number" id="preco" name="preco" step="0.01" min="0.01" required
-                               placeholder="Ex: 15.00">
+                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem">
+                        <div class="form-group">
+                            <label for="categoria">Categoria</label>
+                            <select id="categoria" name="categoria">
+                                <option value="">Selecionar...</option>
+                                <option value="Açaí">🍇 Açaí</option>
+                                <option value="Sorvete">🍦 Sorvete</option>
+                                <option value="Complemento">🥣 Complemento</option>
+                                <option value="Bebida">🥤 Bebida</option>
+                                <option value="Sobremesa">🍰 Sobremesa</option>
+                                <option value="Outro">📦 Outro</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="volume">Volume / Recipiente</label>
+                            <select id="volume" name="volume">
+                                <option value="">Selecionar...</option>
+                                <option value="5L">5L</option>
+                                <option value="10L">10L</option>
+                                <option value="1L">1L</option>
+                                <option value="500ml">500ml</option>
+                                <option value="Unidade">Unidade</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="descricao">Descrição</label>
+                            <input type="text" id="descricao" name="descricao"
+                                   placeholder="Descrição curta do produto">
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label for="categoria">Categoria</label>
-                        <select id="categoria" name="categoria">
-                            <option value="">Selecionar...</option>
-                            <option value="Açaí">Açaí</option>
-                            <option value="Complemento">Complemento</option>
-                            <option value="Bebida">Bebida</option>
-                            <option value="Sobremesa">Sobremesa</option>
-                            <option value="Outro">Outro</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="descricao">Descrição</label>
-                        <textarea id="descricao" name="descricao" rows="2"
-                                  placeholder="Descrição opcional do produto"></textarea>
-                    </div>
-                    <div style="display:flex;gap:1rem;flex-wrap:wrap;">
-                        <div class="form-group" style="flex:1;min-width:120px;">
+                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem">
+                        <div class="form-group">
                             <label for="estoque_atual">Estoque Atual</label>
                             <input type="number" id="estoque_atual" name="estoque_atual" min="0" value="0">
                         </div>
-                        <div class="form-group" style="flex:1;min-width:120px;">
+                        <div class="form-group">
                             <label for="estoque_minimo">Estoque Mínimo</label>
-                            <input type="number" id="estoque_minimo" name="estoque_minimo" min="0" value="5">
+                            <input type="number" id="estoque_minimo" name="estoque_minimo" min="0" value="1">
+                        </div>
+                        <div class="form-group" style="display:flex;align-items:flex-end">
+                            <button type="submit" class="btn btn-primary" style="width:100%" id="btnSubmit">Cadastrar Produto</button>
                         </div>
                     </div>
-                    <button type="submit" class="btn btn-primary">Cadastrar Produto</button>
+                    <button type="button" id="btnCancelarEdicao" class="btn btn-info" style="display:none;margin-top:.5rem" onclick="cancelarEdicao()">✖ Cancelar Edição</button>
                 </form>
             </div>
 
-            <!-- Lista de produtos -->
-            <div class="card" style="margin-top: 2rem;">
-                <h2>Produtos Cadastrados</h2>
-                <button id="btn-atualizar" class="btn btn-info" style="margin-bottom: 1rem;">🔄 Atualizar Lista</button>
+            <!-- Filtros -->
+            <div class="card" style="margin-top:1.5rem">
+                <div style="display:flex;gap:.8rem;align-items:center;flex-wrap:wrap;margin-bottom:1rem">
+                    <h2 style="margin:0">📋 Produtos Cadastrados</h2>
+                    <button id="btn-atualizar" class="btn btn-info" style="font-size:.8rem;padding:.4rem .8rem">🔄 Atualizar</button>
+                </div>
+                <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem" id="filtrosCategoria">
+                    <button class="btn btn-primary" style="font-size:.8rem;padding:.3rem .8rem" onclick="filtrarProdutos('')" data-filtro="">Todos</button>
+                    <button class="btn btn-info" style="font-size:.8rem;padding:.3rem .8rem" onclick="filtrarProdutos('Açaí')" data-filtro="Açaí">🍇 Açaí</button>
+                    <button class="btn btn-info" style="font-size:.8rem;padding:.3rem .8rem" onclick="filtrarProdutos('Sorvete')" data-filtro="Sorvete">🍦 Sorvete</button>
+                    <button class="btn btn-info" style="font-size:.8rem;padding:.3rem .8rem" onclick="filtrarProdutos('Complemento')" data-filtro="Complemento">🥣 Complemento</button>
+                </div>
 
                 <div class="table-responsive">
                     <table class="table" id="tabela-produtos">
@@ -113,14 +160,15 @@
                             <tr>
                                 <th>ID</th>
                                 <th>Nome</th>
-                                <th>Preço</th>
                                 <th>Categoria</th>
+                                <th>Volume</th>
+                                <th>Preço</th>
                                 <th>Estoque</th>
                                 <th>Ações</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr><td colspan="6" class="text-center">⏳ Carregando...</td></tr>
+                            <tr><td colspan="7" class="text-center">⏳ Carregando...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -137,13 +185,62 @@
     <script src="{{ url_for('static', filename='script.js') }}"></script>
     <script>
         let editandoId = null;
+        let todosProdutosAdmin = [];
+        let filtroAtual = '';
 
         document.addEventListener('DOMContentLoaded', () => {
             carregarProdutos();
+            carregarEstoqueBaixo();
         });
 
-        document.getElementById('btn-atualizar').addEventListener('click', carregarProdutos);
+        document.getElementById('btn-atualizar').addEventListener('click', () => {
+            carregarProdutos();
+            carregarEstoqueBaixo();
+        });
 
+        /* ========== FILTROS ========== */
+        function filtrarProdutos(cat) {
+            filtroAtual = cat;
+            document.querySelectorAll('#filtrosCategoria button').forEach(b => {
+                b.className = b.getAttribute('data-filtro') === cat
+                    ? 'btn btn-primary' : 'btn btn-info';
+                b.style.fontSize = '.8rem';
+                b.style.padding = '.3rem .8rem';
+            });
+            renderTabelaProdutos();
+        }
+
+        function renderTabelaProdutos() {
+            const lista = filtroAtual
+                ? todosProdutosAdmin.filter(p => (p.categoria || '').toLowerCase() === filtroAtual.toLowerCase())
+                : todosProdutosAdmin;
+            const tbody = document.querySelector('#tabela-produtos tbody');
+            if (!lista.length) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center">Nenhum produto encontrado</td></tr>';
+                return;
+            }
+            tbody.innerHTML = lista.map(p => {
+                const baixo = p.estoque_minimo > 0 && p.estoque_atual <= p.estoque_minimo;
+                const estLabel = baixo
+                    ? `<span style="color:#c62828;font-weight:bold">⚠️ ${p.estoque_atual}</span> / ${p.estoque_minimo}`
+                    : `<span style="color:#2E7D32;font-weight:600">${p.estoque_atual}</span> / ${p.estoque_minimo}`;
+                const catIcon = p.categoria === 'Açaí' ? '🍇' : p.categoria === 'Sorvete' ? '🍦' : '📦';
+                return `<tr${baixo ? ' style="background:#FFF3E0"' : ''}>
+                    <td>${p.id_produto}</td>
+                    <td><strong>${escapeHtml(p.nome_produto)}</strong></td>
+                    <td>${catIcon} ${escapeHtml(p.categoria || '-')}</td>
+                    <td>${escapeHtml(p.volume || '-')}</td>
+                    <td>${formatarMoeda(p.preco)}</td>
+                    <td>${estLabel}</td>
+                    <td style="white-space:nowrap">
+                        <button onclick="editarProduto(${p.id_produto})" class="btn btn-info" style="font-size:.75rem;padding:.35rem .5rem">✏️</button>
+                        <button onclick="deletarProduto(${p.id_produto}, '${escapeHtml(p.nome_produto).replace(/'/g, "\\'")}')" class="btn-remover" style="font-size:.75rem">🗑️</button>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        /* ========== FORMULÁRIO ========== */
         document.getElementById('form-produto').addEventListener('submit', async (e) => {
             e.preventDefault();
 
@@ -151,9 +248,10 @@
                 nome_produto: document.getElementById('nome_produto').value.trim(),
                 preco: parseFloat(document.getElementById('preco').value),
                 categoria: document.getElementById('categoria').value || undefined,
+                volume: document.getElementById('volume').value || undefined,
                 descricao: document.getElementById('descricao').value.trim() || undefined,
                 estoque_atual: parseInt(document.getElementById('estoque_atual').value) || 0,
-                estoque_minimo: parseInt(document.getElementById('estoque_minimo').value) || 5
+                estoque_minimo: parseInt(document.getElementById('estoque_minimo').value) || 1
             };
 
             if (!dados.nome_produto || !dados.preco) {
@@ -163,54 +261,60 @@
 
             try {
                 if (editandoId) {
-                    // Atualizar produto existente
                     await requisicao(`/api/produtos/${editandoId}`, {
                         method: 'PUT',
                         body: JSON.stringify(dados)
                     });
                     mostrarAlerta('Produto atualizado com sucesso!', 'sucesso');
-                    editandoId = null;
-                    document.querySelector('#form-produto button[type="submit"]').textContent = 'Cadastrar Produto';
+                    cancelarEdicao();
                 } else {
-                    // Criar novo
-                    const resp = await requisicao('/api/produtos', {
+                    await requisicao('/api/produtos', {
                         method: 'POST',
                         body: JSON.stringify(dados)
                     });
                     mostrarAlerta('Produto cadastrado com sucesso!', 'sucesso');
-                    // Inovação: emitir evento para outras abas/páginas
-                    try {
-                        localStorage.setItem('novo_produto', JSON.stringify({ nome: resp.nome_produto, id: resp.id_produto, ts: Date.now() }));
-                    } catch (e) {}
                 }
                 document.getElementById('form-produto').reset();
                 carregarProdutos();
+                carregarEstoqueBaixo();
             } catch (erro) {
                 mostrarAlerta(`Erro: ${erro.message}`, 'erro');
             }
         });
 
-        function editarProduto(id, nome, preco, categoria, descricao, estoqueAtual, estoqueMinimo) {
+        function editarProduto(id) {
+            const p = todosProdutosAdmin.find(x => x.id_produto === id);
+            if (!p) return;
             editandoId = id;
-            document.getElementById('nome_produto').value = nome;
-            document.getElementById('preco').value = preco;
-            document.getElementById('categoria').value = categoria || '';
-            document.getElementById('descricao').value = descricao || '';
-            document.getElementById('estoque_atual').value = estoqueAtual || 0;
-            document.getElementById('estoque_minimo').value = estoqueMinimo || 5;
-            document.querySelector('#form-produto button[type="submit"]').textContent = '💾 Salvar Alterações';
+            document.getElementById('nome_produto').value = p.nome_produto;
+            document.getElementById('preco').value = p.preco;
+            document.getElementById('categoria').value = p.categoria || '';
+            document.getElementById('volume').value = p.volume || '';
+            document.getElementById('descricao').value = p.descricao || '';
+            document.getElementById('estoque_atual').value = p.estoque_atual || 0;
+            document.getElementById('estoque_minimo').value = p.estoque_minimo || 1;
+            document.getElementById('btnSubmit').textContent = '💾 Salvar Alterações';
+            document.getElementById('formTitle').textContent = `✏️ Editando: ${p.nome_produto}`;
+            document.getElementById('btnCancelarEdicao').style.display = 'inline-block';
             window.scrollTo({ top: 0, behavior: 'smooth' });
-            mostrarAlerta(`Editando produto #${id}: ${nome}`, 'info');
+        }
+
+        function cancelarEdicao() {
+            editandoId = null;
+            document.getElementById('form-produto').reset();
+            document.getElementById('btnSubmit').textContent = 'Cadastrar Produto';
+            document.getElementById('formTitle').textContent = '➕ Cadastrar Novo Produto';
+            document.getElementById('btnCancelarEdicao').style.display = 'none';
         }
 
         async function deletarProduto(id, nome) {
-            if (!confirm(`Desativar o produto "${nome}"? Ele não aparecerá mais para novas vendas.`)) return;
-
+            if (!confirm(`Desativar "${nome}"? O produto não aparecerá para novas vendas.`)) return;
             try {
                 const res = await fetch(`/api/produtos/${id}`, { method: 'DELETE' });
                 if (res.ok) {
-                    mostrarAlerta(`Produto "${nome}" desativado com sucesso`, 'sucesso');
+                    mostrarAlerta(`"${nome}" desativado`, 'sucesso');
                     carregarProdutos();
+                    carregarEstoqueBaixo();
                 } else {
                     const err = await res.json();
                     mostrarAlerta(`Erro: ${err.erro}`, 'erro');
@@ -220,38 +324,49 @@
             }
         }
 
+        /* ========== CARREGAR PRODUTOS ========== */
         async function carregarProdutos() {
             const tbody = document.querySelector('#tabela-produtos tbody');
-            tbody.innerHTML = '<tr><td colspan="6" class="text-center">⏳ Carregando...</td></tr>';
-
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center">⏳ Carregando...</td></tr>';
             try {
-                const produtos = await requisicao('/api/produtos');
-                if (produtos.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="6" class="text-center">Nenhum produto cadastrado</td></tr>';
+                todosProdutosAdmin = await requisicao('/api/produtos');
+                // Contadores
+                const acais = todosProdutosAdmin.filter(p => (p.categoria || '').toLowerCase() === 'açaí');
+                const sorvetes = todosProdutosAdmin.filter(p => (p.categoria || '').toLowerCase() === 'sorvete');
+                document.getElementById('countAcai').textContent = acais.length;
+                document.getElementById('countSorvete').textContent = sorvetes.length;
+                document.getElementById('countTotal').textContent = todosProdutosAdmin.length;
+                renderTabelaProdutos();
+            } catch (erro) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center">Erro ao carregar produtos</td></tr>';
+                mostrarAlerta(`Erro: ${erro.message}`, 'erro');
+            }
+        }
+
+        /* ========== ESTOQUE BAIXO ========== */
+        async function carregarEstoqueBaixo() {
+            try {
+                const produtos = await requisicao('/api/produtos/estoque-baixo');
+                const card = document.getElementById('card-estoque-alerta');
+                document.getElementById('countBaixo').textContent = produtos.length;
+                if (!produtos.length) {
+                    card.style.display = 'none';
                     return;
                 }
-
-                tbody.innerHTML = produtos.map(p => {
-                    const baixo = p.estoque_atual <= p.estoque_minimo;
-                    const estoqueLabel = baixo
-                        ? `<span style="color:#c62828;font-weight:bold;">⚠️ ${p.estoque_atual}</span> / ${p.estoque_minimo}`
-                        : `${p.estoque_atual} / ${p.estoque_minimo}`;
-                    return `
-                    <tr>
-                        <td>${p.id_produto}</td>
-                        <td>${escapeHtml(p.nome_produto)}</td>
-                        <td>${formatarMoeda(p.preco)}</td>
+                card.style.display = 'block';
+                const tbody = document.querySelector('#tabela-estoque-baixo tbody');
+                tbody.innerHTML = produtos.map(p => `
+                    <tr style="background:#FFF3E0">
+                        <td><strong>${escapeHtml(p.nome_produto)}</strong></td>
                         <td>${escapeHtml(p.categoria || '-')}</td>
-                        <td>${estoqueLabel}</td>
-                        <td>
-                            <button onclick="editarProduto(${p.id_produto}, '${p.nome_produto.replace(/'/g, "\\'")}', ${p.preco}, '${(p.categoria || '').replace(/'/g, "\\'")}', '${(p.descricao || '').replace(/'/g, "\\'")}', ${p.estoque_atual}, ${p.estoque_minimo})" class="btn btn-info" style="font-size: 0.75rem; padding: 0.4rem 0.6rem;">✏️ Editar</button>
-                            <button onclick="deletarProduto(${p.id_produto}, '${p.nome_produto.replace(/'/g, "\\'")}')" class="btn-remover" style="font-size: 0.75rem;">🗑️</button>
-                        </td>
+                        <td>${escapeHtml(p.volume || '-')}</td>
+                        <td style="color:#c62828;font-weight:bold">${p.estoque_atual}</td>
+                        <td>${p.estoque_minimo}</td>
+                        <td><button onclick="editarProduto(${p.id_produto})" class="btn btn-info" style="font-size:.75rem;padding:.3rem .6rem">📦 Repor</button></td>
                     </tr>
-                `}).join('');
-            } catch (erro) {
-                tbody.innerHTML = '<tr><td colspan="6" class="text-center">Erro ao carregar produtos</td></tr>';
-                mostrarAlerta(`Erro: ${erro.message}`, 'erro');
+                `).join('');
+            } catch (e) {
+                console.error('Erro ao carregar estoque baixo:', e);
             }
         }
     </script>

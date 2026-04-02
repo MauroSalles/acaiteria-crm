@@ -35,6 +35,7 @@ from .models import (
     Usuario,
     Cliente,
     Produto,
+    Complemento,
     Venda,
     ItemVenda,
     Pagamento,
@@ -233,6 +234,7 @@ class ProdutoCreateSchema(BaseModel):
     categoria: str | None = None
     descricao: str | None = None
     preco: float
+    volume: str | None = None
     estoque_atual: int | None = 0
     estoque_minimo: int | None = 0
 
@@ -907,6 +909,7 @@ def criar_produto():
             categoria=dados.get("categoria"),
             descricao=dados.get("descricao"),
             preco=Decimal(str(dados.get("preco"))),
+            volume=dados.get("volume"),
             estoque_atual=(
                 int(dados.get("estoque_atual", 0))
                 if dados.get("estoque_atual") is not None
@@ -973,6 +976,8 @@ def atualizar_produto(id_produto):
             produto.descricao = dados["descricao"]
         if "preco" in dados and dados["preco"] is not None:
             produto.preco = Decimal(str(dados["preco"]))
+        if "volume" in dados:
+            produto.volume = dados["volume"]
         if "ativo" in dados:
             produto.ativo = bool(dados["ativo"])
         if "estoque_atual" in dados and dados["estoque_atual"] is not None:
@@ -2419,6 +2424,7 @@ def vitrine_produtos():
                 "categoria": p.categoria,
                 "descricao": p.descricao,
                 "preco": float(p.preco),
+                "volume": p.volume,
             }
             for p in produtos
         ])
@@ -2439,6 +2445,131 @@ def vitrine_categorias():
             .all()
         )
         return jsonify([c[0] for c in cats if c[0]])
+    except Exception as e:
+        return _erro_interno(e)
+
+
+# =============================================================================
+# ROTAS — COMPLEMENTOS / TOPPINGS (Admin + Vitrine)
+# =============================================================================
+
+
+@app.route("/api/complementos", methods=["GET"])
+@limiter.limit("120 per minute")
+@api_login_required
+def listar_complementos():
+    """Listar complementos (admin)."""
+    try:
+        incluir_inativos = (
+            request.args.get("incluir_inativos", "").lower() == "true"
+        )
+        query = (
+            Complemento.query
+            if incluir_inativos
+            else Complemento.query.filter_by(ativo=True)
+        )
+        comps = query.order_by(Complemento.categoria, Complemento.nome).all()
+        return jsonify([c.to_dict() for c in comps])
+    except Exception as e:
+        return _erro_interno(e)
+
+
+@app.route("/api/complementos", methods=["POST"])
+@limiter.limit("30 per minute")
+@api_login_required
+def criar_complemento():
+    """Criar novo complemento."""
+    try:
+        dados = request.get_json(silent=True) or {}
+        nome = (dados.get("nome") or "").strip()
+        if not nome:
+            return jsonify({"erro": "Nome é obrigatório"}), 400
+
+        comp = Complemento(
+            nome=nome,
+            categoria=dados.get("categoria"),
+            unidade_medida=dados.get("unidade_medida"),
+            preco_adicional=Decimal(str(dados.get("preco_adicional", 0))),
+            ativo=True,
+        )
+        db.session.add(comp)
+        db.session.commit()
+        registrar_log(
+            "criar", "complemento", comp.id_complemento,
+            f"Complemento criado: {comp.nome}",
+        )
+        return jsonify(comp.to_dict()), 201
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
+@app.route("/api/complementos/<int:cid>", methods=["PUT"])
+@limiter.limit("30 per minute")
+@api_login_required
+def atualizar_complemento(cid):
+    """Atualizar complemento existente."""
+    try:
+        comp = db.session.get(Complemento, cid)
+        if not comp:
+            return jsonify({"erro": "Complemento não encontrado"}), 404
+        dados = request.get_json(silent=True) or {}
+        if "nome" in dados and dados["nome"]:
+            comp.nome = dados["nome"].strip()
+        if "categoria" in dados:
+            comp.categoria = dados["categoria"]
+        if "unidade_medida" in dados:
+            comp.unidade_medida = dados["unidade_medida"]
+        if "preco_adicional" in dados:
+            comp.preco_adicional = Decimal(
+                str(dados["preco_adicional"])
+            )
+        if "ativo" in dados:
+            comp.ativo = bool(dados["ativo"])
+        db.session.commit()
+        registrar_log(
+            "editar", "complemento", cid,
+            f"Complemento editado: {comp.nome}",
+        )
+        return jsonify(comp.to_dict())
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
+@app.route("/api/complementos/<int:cid>", methods=["DELETE"])
+@limiter.limit("30 per minute")
+@api_login_required
+def deletar_complemento(cid):
+    """Desativar complemento (soft delete)."""
+    try:
+        comp = db.session.get(Complemento, cid)
+        if not comp:
+            return jsonify({"erro": "Complemento não encontrado"}), 404
+        comp.ativo = False
+        db.session.commit()
+        registrar_log(
+            "excluir", "complemento", cid,
+            f"Complemento desativado: {comp.nome}",
+        )
+        return jsonify({"mensagem": "Complemento desativado"})
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
+@app.route("/api/vitrine/complementos", methods=["GET"])
+@limiter.limit("60 per minute")
+def vitrine_complementos():
+    """API pública — lista complementos ativos para a vitrine."""
+    try:
+        comps = (
+            Complemento.query
+            .filter_by(ativo=True)
+            .order_by(Complemento.categoria, Complemento.nome)
+            .all()
+        )
+        return jsonify([c.to_dict() for c in comps])
     except Exception as e:
         return _erro_interno(e)
 
@@ -4346,7 +4477,7 @@ def erro_interno(erro):
 
 
 # =============================================================================
-# SEED — Cria admin padrão se não existir nenhum usuário
+# SEED — Cria admin padrão e produtos iniciais se não existirem
 # =============================================================================
 
 
@@ -4364,6 +4495,108 @@ def _seed_admin():
         logger.info("Admin padrão criado: %s", admin.email)
 
 
+def _seed_produtos():
+    """Semeia catálogo real Combina Açaí se a tabela estiver vazia."""
+    if Produto.query.first() is not None:
+        return
+
+    _acais = [
+        ("Açaí Tradicional", "10L", 15.90,
+         "Açaí puro 100% natural do Pará", 10, 10),
+        ("Açaí Grego", "10L", 17.90,
+         "Açaí cremoso estilo grego", 6, 6),
+        ("Açaí com Morango", "10L", 17.90,
+         "Açaí com pedaços de morango natural", 1, 1),
+        ("Açaí Black", "10L", 19.90,
+         "Açaí premium extra-concentrado", 1, 1),
+        ("Açaí Zero", "10L", 18.90,
+         "Açaí sem adição de açúcar", 1, 1),
+        ("Açaí Trufado", "10L", 19.90,
+         "Açaí com sabor trufa de chocolate", 1, 1),
+        ("Açaí Ninho", "10L", 18.90,
+         "Açaí com leite ninho cremoso", 1, 1),
+        ("Açaí Paçoca", "10L", 18.90,
+         "Açaí com paçoca triturada", 1, 1),
+        ("Açaí Cupuaçu", "5L", 17.90,
+         "Açaí com cupuaçu da Amazônia", 1, 1),
+        ("Açaí Banana", "5L", 16.90,
+         "Açaí com banana natural", 1, 1),
+    ]
+
+    _sorvetes = [
+        ("Menta com Chocolate", "10L", 12.90,
+         "Refrescante menta com lascas de chocolate", 1, 1),
+        ("Chocolate Belga", "10L", 14.90,
+         "Chocolate belga premium importado", 1, 1),
+        ("Pistache", "10L", 15.90,
+         "Pistache artesanal cremoso", 1, 1),
+        ("Côco", "10L", 12.90,
+         "Côco natural ralado", 1, 1),
+        ("Cappuccino", "10L", 13.90,
+         "Sabor cappuccino com toque de canela", 1, 1),
+        ("Doce de Leite", "10L", 12.90,
+         "Doce de leite artesanal mineiro", 1, 1),
+        ("Grego Maracujá", "10L", 14.90,
+         "Sorvete grego com calda de maracujá", 1, 1),
+        ("Grego Cereja", "10L", 14.90,
+         "Sorvete grego com cerejas", 1, 1),
+        ("Unicórnio", "10L", 13.90,
+         "Mix colorido de sabores frutados", 1, 1),
+        ("Pitaya", "10L", 14.90,
+         "Pitaya rosa natural e refrescante", 1, 1),
+        ("Limão", "10L", 11.90,
+         "Limão siciliano refrescante", 1, 1),
+        ("Morango", "10L", 12.90,
+         "Morango com pedaços de fruta", 1, 1),
+        ("Flocos", "10L", 12.90,
+         "Creme com flocos de chocolate", 1, 1),
+        ("Manga", "5L", 12.90,
+         "Manga madura tropical", 1, 1),
+        ("Abacaxi", "5L", 11.90,
+         "Abacaxi refrescante", 1, 1),
+        ("Banana Caramelizada", "5L", 12.90,
+         "Banana com calda de caramelo", 1, 1),
+        ("Paçoca", "5L", 12.90,
+         "Paçoca cremosa artesanal", 1, 1),
+        ("Chocolate Branco", "5L", 12.90,
+         "Chocolate branco aveludado", 1, 1),
+        ("Baunilha", "5L", 11.90,
+         "Baunilha clássica de Madagascar", 1, 1),
+        ("Laranja", "5L", 11.90,
+         "Laranja cítrica natural", 1, 1),
+        ("Café", "5L", 12.90,
+         "Café expresso intenso", 1, 1),
+        ("Goiaba", "5L", 11.90,
+         "Goiaba vermelha cascuda", 1, 1),
+        ("Mamão", "5L", 11.90,
+         "Mamão papaia cremoso", 1, 1),
+        ("Algodão Doce", "5L", 12.90,
+         "Sabor algodão doce divertido", 1, 1),
+        ("Creme de Cupuaçu", "5L", 13.90,
+         "Cupuaçu amazônico cremoso", 1, 1),
+        ("Milho Verde", "5L", 12.90,
+         "Milho verde no estilo junino", 1, 1),
+    ]
+
+    for nome, vol, preco, desc, est_at, est_min in _acais:
+        db.session.add(Produto(
+            nome_produto=nome, categoria="Açaí", volume=vol,
+            preco=Decimal(str(preco)), descricao=desc,
+            estoque_atual=est_at, estoque_minimo=est_min,
+        ))
+
+    for nome, vol, preco, desc, est_at, est_min in _sorvetes:
+        db.session.add(Produto(
+            nome_produto=nome, categoria="Sorvete", volume=vol,
+            preco=Decimal(str(preco)), descricao=desc,
+            estoque_atual=est_at, estoque_minimo=est_min,
+        ))
+
+    db.session.commit()
+    logger.info("Catálogo semeado: %d açaís + %d sorvetes",
+                len(_acais), len(_sorvetes))
+
+
 # =============================================================================
 # CRIAR TABELAS E SEED
 # (usado pelo gunicorn na nuvem — tabelas já criadas acima)
@@ -4371,6 +4604,7 @@ def _seed_admin():
 
 with app.app_context():
     _seed_admin()
+    _seed_produtos()
 
 
 if __name__ == "__main__":
