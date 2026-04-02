@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meu Painel — Combina Açaí</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
+    <meta name="theme-color" content="#7B1FA2">
+    <style>
+        body { background: #FAFAFA; font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; }
+        .painel-nav {
+            background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.08); padding: 0.8rem 1.5rem;
+            display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100;
+        }
+        .painel-nav a { color: #7B1FA2; text-decoration: none; font-weight: 700; font-size: 1.1rem; }
+        .painel-nav .nav-right { display: flex; gap: 1rem; align-items: center; }
+        .painel-nav .nav-right a { font-size: 0.9rem; color: #666; font-weight: 600; padding: 0.4rem 0.8rem; border-radius: 8px; }
+        .painel-nav .nav-right a:hover { background: #F3E5F5; color: #7B1FA2; }
+        .painel-nav .btn-logout { color: #D32F2F !important; }
+
+        .painel { max-width: 800px; margin: 2rem auto; padding: 0 1.5rem; }
+
+        /* Saudação */
+        .welcome-card {
+            background: linear-gradient(135deg, #7B1FA2 0%, #9C27B0 100%);
+            color: #fff; border-radius: 20px; padding: 2rem; margin-bottom: 1.5rem;
+            display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;
+        }
+        .welcome-card h1 { font-size: 1.5rem; margin-bottom: 0.3rem; }
+        .welcome-card p { opacity: 0.9; font-size: 0.95rem; }
+        .points-badge {
+            background: rgba(255,255,255,0.2); border-radius: 16px; padding: 1.2rem 2rem;
+            text-align: center; backdrop-filter: blur(10px);
+        }
+        .points-badge .points-number { font-size: 2.5rem; font-weight: 800; display: block; }
+        .points-badge .points-label { font-size: 0.85rem; opacity: 0.85; }
+
+        /* Info cards */
+        .info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+        .info-card {
+            background: #fff; border-radius: 16px; padding: 1.5rem; text-align: center;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+        }
+        .info-card .icon { font-size: 1.8rem; margin-bottom: 0.5rem; display: block; }
+        .info-card .value { font-size: 1.5rem; font-weight: 800; color: #7B1FA2; display: block; }
+        .info-card .label { font-size: 0.82rem; color: #999; }
+
+        /* Histórico */
+        .section-title { font-size: 1.3rem; color: #333; margin-bottom: 1rem; font-weight: 700; }
+        .vendas-list { display: flex; flex-direction: column; gap: 0.8rem; }
+        .venda-card {
+            background: #fff; border-radius: 14px; padding: 1.2rem 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05); display: flex;
+            justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.8rem;
+        }
+        .venda-data { font-size: 0.88rem; color: #999; }
+        .venda-itens { font-size: 0.92rem; color: #555; flex: 1; min-width: 200px; }
+        .venda-valor { font-size: 1.15rem; font-weight: 700; color: #4CAF50; }
+        .venda-status { font-size: 0.78rem; padding: 0.25rem 0.7rem; border-radius: 15px; font-weight: 600; }
+        .status-concluido { background: #E8F5E9; color: #2E7D32; }
+        .status-pendente { background: #FFF3E0; color: #E65100; }
+        .empty-state { text-align: center; padding: 3rem; color: #999; }
+        .empty-state .emoji { font-size: 3rem; margin-bottom: 0.5rem; display: block; }
+        .empty-state a { color: #7B1FA2; font-weight: 600; text-decoration: none; }
+
+        /* Nível fidelidade */
+        .level-bar { background: #eee; border-radius: 10px; height: 12px; overflow: hidden; margin: 0.5rem 0; }
+        .level-fill { height: 100%; border-radius: 10px; background: linear-gradient(90deg, #7B1FA2, #CE93D8); transition: width 0.5s; }
+        .level-info { display: flex; justify-content: space-between; font-size: 0.82rem; color: #999; }
+
+        @media (max-width: 600px) {
+            .welcome-card { flex-direction: column; text-align: center; }
+            .painel-nav .nav-right a span { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Navbar -->
+    <nav class="painel-nav">
+        <a href="/vitrine">🍇 Combina Açaí</a>
+        <div class="nav-right">
+            <a href="/vitrine">🏪 Vitrine</a>
+            <a href="/cliente/logout" class="btn-logout">Sair ↗</a>
+        </div>
+    </nav>
+
+    <div class="painel">
+        <!-- Saudação + Pontos -->
+        <div class="welcome-card">
+            <div>
+                <h1>Olá, {{ cliente.nome.split()[0] }}! 👋</h1>
+                <p>Aqui você acompanha seus pontos e histórico de compras</p>
+            </div>
+            <div class="points-badge">
+                <span class="points-number">{{ cliente.pontos_fidelidade or 0 }}</span>
+                <span class="points-label">pontos</span>
+            </div>
+        </div>
+
+        <!-- Nível de fidelidade -->
+        {% set pontos = cliente.pontos_fidelidade or 0 %}
+        {% if pontos < 50 %}
+            {% set nivel = "Bronze" %}
+            {% set proximo = 50 %}
+            {% set progresso = (pontos / 50 * 100)|int %}
+        {% elif pontos < 150 %}
+            {% set nivel = "Prata" %}
+            {% set proximo = 150 %}
+            {% set progresso = (pontos / 150 * 100)|int %}
+        {% elif pontos < 300 %}
+            {% set nivel = "Ouro" %}
+            {% set proximo = 300 %}
+            {% set progresso = (pontos / 300 * 100)|int %}
+        {% else %}
+            {% set nivel = "Diamante" %}
+            {% set proximo = 0 %}
+            {% set progresso = 100 %}
+        {% endif %}
+
+        <div class="info-grid">
+            <div class="info-card">
+                <span class="icon">🏅</span>
+                <span class="value">{{ nivel }}</span>
+                <span class="label">Nível atual</span>
+                {% if proximo > 0 %}
+                    <div class="level-bar"><div class="level-fill" style="width:{{ progresso }}%"></div></div>
+                    <div class="level-info"><span>{{ pontos }} pts</span><span>{{ proximo }} pts</span></div>
+                {% endif %}
+            </div>
+            <div class="info-card">
+                <span class="icon">🛒</span>
+                <span class="value">{{ vendas|length }}</span>
+                <span class="label">Compras realizadas</span>
+            </div>
+            <div class="info-card">
+                <span class="icon">💰</span>
+                <span class="value">R$ {{ "%.2f"|format(vendas|sum(attribute='valor_total')|float) }}</span>
+                <span class="label">Total gasto</span>
+            </div>
+        </div>
+
+        <!-- Histórico de Compras -->
+        <h2 class="section-title">📋 Histórico de Compras</h2>
+
+        {% if vendas %}
+            <div class="vendas-list">
+            {% for v in vendas %}
+                <div class="venda-card">
+                    <div>
+                        <div class="venda-data">{{ v.data_venda.strftime('%d/%m/%Y %H:%M') if v.data_venda else '-' }}</div>
+                        <div class="venda-itens">
+                            {% for item in v.itens %}
+                                {{ item.quantidade }}x {{ item.produto.nome_produto if item.produto else 'Produto' }}{% if not loop.last %}, {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div class="venda-valor">R$ {{ "%.2f"|format(v.valor_total|float) }}</div>
+                        <span class="venda-status {{ 'status-concluido' if v.status_pagamento == 'Concluído' else 'status-pendente' }}">
+                            {{ v.status_pagamento or 'Pendente' }}
+                        </span>
+                    </div>
+                </div>
+            {% endfor %}
+            </div>
+        {% else %}
+            <div class="empty-state">
+                <span class="emoji">🛍️</span>
+                <p>Nenhuma compra registrada ainda.</p>
+                <p>Visite nossa loja e comece a acumular pontos!</p>
+                <a href="/vitrine">← Ver cardápio</a>
+            </div>
+        {% endif %}
+    </div>
+</body>
+</html>

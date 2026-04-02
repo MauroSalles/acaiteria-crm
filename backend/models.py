@@ -64,6 +64,7 @@ class Cliente(db.Model):
     nome = db.Column(db.String(150), nullable=False)
     telefone = db.Column(db.String(20))
     email = db.Column(db.String(100))
+    senha_hash = db.Column(db.String(256), nullable=True)
     data_cadastro = db.Column(db.DateTime, default=_utcnow)
     observacoes = db.Column(db.Text)
     consentimento_lgpd = db.Column(db.Boolean, default=False)
@@ -80,6 +81,14 @@ class Cliente(db.Model):
     historico_consentimento = db.relationship(
         "ConsentimentoHistorico", backref="cliente_hist", lazy=True
     )
+
+    def set_senha(self, senha):
+        self.senha_hash = generate_password_hash(senha)
+
+    def verificar_senha(self, senha):
+        if not self.senha_hash:
+            return False
+        return check_password_hash(self.senha_hash, senha)
 
     def __repr__(self):
         return f"<Cliente {self.nome}>"

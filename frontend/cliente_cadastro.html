@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cadastro — Combina Açaí</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
+    <meta name="theme-color" content="#7B1FA2">
+    <style>
+        body { background: linear-gradient(135deg, #F3E5F5 0%, #EDE7F6 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; font-family: 'Segoe UI', system-ui, sans-serif; padding: 1rem; }
+        .auth-card { background: #fff; border-radius: 20px; box-shadow: 0 8px 32px rgba(123,31,162,0.12); padding: 2.5rem 2rem; max-width: 440px; width: 100%; text-align: center; }
+        .auth-card .logo { font-size: 3.5rem; margin-bottom: 0.5rem; display: block; }
+        .auth-card h1 { color: #7B1FA2; font-size: 1.8rem; margin-bottom: 0.3rem; }
+        .auth-card .subtitle { color: #666; margin-bottom: 1.5rem; font-size: 0.95rem; }
+        .auth-label { text-align: left; display: block; margin-bottom: 0.3rem; font-weight: 600; color: #444; font-size: 0.95rem; }
+        .auth-input, .auth-textarea {
+            font-size: 1rem; padding: 0.85rem 1rem; border: 2px solid #ddd; border-radius: 12px;
+            width: 100%; margin-bottom: 1rem; box-sizing: border-box; transition: border-color 0.2s;
+            font-family: inherit;
+        }
+        .auth-input:focus, .auth-textarea:focus { outline: none; border-color: #7B1FA2; box-shadow: 0 0 0 3px rgba(123,31,162,0.12); }
+        .auth-textarea { resize: vertical; min-height: 60px; }
+        .auth-btn {
+            width: 100%; padding: 0.9rem; background: #4CAF50; color: #fff; border: none;
+            border-radius: 50px; font-size: 1.05rem; font-weight: 700; cursor: pointer;
+            transition: background 0.2s, transform 0.1s; margin-top: 0.5rem;
+        }
+        .auth-btn:hover { background: #388E3C; transform: translateY(-1px); }
+        .auth-erro { color: #D32F2F; background: #FFEBEE; padding: 0.7rem; border-radius: 10px; margin-bottom: 1rem; font-size: 0.9rem; text-align: left; }
+        .auth-erro ul { margin: 0; padding-left: 1.2rem; }
+        .auth-links { margin-top: 1.5rem; font-size: 0.9rem; color: #666; }
+        .auth-links a { color: #7B1FA2; text-decoration: none; font-weight: 600; }
+        .auth-links a:hover { text-decoration: underline; }
+        .lgpd-box { background: #FFFDE7; border: 2px solid #FFD54F; border-radius: 12px; padding: 1rem; margin: 1rem 0; text-align: left; font-size: 0.9rem; display: flex; gap: 0.8rem; align-items: flex-start; }
+        .lgpd-box input { margin-top: 0.2rem; transform: scale(1.2); }
+        .lgpd-box a { color: #7B1FA2; font-weight: 600; }
+        .bonus-badge { display: inline-block; background: linear-gradient(135deg, #4CAF50, #66BB6A); color: #fff; padding: 0.4rem 1rem; border-radius: 20px; font-weight: 700; font-size: 0.85rem; margin-bottom: 1rem; }
+        .divider { display: flex; align-items: center; gap: 1rem; margin: 1.2rem 0; color: #ccc; font-size: 0.85rem; }
+        .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: #eee; }
+        .password-hint { text-align: left; font-size: 0.8rem; color: #999; margin-top: -0.7rem; margin-bottom: 1rem; }
+    </style>
+</head>
+<body>
+    <div class="auth-card">
+        <span class="logo">🍇</span>
+        <h1>Crie sua conta</h1>
+        <p class="subtitle">Ganhe pontos de fidelidade!</p>
+        <span class="bonus-badge">🎁 +10 pontos de boas-vindas</span>
+
+        {% if erros %}
+            <div class="auth-erro">
+                <ul>
+                {% for e in erros %}
+                    <li>{{ e }}</li>
+                {% endfor %}
+                </ul>
+            </div>
+        {% endif %}
+
+        <form method="POST" action="/cliente/cadastro">
+            <label class="auth-label">📝 Seu nome *</label>
+            <input type="text" name="nome" class="auth-input" placeholder="Nome completo" required minlength="2" value="{{ dados.get('nome', '') }}">
+
+            <label class="auth-label">📱 WhatsApp</label>
+            <input type="tel" name="telefone" class="auth-input" placeholder="(12) 99999-9999" value="{{ dados.get('telefone', '') }}" id="telefone">
+
+            <label class="auth-label">📧 E-mail</label>
+            <input type="email" name="email" class="auth-input" placeholder="seu@email.com" value="{{ dados.get('email', '') }}">
+
+            <label class="auth-label">🔒 Crie uma senha *</label>
+            <input type="password" name="senha" class="auth-input" placeholder="Mínimo 6 caracteres" required minlength="6" autocomplete="new-password">
+            <p class="password-hint">Use ao menos 6 caracteres. Você usará essa senha para acessar seus pontos e histórico.</p>
+
+            <label class="auth-label">🍨 Preferências (opcional)</label>
+            <textarea name="observacoes" class="auth-textarea" placeholder="Ex: Gosto de açaí com granola e morango...">{{ dados.get('observacoes', '') }}</textarea>
+
+            <div class="lgpd-box">
+                <input type="checkbox" name="consentimento_lgpd" id="lgpd" required>
+                <label for="lgpd">Li e aceito a <a href="/politica-privacidade" target="_blank">Política de Privacidade</a> e autorizo o uso dos meus dados conforme a LGPD.</label>
+            </div>
+
+            <button type="submit" class="auth-btn">✅ Cadastrar e Ganhar Pontos</button>
+        </form>
+
+        <div class="divider">ou</div>
+
+        <div class="auth-links">
+            <p>Já tem conta? <a href="/cliente/login">Faça login</a></p>
+            <p style="margin-top:0.8rem;"><a href="/vitrine">← Voltar à vitrine</a></p>
+        </div>
+    </div>
+
+    <script>
+        // Máscara de telefone
+        const tel = document.getElementById('telefone');
+        if (tel) {
+            tel.addEventListener('input', function() {
+                let v = this.value.replace(/\D/g, '');
+                if (v.length > 11) v = v.slice(0, 11);
+                if (v.length > 6) v = '(' + v.slice(0,2) + ') ' + v.slice(2,7) + '-' + v.slice(7);
+                else if (v.length > 2) v = '(' + v.slice(0,2) + ') ' + v.slice(2);
+                else if (v.length > 0) v = '(' + v;
+                this.value = v;
+            });
+        }
+    </script>
+</body>
+</html>

@@ -136,6 +136,7 @@ with app.app_context():
         ("produto", "estoque_atual", "INTEGER DEFAULT 0"),
         ("produto", "estoque_minimo", "INTEGER DEFAULT 0"),
         ("cliente", "pontos_fidelidade", "INTEGER DEFAULT 0"),
+        ("cliente", "senha_hash", "VARCHAR(256)"),
     ]
     with db.engine.connect() as conn:
         for tabela, coluna, tipo in _migracoes:
@@ -2344,6 +2345,11 @@ def totem_cadastrar_cliente():
             ativo=True,
         )
 
+        # Senha opcional no totem (cliente pode criar depois)
+        senha = (dados.get("senha") or "").strip()
+        if senha and len(senha) >= 6:
+            cliente.set_senha(senha)
+
         db.session.add(cliente)
         db.session.flush()
 
@@ -2383,6 +2389,255 @@ def totem_cadastrar_cliente():
     except Exception:
         db.session.rollback()
         return jsonify({"erro": "Erro interno. Tente novamente."}), 500
+
+
+# =============================================================================
+# VITRINE PÚBLICA — Visão do cliente (sem login obrigatório)
+# =============================================================================
+
+
+@app.route("/vitrine")
+def vitrine():
+    """Página pública — vitrine da açaiteria para clientes."""
+    return render_template("vitrine.html")
+
+
+@app.route("/api/vitrine/produtos", methods=["GET"])
+@limiter.limit("60 per minute")
+def vitrine_produtos():
+    """API pública — lista produtos ativos para a vitrine."""
+    try:
+        categoria = request.args.get("categoria", "").strip()
+        query = Produto.query.filter_by(ativo=True)
+        if categoria:
+            query = query.filter(Produto.categoria.ilike(f"%{categoria}%"))
+        produtos = query.order_by(Produto.nome_produto).all()
+        return jsonify([
+            {
+                "id_produto": p.id_produto,
+                "nome_produto": p.nome_produto,
+                "categoria": p.categoria,
+                "descricao": p.descricao,
+                "preco": float(p.preco),
+            }
+            for p in produtos
+        ])
+    except Exception as e:
+        return _erro_interno(e)
+
+
+@app.route("/api/vitrine/categorias", methods=["GET"])
+@limiter.limit("60 per minute")
+def vitrine_categorias():
+    """API pública — lista categorias disponíveis."""
+    try:
+        cats = (
+            db.session.query(Produto.categoria)
+            .filter(Produto.ativo.is_(True), Produto.categoria.isnot(None))
+            .distinct()
+            .order_by(Produto.categoria)
+            .all()
+        )
+        return jsonify([c[0] for c in cats if c[0]])
+    except Exception as e:
+        return _erro_interno(e)
+
+
+# =============================================================================
+# AUTENTICAÇÃO DE CLIENTES — Login / Cadastro com senha
+# =============================================================================
+
+
+@app.route("/cliente/login", methods=["GET", "POST"])
+@limiter.limit("5 per minute", methods=["POST"])
+def cliente_login():
+    """Login do cliente (email ou telefone + senha)."""
+    if request.method == "POST":
+        identificador = (
+            request.form.get("identificador", "").strip().lower()
+        )
+        senha = request.form.get("senha", "")
+
+        if not identificador or not senha:
+            return render_template(
+                "cliente_login.html", erro="Preencha todos os campos."
+            )
+
+        # Buscar por email ou telefone
+        telefone_limpo = _re.sub(r"\D", "", identificador)
+        cliente = Cliente.query.filter(
+            Cliente.ativo.is_(True),
+            db.or_(
+                db.func.lower(Cliente.email) == identificador,
+                db.func.replace(
+                    db.func.replace(
+                        db.func.replace(Cliente.telefone, "(", ""),
+                        ")", "",
+                    ),
+                    "-", "",
+                ).like(f"%{telefone_limpo}%")
+                if telefone_limpo and len(telefone_limpo) >= 8
+                else db.func.lower(Cliente.email) == identificador,
+            ),
+        ).first()
+
+        if cliente and cliente.verificar_senha(senha):
+            session.permanent = True
+            session["cliente_id"] = cliente.id_cliente
+            session["cliente_nome"] = cliente.nome
+            session["tipo_usuario"] = "cliente"
+            return redirect("/cliente/painel")
+
+        logger.warning(
+            "Login cliente falhou: %s de %s",
+            identificador,
+            request.remote_addr,
+        )
+        return render_template(
+            "cliente_login.html", erro="Credenciais incorretas."
+        )
+
+    return render_template("cliente_login.html")
+
+
+@app.route("/cliente/cadastro", methods=["GET", "POST"])
+@limiter.limit("5 per minute", methods=["POST"])
+def cliente_cadastro():
+    """Cadastro do cliente com senha."""
+    if request.method == "POST":
+        dados = request.form
+        nome = (dados.get("nome") or "").strip()
+        telefone = (dados.get("telefone") or "").strip() or None
+        email = (dados.get("email") or "").strip().lower() or None
+        senha = dados.get("senha", "")
+        observacoes = (dados.get("observacoes") or "").strip() or None
+        consentimento = dados.get("consentimento_lgpd") == "on"
+
+        erros = []
+        if not nome or len(nome) < 2:
+            erros.append("Nome deve ter ao menos 2 caracteres.")
+        if not senha or len(senha) < 6:
+            erros.append("Senha deve ter ao menos 6 caracteres.")
+        if not consentimento:
+            erros.append("Consentimento LGPD é obrigatório.")
+        if not email and not telefone:
+            erros.append(
+                "Informe ao menos email ou telefone para login."
+            )
+        if email and "@" not in email:
+            erros.append("E-mail inválido.")
+
+        # Verificar duplicatas
+        if not erros and telefone:
+            existente = Cliente.query.filter_by(
+                telefone=telefone, ativo=True
+            ).first()
+            if existente:
+                erros.append("Este telefone já está cadastrado.")
+        if not erros and email:
+            existente = Cliente.query.filter_by(
+                email=email, ativo=True
+            ).first()
+            if existente:
+                erros.append("Este e-mail já está cadastrado.")
+
+        if erros:
+            return render_template(
+                "cliente_cadastro.html", erros=erros, dados=dados
+            )
+
+        try:
+            cliente = Cliente(
+                nome=nome,
+                telefone=telefone,
+                email=email,
+                observacoes=observacoes,
+                consentimento_lgpd=True,
+                data_consentimento=datetime.now(timezone.utc),
+                consentimento_versao="v1.0",
+                ativo=True,
+            )
+            cliente.set_senha(senha)
+            db.session.add(cliente)
+            db.session.flush()
+
+            entrada = ConsentimentoHistorico(
+                id_cliente=cliente.id_cliente,
+                acao="concedeu",
+                versao_politica="v1.0",
+                ip_address=request.remote_addr,
+                user_agent=request.headers.get(
+                    "User-Agent", ""
+                )[:255],
+            )
+            db.session.add(entrada)
+
+            cliente.pontos_fidelidade = 10
+            db.session.commit()
+            registrar_log(
+                "criar",
+                "cliente",
+                cliente.id_cliente,
+                f"Auto-cadastro com senha: {cliente.nome}",
+            )
+
+            # Login automático após cadastro
+            session.permanent = True
+            session["cliente_id"] = cliente.id_cliente
+            session["cliente_nome"] = cliente.nome
+            session["tipo_usuario"] = "cliente"
+            return redirect("/cliente/painel")
+
+        except Exception:
+            db.session.rollback()
+            return render_template(
+                "cliente_cadastro.html",
+                erros=["Erro interno. Tente novamente."],
+                dados=dados,
+            )
+
+    return render_template("cliente_cadastro.html", erros=[], dados={})
+
+
+def cliente_login_required(f):
+    """Decorator que exige login do cliente."""
+
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("cliente_id"):
+            return redirect("/cliente/login")
+        return f(*args, **kwargs)
+
+    return decorated
+
+
+@app.route("/cliente/painel")
+@cliente_login_required
+def cliente_painel():
+    """Painel do cliente — pontos, histórico de compras."""
+    cliente = Cliente.query.get(session["cliente_id"])
+    if not cliente or not cliente.ativo:
+        session.clear()
+        return redirect("/cliente/login")
+
+    # Histórico de compras
+    vendas = (
+        Venda.query.filter_by(id_cliente=cliente.id_cliente)
+        .order_by(Venda.data_venda.desc())
+        .limit(20)
+        .all()
+    )
+
+    return render_template(
+        "cliente_painel.html", cliente=cliente, vendas=vendas
+    )
+
+
+@app.route("/cliente/logout")
+def cliente_logout():
+    """Logout do cliente."""
+    session.clear()
+    return redirect("/vitrine")
 
 
 # =============================================================================

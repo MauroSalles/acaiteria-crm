@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login — Combina Açaí</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
+    <meta name="theme-color" content="#7B1FA2">
+    <style>
+        body { background: linear-gradient(135deg, #F3E5F5 0%, #EDE7F6 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; font-family: 'Segoe UI', system-ui, sans-serif; }
+        .auth-card { background: #fff; border-radius: 20px; box-shadow: 0 8px 32px rgba(123,31,162,0.12); padding: 2.5rem 2rem; max-width: 420px; width: 100%; text-align: center; }
+        .auth-card .logo { font-size: 3.5rem; margin-bottom: 0.5rem; display: block; }
+        .auth-card h1 { color: #7B1FA2; font-size: 1.8rem; margin-bottom: 0.3rem; }
+        .auth-card .subtitle { color: #666; margin-bottom: 1.5rem; font-size: 0.95rem; }
+        .auth-label { text-align: left; display: block; margin-bottom: 0.3rem; font-weight: 600; color: #444; font-size: 0.95rem; }
+        .auth-input {
+            font-size: 1rem; padding: 0.85rem 1rem; border: 2px solid #ddd; border-radius: 12px;
+            width: 100%; margin-bottom: 1rem; box-sizing: border-box; transition: border-color 0.2s;
+        }
+        .auth-input:focus { outline: none; border-color: #7B1FA2; box-shadow: 0 0 0 3px rgba(123,31,162,0.12); }
+        .auth-btn {
+            width: 100%; padding: 0.9rem; background: #4CAF50; color: #fff; border: none;
+            border-radius: 50px; font-size: 1.05rem; font-weight: 700; cursor: pointer;
+            transition: background 0.2s, transform 0.1s; margin-top: 0.5rem;
+        }
+        .auth-btn:hover { background: #388E3C; transform: translateY(-1px); }
+        .auth-erro { color: #D32F2F; background: #FFEBEE; padding: 0.7rem; border-radius: 10px; margin-bottom: 1rem; font-size: 0.9rem; }
+        .auth-links { margin-top: 1.5rem; font-size: 0.9rem; color: #666; }
+        .auth-links a { color: #7B1FA2; text-decoration: none; font-weight: 600; }
+        .auth-links a:hover { text-decoration: underline; }
+        .divider { display: flex; align-items: center; gap: 1rem; margin: 1.2rem 0; color: #ccc; font-size: 0.85rem; }
+        .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: #eee; }
+    </style>
+</head>
+<body>
+    <div class="auth-card">
+        <span class="logo">🍇</span>
+        <h1>Bem-vindo de volta!</h1>
+        <p class="subtitle">Acesse sua conta de cliente</p>
+
+        {% if erro %}
+            <div class="auth-erro">{{ erro }}</div>
+        {% endif %}
+
+        <form method="POST" action="/cliente/login">
+            <label class="auth-label">📧 E-mail ou Telefone</label>
+            <input type="text" name="identificador" class="auth-input" placeholder="seu@email.com ou (12) 99999-9999" required autocomplete="username">
+
+            <label class="auth-label">🔒 Senha</label>
+            <input type="password" name="senha" class="auth-input" placeholder="Sua senha" required autocomplete="current-password">
+
+            <button type="submit" class="auth-btn">Entrar →</button>
+        </form>
+
+        <div class="divider">ou</div>
+
+        <div class="auth-links">
+            <p>Ainda não tem conta? <a href="/cliente/cadastro">Cadastre-se grátis</a></p>
+            <p style="margin-top:0.8rem;"><a href="/vitrine">← Voltar à vitrine</a></p>
+        </div>
+
+        <div class="divider">administrador?</div>
+        <div class="auth-links">
+            <p><a href="/login">🔐 Acessar painel administrativo</a></p>
+        </div>
+    </div>
+</body>
+</html>

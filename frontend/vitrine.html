@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Combina Açaí — Açaiteria em Lorena/SP</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <meta name="theme-color" content="#7B1FA2">
+    <meta name="description" content="Açaiteria Combina Açaí — Os melhores açaís, sorvetes e bowls de Lorena/SP. Programa de fidelidade, ofertas da semana e muito mais!">
+    <style>
+        /* ===== VITRINE — Landing page pública ===== */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #FAFAFA; color: #333; }
+
+        /* Hero */
+        .hero {
+            background: linear-gradient(135deg, #7B1FA2 0%, #9C27B0 50%, #CE93D8 100%);
+            color: #fff;
+            text-align: center;
+            padding: 3rem 1.5rem 2.5rem;
+        }
+        .hero-logo { font-size: 4rem; margin-bottom: 0.5rem; display: block; }
+        .hero h1 { font-size: 2.2rem; margin-bottom: 0.5rem; font-weight: 800; }
+        .hero p { font-size: 1.1rem; opacity: 0.92; max-width: 500px; margin: 0 auto 1.5rem; }
+        .hero-actions { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+        .hero-actions a {
+            padding: 0.85rem 2rem;
+            border-radius: 50px;
+            font-weight: 700;
+            font-size: 1rem;
+            text-decoration: none;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .hero-actions a:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.2); }
+        .btn-primary-v { background: #4CAF50; color: #fff; }
+        .btn-secondary-v { background: rgba(255,255,255,0.2); color: #fff; border: 2px solid rgba(255,255,255,0.5); }
+
+        /* Seções */
+        .section { max-width: 1100px; margin: 0 auto; padding: 2.5rem 1.5rem; }
+        .section-title { text-align: center; margin-bottom: 2rem; }
+        .section-title h2 { font-size: 1.8rem; color: #7B1FA2; margin-bottom: 0.3rem; }
+        .section-title p { color: #666; font-size: 1rem; }
+
+        /* Benefícios */
+        .benefits-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1.5rem;
+        }
+        .benefit-card {
+            background: #fff;
+            border-radius: 16px;
+            padding: 2rem 1.5rem;
+            text-align: center;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+            transition: transform 0.2s;
+        }
+        .benefit-card:hover { transform: translateY(-4px); }
+        .benefit-icon { font-size: 2.5rem; margin-bottom: 0.8rem; display: block; }
+        .benefit-card h3 { color: #7B1FA2; margin-bottom: 0.5rem; font-size: 1.15rem; }
+        .benefit-card p { color: #666; font-size: 0.92rem; line-height: 1.5; }
+
+        /* Cardápio */
+        .menu-filter {
+            display: flex;
+            gap: 0.6rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 1.5rem;
+        }
+        .menu-filter button {
+            padding: 0.5rem 1.2rem;
+            border: 2px solid #7B1FA2;
+            background: #fff;
+            color: #7B1FA2;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+        .menu-filter button.active,
+        .menu-filter button:hover { background: #7B1FA2; color: #fff; }
+        .menu-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 1.2rem;
+        }
+        .product-card {
+            background: #fff;
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.2s;
+        }
+        .product-card:hover { transform: translateY(-3px); }
+        .product-emoji { font-size: 2.2rem; margin-bottom: 0.5rem; }
+        .product-name { font-weight: 700; color: #333; font-size: 1.05rem; margin-bottom: 0.3rem; }
+        .product-category { color: #9C27B0; font-size: 0.82rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.4rem; }
+        .product-desc { color: #666; font-size: 0.88rem; line-height: 1.4; flex: 1; margin-bottom: 0.8rem; }
+        .product-price { font-size: 1.3rem; font-weight: 800; color: #4CAF50; }
+
+        /* Fidelidade */
+        .loyalty-banner {
+            background: linear-gradient(135deg, #FFF8E1, #FFF3E0);
+            border-radius: 20px;
+            padding: 2.5rem;
+            text-align: center;
+            border: 2px solid #FFD54F;
+        }
+        .loyalty-banner h2 { color: #F57F17; font-size: 1.6rem; margin-bottom: 0.8rem; }
+        .loyalty-steps {
+            display: flex;
+            gap: 2rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin: 1.5rem 0;
+        }
+        .loyalty-step { text-align: center; max-width: 180px; }
+        .loyalty-step .step-icon { font-size: 2.5rem; display: block; margin-bottom: 0.5rem; }
+        .loyalty-step h4 { color: #E65100; font-size: 1rem; margin-bottom: 0.3rem; }
+        .loyalty-step p { color: #666; font-size: 0.85rem; }
+
+        /* CTA Final */
+        .cta-section {
+            background: linear-gradient(135deg, #7B1FA2, #9C27B0);
+            color: #fff;
+            text-align: center;
+            padding: 3rem 1.5rem;
+            border-radius: 20px;
+            margin: 2rem auto;
+            max-width: 1100px;
+        }
+        .cta-section h2 { font-size: 1.8rem; margin-bottom: 0.8rem; }
+        .cta-section p { opacity: 0.9; margin-bottom: 1.5rem; font-size: 1.05rem; }
+
+        /* Footer */
+        .vitrine-footer {
+            text-align: center;
+            padding: 2rem 1rem;
+            color: #999;
+            font-size: 0.85rem;
+            border-top: 1px solid #eee;
+        }
+        .vitrine-footer a { color: #7B1FA2; text-decoration: none; }
+
+        /* Navbar vitrine */
+        .vitrine-nav {
+            background: #fff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            padding: 0.8rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .vitrine-nav-brand { font-weight: 800; color: #7B1FA2; font-size: 1.2rem; text-decoration: none; }
+        .vitrine-nav-links { display: flex; gap: 1rem; align-items: center; }
+        .vitrine-nav-links a {
+            color: #555;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.9rem;
+            padding: 0.4rem 0.8rem;
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+        .vitrine-nav-links a:hover { background: #F3E5F5; color: #7B1FA2; }
+        .vitrine-nav-links .btn-login {
+            background: #7B1FA2;
+            color: #fff;
+            padding: 0.5rem 1.2rem;
+            border-radius: 25px;
+        }
+        .vitrine-nav-links .btn-login:hover { background: #6A1B9A; }
+
+        /* Loading spinner */
+        .loading { text-align: center; padding: 3rem; color: #999; }
+
+        @media (max-width: 600px) {
+            .hero h1 { font-size: 1.6rem; }
+            .hero-actions { flex-direction: column; align-items: center; }
+            .loyalty-steps { flex-direction: column; align-items: center; }
+            .vitrine-nav-links a:not(.btn-login) { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Navbar -->
+    <nav class="vitrine-nav">
+        <a href="/vitrine" class="vitrine-nav-brand">🍇 Combina Açaí</a>
+        <div class="vitrine-nav-links">
+            <a href="#cardapio">Cardápio</a>
+            <a href="#fidelidade">Fidelidade</a>
+            <a href="/politica-privacidade">LGPD</a>
+            {% if session.get('cliente_id') %}
+                <a href="/cliente/painel" class="btn-login">🎯 Meu Painel</a>
+            {% else %}
+                <a href="/cliente/login" class="btn-login">Entrar</a>
+            {% endif %}
+        </div>
+    </nav>
+
+    <!-- Hero -->
+    <section class="hero">
+        <span class="hero-logo">🍇</span>
+        <h1>Combina Açaí</h1>
+        <p>Os melhores açaís, bowls e sorvetes de Lorena/SP. Cadastre-se e ganhe pontos de fidelidade a cada compra!</p>
+        <div class="hero-actions">
+            <a href="/cliente/cadastro" class="btn-primary-v">✅ Cadastrar e Ganhar Pontos</a>
+            <a href="#cardapio" class="btn-secondary-v">📋 Ver Cardápio</a>
+        </div>
+    </section>
+
+    <!-- Benefícios -->
+    <section class="section">
+        <div class="section-title">
+            <h2>Por que escolher a Combina Açaí?</h2>
+            <p>Mais do que açaí — uma experiência completa</p>
+        </div>
+        <div class="benefits-grid">
+            <div class="benefit-card">
+                <span class="benefit-icon">🏆</span>
+                <h3>Programa de Fidelidade</h3>
+                <p>Acumule pontos a cada compra e troque por prêmios exclusivos</p>
+            </div>
+            <div class="benefit-card">
+                <span class="benefit-icon">🍓</span>
+                <h3>Ingredientes Frescos</h3>
+                <p>Frutas selecionadas e açaí 100% natural do Pará</p>
+            </div>
+            <div class="benefit-card">
+                <span class="benefit-icon">🎁</span>
+                <h3>Ofertas Exclusivas</h3>
+                <p>Clientes cadastrados recebem cupons e promoções especiais</p>
+            </div>
+            <div class="benefit-card">
+                <span class="benefit-icon">⚡</span>
+                <h3>Atendimento Rápido</h3>
+                <p>Pedido pronto em minutos — ideal para o seu dia corrido</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Cardápio -->
+    <section class="section" id="cardapio">
+        <div class="section-title">
+            <h2>🍨 Nosso Cardápio</h2>
+            <p>Confira nossos produtos fresquinhos</p>
+        </div>
+        <div class="menu-filter" id="menuFilter">
+            <button class="active" onclick="filtrarCategoria('')">Todos</button>
+        </div>
+        <div class="menu-grid" id="menuGrid">
+            <div class="loading">Carregando produtos...</div>
+        </div>
+    </section>
+
+    <!-- Fidelidade -->
+    <section class="section" id="fidelidade">
+        <div class="loyalty-banner">
+            <h2>🎯 Programa de Fidelidade</h2>
+            <p>Ganhe pontos a cada compra e troque por prêmios!</p>
+            <div class="loyalty-steps">
+                <div class="loyalty-step">
+                    <span class="step-icon">📝</span>
+                    <h4>1. Cadastre-se</h4>
+                    <p>Crie sua conta grátis e ganhe 10 pontos de boas-vindas</p>
+                </div>
+                <div class="loyalty-step">
+                    <span class="step-icon">🛒</span>
+                    <h4>2. Compre</h4>
+                    <p>A cada R$ 1 gasto, acumule 1 ponto no programa</p>
+                </div>
+                <div class="loyalty-step">
+                    <span class="step-icon">🎁</span>
+                    <h4>3. Resgate</h4>
+                    <p>Troque seus pontos por açaís grátis e descontos</p>
+                </div>
+            </div>
+            <a href="/cliente/cadastro" style="display:inline-block; margin-top:1rem; padding:0.8rem 2rem; background:#F57F17; color:#fff; border-radius:50px; text-decoration:none; font-weight:700;">Quero Participar!</a>
+        </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="cta-section">
+        <h2>Pronto para experimentar?</h2>
+        <p>Cadastre-se agora e ganhe 10 pontos de boas-vindas!</p>
+        <div class="hero-actions">
+            <a href="/cliente/cadastro" class="btn-primary-v">Criar Minha Conta</a>
+            {% if not session.get('cliente_id') %}
+                <a href="/cliente/login" class="btn-secondary-v">Já Tenho Conta</a>
+            {% endif %}
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="vitrine-footer">
+        <p>Açaiteria Combina Açaí — Lorena/SP | Projeto Integrador UNIVESP — Grupo 22</p>
+        <p><a href="/politica-privacidade">Política de Privacidade (LGPD)</a></p>
+    </footer>
+
+    <script>
+        const emojisPorCategoria = {
+            'açaí': '🍇', 'acai': '🍇', 'premium': '🍇',
+            'sorvete': '🍦', 'gelato': '🍦',
+            'suco': '🧃', 'bebida': '🥤',
+            'lanche': '🥪', 'salgado': '🥧',
+            'doce': '🍰', 'sobremesa': '🍮',
+            'fruta': '🍓', 'bowl': '🥣',
+        };
+
+        function getEmoji(nome, cat) {
+            const texto = ((cat || '') + ' ' + (nome || '')).toLowerCase();
+            for (const [k, v] of Object.entries(emojisPorCategoria)) {
+                if (texto.includes(k)) return v;
+            }
+            return '🍨';
+        }
+
+        let todosProdutos = [];
+        let categoriaAtiva = '';
+
+        async function carregarProdutos() {
+            try {
+                const [prodResp, catResp] = await Promise.all([
+                    fetch('/api/vitrine/produtos'),
+                    fetch('/api/vitrine/categorias')
+                ]);
+                todosProdutos = await prodResp.json();
+                const categorias = await catResp.json();
+
+                // Filtros
+                const filterDiv = document.getElementById('menuFilter');
+                categorias.forEach(cat => {
+                    const btn = document.createElement('button');
+                    btn.textContent = cat;
+                    btn.onclick = () => filtrarCategoria(cat);
+                    filterDiv.appendChild(btn);
+                });
+
+                renderProdutos(todosProdutos);
+            } catch {
+                document.getElementById('menuGrid').innerHTML =
+                    '<p style="text-align:center;color:#999;">Não foi possível carregar o cardápio.</p>';
+            }
+        }
+
+        function filtrarCategoria(cat) {
+            categoriaAtiva = cat;
+            document.querySelectorAll('.menu-filter button').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+            const filtrados = cat ? todosProdutos.filter(p => p.categoria && p.categoria.toLowerCase().includes(cat.toLowerCase())) : todosProdutos;
+            renderProdutos(filtrados);
+        }
+
+        function escapeHtml(text) {
+            const d = document.createElement('div');
+            d.textContent = text || '';
+            return d.innerHTML;
+        }
+
+        function renderProdutos(lista) {
+            const grid = document.getElementById('menuGrid');
+            if (!lista.length) {
+                grid.innerHTML = '<p style="text-align:center;color:#999;padding:2rem;">Nenhum produto encontrado.</p>';
+                return;
+            }
+            grid.innerHTML = lista.map(p => `
+                <div class="product-card">
+                    <span class="product-emoji">${getEmoji(p.nome_produto, p.categoria)}</span>
+                    <span class="product-category">${escapeHtml(p.categoria || 'Geral')}</span>
+                    <span class="product-name">${escapeHtml(p.nome_produto)}</span>
+                    <span class="product-desc">${escapeHtml(p.descricao || '')}</span>
+                    <span class="product-price">R$ ${p.preco.toFixed(2).replace('.', ',')}</span>
+                </div>
+            `).join('');
+        }
+
+        carregarProdutos();
+    </script>
+</body>
+</html>
