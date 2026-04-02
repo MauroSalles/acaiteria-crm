@@ -2647,9 +2647,124 @@ def cliente_painel():
 
 @app.route("/cliente/logout")
 def cliente_logout():
-    """Logout do cliente."""
-    session.clear()
+    """Logout do cliente — preserva sessão admin se houver."""
+    session.pop("cliente_id", None)
+    session.pop("cliente_nome", None)
+    if session.get("tipo_usuario") == "cliente":
+        session.pop("tipo_usuario", None)
     return redirect("/vitrine")
+
+
+@app.route("/api/cliente/carrinho/checkout", methods=["POST"])
+@limiter.limit("10 per minute")
+@cliente_login_required
+def cliente_checkout():
+    """Finaliza o pedido do cliente (carrinho → Venda)."""
+    try:
+        dados = request.get_json(silent=True)
+        if not dados or not dados.get("itens"):
+            return jsonify({"erro": "Carrinho vazio."}), 400
+
+        forma_pagamento = (
+            dados.get("forma_pagamento", "").strip() or "Não informado"
+        )
+        formas_validas = [
+            "Pix", "Cartão de Crédito", "Cartão de Débito",
+            "Dinheiro", "Não informado",
+        ]
+        if forma_pagamento not in formas_validas:
+            return jsonify({"erro": "Forma de pagamento inválida."}), 400
+
+        cliente = Cliente.query.get(session["cliente_id"])
+        if not cliente or not cliente.ativo:
+            return jsonify({"erro": "Cliente não encontrado."}), 404
+
+        itens_req = dados["itens"]
+        if len(itens_req) > 50:
+            return jsonify({"erro": "Máximo 50 itens por pedido."}), 400
+
+        itens_venda = []
+        valor_total = 0
+
+        for item in itens_req:
+            id_produto = item.get("id_produto")
+            quantidade = item.get("quantidade", 1)
+            if (
+                not id_produto
+                or not isinstance(quantidade, int)
+                or quantidade < 1
+                or quantidade > 99
+            ):
+                return jsonify(
+                    {"erro": "Item inválido no carrinho."}
+                ), 400
+
+            produto = Produto.query.filter_by(
+                id_produto=id_produto, ativo=True
+            ).first()
+            if not produto:
+                return jsonify(
+                    {"erro": f"Produto ID {id_produto} indisponível."}
+                ), 400
+
+            subtotal = float(produto.preco) * quantidade
+            itens_venda.append(
+                ItemVenda(
+                    id_produto=produto.id_produto,
+                    quantidade=quantidade,
+                    preco_unitario=float(produto.preco),
+                    subtotal=subtotal,
+                )
+            )
+            valor_total += subtotal
+
+        observacoes = (
+            dados.get("observacoes", "").strip()[:500] or None
+        )
+
+        venda = Venda(
+            id_cliente=cliente.id_cliente,
+            valor_total=valor_total,
+            forma_pagamento=forma_pagamento,
+            status_pagamento="Pendente",
+            observacoes=observacoes,
+        )
+        db.session.add(venda)
+        db.session.flush()
+
+        for iv in itens_venda:
+            iv.id_venda = venda.id_venda
+            db.session.add(iv)
+
+        # 1 ponto por real gasto
+        pontos_ganhos = int(valor_total)
+        cliente.pontos_fidelidade = (
+            (cliente.pontos_fidelidade or 0) + pontos_ganhos
+        )
+
+        db.session.commit()
+        registrar_log(
+            "criar", "venda", venda.id_venda,
+            f"Pedido online cliente {cliente.nome}: "
+            f"R${valor_total:.2f}, {len(itens_venda)} itens",
+        )
+
+        return jsonify({
+            "sucesso": True,
+            "id_venda": venda.id_venda,
+            "valor_total": valor_total,
+            "pontos_ganhos": pontos_ganhos,
+            "pontos_total": cliente.pontos_fidelidade,
+            "mensagem": (
+                f"Pedido #{venda.id_venda} realizado! "
+                f"+{pontos_ganhos} pontos"
+            ),
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        logger.exception("Erro no checkout: %s", e)
+        return jsonify({"erro": "Erro ao processar pedido."}), 500
 
 
 # =============================================================================

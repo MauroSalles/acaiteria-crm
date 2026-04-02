@@ -9,184 +9,133 @@
     <meta name="theme-color" content="#7B1FA2">
     <meta name="description" content="Açaiteria Combina Açaí — Os melhores açaís, sorvetes e bowls de Lorena/SP. Programa de fidelidade, ofertas da semana e muito mais!">
     <style>
-        /* ===== VITRINE — Landing page pública ===== */
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #FAFAFA; color: #333; }
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#FAFAFA;color:#333}
+        .hero{background:linear-gradient(135deg,#7B1FA2 0%,#9C27B0 50%,#CE93D8 100%);color:#fff;text-align:center;padding:3rem 1.5rem 2.5rem}
+        .hero-logo{font-size:4rem;margin-bottom:.5rem;display:block}
+        .hero h1{font-size:2.2rem;margin-bottom:.5rem;font-weight:800}
+        .hero p{font-size:1.1rem;opacity:.92;max-width:500px;margin:0 auto 1.5rem}
+        .hero-actions{display:flex;gap:1rem;justify-content:center;flex-wrap:wrap}
+        .hero-actions a{padding:.85rem 2rem;border-radius:50px;font-weight:700;font-size:1rem;text-decoration:none;transition:transform .2s,box-shadow .2s}
+        .hero-actions a:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.2)}
+        .btn-primary-v{background:#4CAF50;color:#fff}
+        .btn-secondary-v{background:rgba(255,255,255,.2);color:#fff;border:2px solid rgba(255,255,255,.5)}
+        .section{max-width:1100px;margin:0 auto;padding:2.5rem 1.5rem}
+        .section-title{text-align:center;margin-bottom:2rem}
+        .section-title h2{font-size:1.8rem;color:#7B1FA2;margin-bottom:.3rem}
+        .section-title p{color:#666;font-size:1rem}
+        .benefits-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1.5rem}
+        .benefit-card{background:#fff;border-radius:16px;padding:2rem 1.5rem;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,.06);transition:transform .2s}
+        .benefit-card:hover{transform:translateY(-4px)}
+        .benefit-icon{font-size:2.5rem;margin-bottom:.8rem;display:block}
+        .benefit-card h3{color:#7B1FA2;margin-bottom:.5rem;font-size:1.15rem}
+        .benefit-card p{color:#666;font-size:.92rem;line-height:1.5}
+        .menu-filter{display:flex;gap:.6rem;justify-content:center;flex-wrap:wrap;margin-bottom:1.5rem}
+        .menu-filter button{padding:.5rem 1.2rem;border:2px solid #7B1FA2;background:#fff;color:#7B1FA2;border-radius:25px;cursor:pointer;font-weight:600;font-size:.9rem;transition:all .2s}
+        .menu-filter button.active,.menu-filter button:hover{background:#7B1FA2;color:#fff}
+        .menu-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1.2rem}
+        .product-card{background:#fff;border-radius:16px;padding:1.5rem;box-shadow:0 2px 12px rgba(0,0,0,.06);display:flex;flex-direction:column;transition:transform .2s}
+        .product-card:hover{transform:translateY(-3px)}
+        .product-emoji{font-size:2.2rem;margin-bottom:.5rem}
+        .product-name{font-weight:700;color:#333;font-size:1.05rem;margin-bottom:.3rem}
+        .product-category{color:#9C27B0;font-size:.82rem;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:.4rem}
+        .product-desc{color:#666;font-size:.88rem;line-height:1.4;flex:1;margin-bottom:.8rem}
+        .product-footer{display:flex;justify-content:space-between;align-items:center}
+        .product-price{font-size:1.3rem;font-weight:800;color:#4CAF50}
+        .btn-add-cart{background:#7B1FA2;color:#fff;border:none;border-radius:25px;padding:.5rem 1rem;font-size:.85rem;font-weight:700;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:.3rem}
+        .btn-add-cart:hover{background:#6A1B9A;transform:scale(1.05)}
+        .btn-add-cart.added{background:#4CAF50}
+        .loyalty-banner{background:linear-gradient(135deg,#FFF8E1,#FFF3E0);border-radius:20px;padding:2.5rem;text-align:center;border:2px solid #FFD54F}
+        .loyalty-banner h2{color:#F57F17;font-size:1.6rem;margin-bottom:.8rem}
+        .loyalty-steps{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin:1.5rem 0}
+        .loyalty-step{text-align:center;max-width:180px}
+        .loyalty-step .step-icon{font-size:2.5rem;display:block;margin-bottom:.5rem}
+        .loyalty-step h4{color:#E65100;font-size:1rem;margin-bottom:.3rem}
+        .loyalty-step p{color:#666;font-size:.85rem}
+        .cta-section{background:linear-gradient(135deg,#7B1FA2,#9C27B0);color:#fff;text-align:center;padding:3rem 1.5rem;border-radius:20px;margin:2rem auto;max-width:1100px}
+        .cta-section h2{font-size:1.8rem;margin-bottom:.8rem}
+        .cta-section p{opacity:.9;margin-bottom:1.5rem;font-size:1.05rem}
+        .vitrine-footer{text-align:center;padding:2rem 1rem;color:#999;font-size:.85rem;border-top:1px solid #eee}
+        .vitrine-footer a{color:#7B1FA2;text-decoration:none}
+        .vitrine-nav{background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.08);padding:.8rem 1.5rem;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100}
+        .vitrine-nav-brand{font-weight:800;color:#7B1FA2;font-size:1.2rem;text-decoration:none}
+        .vitrine-nav-links{display:flex;gap:1rem;align-items:center}
+        .vitrine-nav-links a{color:#555;text-decoration:none;font-weight:600;font-size:.9rem;padding:.4rem .8rem;border-radius:8px;transition:background .2s}
+        .vitrine-nav-links a:hover{background:#F3E5F5;color:#7B1FA2}
+        .vitrine-nav-links .btn-login{background:#7B1FA2;color:#fff;padding:.5rem 1.2rem;border-radius:25px}
+        .vitrine-nav-links .btn-login:hover{background:#6A1B9A}
+        .btn-cart{position:relative;background:none;border:none;font-size:1.5rem;cursor:pointer;padding:.3rem .6rem}
+        .cart-badge{position:absolute;top:-4px;right:-4px;background:#D32F2F;color:#fff;font-size:.65rem;font-weight:800;border-radius:50%;min-width:18px;height:18px;display:flex;align-items:center;justify-content:center;line-height:1}
+        .loading{text-align:center;padding:3rem;color:#999}
 
-        /* Hero */
-        .hero {
-            background: linear-gradient(135deg, #7B1FA2 0%, #9C27B0 50%, #CE93D8 100%);
-            color: #fff;
-            text-align: center;
-            padding: 3rem 1.5rem 2.5rem;
-        }
-        .hero-logo { font-size: 4rem; margin-bottom: 0.5rem; display: block; }
-        .hero h1 { font-size: 2.2rem; margin-bottom: 0.5rem; font-weight: 800; }
-        .hero p { font-size: 1.1rem; opacity: 0.92; max-width: 500px; margin: 0 auto 1.5rem; }
-        .hero-actions { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
-        .hero-actions a {
-            padding: 0.85rem 2rem;
-            border-radius: 50px;
-            font-weight: 700;
-            font-size: 1rem;
-            text-decoration: none;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-        .hero-actions a:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.2); }
-        .btn-primary-v { background: #4CAF50; color: #fff; }
-        .btn-secondary-v { background: rgba(255,255,255,0.2); color: #fff; border: 2px solid rgba(255,255,255,0.5); }
+        /* Cart Drawer */
+        .cart-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.4);z-index:200}
+        .cart-overlay.open{display:block}
+        .cart-drawer{position:fixed;top:0;right:-420px;width:400px;max-width:90vw;height:100%;background:#fff;box-shadow:-4px 0 20px rgba(0,0,0,.15);z-index:201;transition:right .3s ease;display:flex;flex-direction:column}
+        .cart-drawer.open{right:0}
+        .cart-header{padding:1.2rem 1.5rem;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center}
+        .cart-header h2{font-size:1.3rem;color:#7B1FA2}
+        .cart-close{background:none;border:none;font-size:1.5rem;cursor:pointer;color:#999;padding:.3rem}
+        .cart-close:hover{color:#333}
+        .cart-body{flex:1;overflow-y:auto;padding:1rem 1.5rem}
+        .cart-empty{text-align:center;padding:3rem 1rem;color:#999}
+        .cart-empty .emoji{font-size:3rem;display:block;margin-bottom:.5rem}
+        .cart-item{display:flex;gap:1rem;padding:1rem 0;border-bottom:1px solid #f0f0f0;align-items:center}
+        .cart-item-emoji{font-size:1.8rem}
+        .cart-item-info{flex:1}
+        .cart-item-name{font-weight:700;font-size:.95rem;color:#333}
+        .cart-item-price{color:#4CAF50;font-weight:600;font-size:.88rem}
+        .cart-item-qty{display:flex;align-items:center;gap:.5rem}
+        .cart-item-qty button{width:28px;height:28px;border:2px solid #ddd;background:#fff;border-radius:50%;cursor:pointer;font-size:1rem;font-weight:700;display:flex;align-items:center;justify-content:center;transition:all .15s}
+        .cart-item-qty button:hover{border-color:#7B1FA2;color:#7B1FA2}
+        .cart-item-qty span{font-weight:700;min-width:20px;text-align:center}
+        .cart-item-remove{background:none;border:none;color:#D32F2F;cursor:pointer;font-size:.8rem;font-weight:600;margin-top:.3rem;padding:0}
+        .cart-item-remove:hover{text-decoration:underline}
+        .cart-footer{border-top:2px solid #eee;padding:1.2rem 1.5rem}
+        .cart-total{display:flex;justify-content:space-between;font-size:1.2rem;font-weight:800;margin-bottom:1rem}
+        .cart-total .total-value{color:#4CAF50}
+        .cart-points-info{text-align:center;font-size:.82rem;color:#F57F17;font-weight:600;margin-bottom:.8rem;background:#FFFDE7;padding:.4rem;border-radius:8px}
+        .btn-checkout{width:100%;padding:.9rem;background:#4CAF50;color:#fff;border:none;border-radius:50px;font-size:1.05rem;font-weight:700;cursor:pointer;transition:all .2s}
+        .btn-checkout:hover{background:#388E3C;transform:translateY(-1px)}
+        .btn-checkout:disabled{background:#ccc;cursor:not-allowed;transform:none}
 
-        /* Seções */
-        .section { max-width: 1100px; margin: 0 auto; padding: 2.5rem 1.5rem; }
-        .section-title { text-align: center; margin-bottom: 2rem; }
-        .section-title h2 { font-size: 1.8rem; color: #7B1FA2; margin-bottom: 0.3rem; }
-        .section-title p { color: #666; font-size: 1rem; }
+        /* Checkout Modal */
+        .modal-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:300;align-items:center;justify-content:center}
+        .modal-overlay.open{display:flex}
+        .modal-box{background:#fff;border-radius:20px;padding:2rem;max-width:480px;width:90%;max-height:90vh;overflow-y:auto;box-shadow:0 12px 40px rgba(0,0,0,.2)}
+        .modal-box h2{color:#7B1FA2;margin-bottom:1rem;text-align:center}
+        .payment-options{display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin:1rem 0}
+        .payment-opt{border:2px solid #ddd;border-radius:12px;padding:1rem;text-align:center;cursor:pointer;transition:all .2s;font-weight:600;font-size:.9rem}
+        .payment-opt:hover{border-color:#7B1FA2}
+        .payment-opt.selected{border-color:#7B1FA2;background:#F3E5F5;color:#7B1FA2}
+        .payment-opt .pay-icon{font-size:1.5rem;display:block;margin-bottom:.3rem}
+        .modal-obs{width:100%;padding:.7rem;border:2px solid #ddd;border-radius:12px;font-family:inherit;font-size:.9rem;resize:vertical;min-height:60px;margin:.5rem 0}
+        .modal-obs:focus{outline:none;border-color:#7B1FA2}
+        .modal-summary{background:#F5F5F5;border-radius:12px;padding:1rem;margin:1rem 0;font-size:.9rem}
+        .modal-summary .sum-row{display:flex;justify-content:space-between;padding:.3rem 0}
+        .modal-summary .sum-total{font-weight:800;font-size:1.1rem;border-top:1px solid #ddd;padding-top:.5rem;margin-top:.3rem}
+        .modal-actions{display:flex;gap:.8rem;margin-top:1rem}
+        .modal-actions button{flex:1;padding:.8rem;border-radius:50px;font-weight:700;font-size:.95rem;cursor:pointer;border:none;transition:all .2s}
+        .btn-cancel{background:#eee;color:#666}
+        .btn-cancel:hover{background:#ddd}
+        .btn-confirm{background:#4CAF50;color:#fff}
+        .btn-confirm:hover{background:#388E3C}
+        .btn-confirm:disabled{background:#ccc;cursor:not-allowed}
 
-        /* Benefícios */
-        .benefits-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 1.5rem;
-        }
-        .benefit-card {
-            background: #fff;
-            border-radius: 16px;
-            padding: 2rem 1.5rem;
-            text-align: center;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-            transition: transform 0.2s;
-        }
-        .benefit-card:hover { transform: translateY(-4px); }
-        .benefit-icon { font-size: 2.5rem; margin-bottom: 0.8rem; display: block; }
-        .benefit-card h3 { color: #7B1FA2; margin-bottom: 0.5rem; font-size: 1.15rem; }
-        .benefit-card p { color: #666; font-size: 0.92rem; line-height: 1.5; }
+        /* Success modal */
+        .success-box{text-align:center;padding:1rem}
+        .success-box .check{font-size:4rem;display:block;margin-bottom:.5rem}
+        .success-box h2{color:#4CAF50;margin-bottom:.5rem}
+        .success-box .points-earned{display:inline-block;background:#FFF8E1;border:2px solid #FFD54F;border-radius:12px;padding:.5rem 1.5rem;font-weight:700;color:#F57F17;margin:.8rem 0;font-size:1.1rem}
+        .success-box p{color:#666;margin:.5rem 0}
+        .success-box a{display:inline-block;margin-top:1rem;padding:.7rem 2rem;background:#7B1FA2;color:#fff;border-radius:50px;text-decoration:none;font-weight:700}
 
-        /* Cardápio */
-        .menu-filter {
-            display: flex;
-            gap: 0.6rem;
-            justify-content: center;
-            flex-wrap: wrap;
-            margin-bottom: 1.5rem;
-        }
-        .menu-filter button {
-            padding: 0.5rem 1.2rem;
-            border: 2px solid #7B1FA2;
-            background: #fff;
-            color: #7B1FA2;
-            border-radius: 25px;
-            cursor: pointer;
-            font-weight: 600;
-            font-size: 0.9rem;
-            transition: all 0.2s;
-        }
-        .menu-filter button.active,
-        .menu-filter button:hover { background: #7B1FA2; color: #fff; }
-        .menu-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-            gap: 1.2rem;
-        }
-        .product-card {
-            background: #fff;
-            border-radius: 16px;
-            padding: 1.5rem;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-            display: flex;
-            flex-direction: column;
-            transition: transform 0.2s;
-        }
-        .product-card:hover { transform: translateY(-3px); }
-        .product-emoji { font-size: 2.2rem; margin-bottom: 0.5rem; }
-        .product-name { font-weight: 700; color: #333; font-size: 1.05rem; margin-bottom: 0.3rem; }
-        .product-category { color: #9C27B0; font-size: 0.82rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.4rem; }
-        .product-desc { color: #666; font-size: 0.88rem; line-height: 1.4; flex: 1; margin-bottom: 0.8rem; }
-        .product-price { font-size: 1.3rem; font-weight: 800; color: #4CAF50; }
-
-        /* Fidelidade */
-        .loyalty-banner {
-            background: linear-gradient(135deg, #FFF8E1, #FFF3E0);
-            border-radius: 20px;
-            padding: 2.5rem;
-            text-align: center;
-            border: 2px solid #FFD54F;
-        }
-        .loyalty-banner h2 { color: #F57F17; font-size: 1.6rem; margin-bottom: 0.8rem; }
-        .loyalty-steps {
-            display: flex;
-            gap: 2rem;
-            justify-content: center;
-            flex-wrap: wrap;
-            margin: 1.5rem 0;
-        }
-        .loyalty-step { text-align: center; max-width: 180px; }
-        .loyalty-step .step-icon { font-size: 2.5rem; display: block; margin-bottom: 0.5rem; }
-        .loyalty-step h4 { color: #E65100; font-size: 1rem; margin-bottom: 0.3rem; }
-        .loyalty-step p { color: #666; font-size: 0.85rem; }
-
-        /* CTA Final */
-        .cta-section {
-            background: linear-gradient(135deg, #7B1FA2, #9C27B0);
-            color: #fff;
-            text-align: center;
-            padding: 3rem 1.5rem;
-            border-radius: 20px;
-            margin: 2rem auto;
-            max-width: 1100px;
-        }
-        .cta-section h2 { font-size: 1.8rem; margin-bottom: 0.8rem; }
-        .cta-section p { opacity: 0.9; margin-bottom: 1.5rem; font-size: 1.05rem; }
-
-        /* Footer */
-        .vitrine-footer {
-            text-align: center;
-            padding: 2rem 1rem;
-            color: #999;
-            font-size: 0.85rem;
-            border-top: 1px solid #eee;
-        }
-        .vitrine-footer a { color: #7B1FA2; text-decoration: none; }
-
-        /* Navbar vitrine */
-        .vitrine-nav {
-            background: #fff;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-            padding: 0.8rem 1.5rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
-        .vitrine-nav-brand { font-weight: 800; color: #7B1FA2; font-size: 1.2rem; text-decoration: none; }
-        .vitrine-nav-links { display: flex; gap: 1rem; align-items: center; }
-        .vitrine-nav-links a {
-            color: #555;
-            text-decoration: none;
-            font-weight: 600;
-            font-size: 0.9rem;
-            padding: 0.4rem 0.8rem;
-            border-radius: 8px;
-            transition: background 0.2s;
-        }
-        .vitrine-nav-links a:hover { background: #F3E5F5; color: #7B1FA2; }
-        .vitrine-nav-links .btn-login {
-            background: #7B1FA2;
-            color: #fff;
-            padding: 0.5rem 1.2rem;
-            border-radius: 25px;
-        }
-        .vitrine-nav-links .btn-login:hover { background: #6A1B9A; }
-
-        /* Loading spinner */
-        .loading { text-align: center; padding: 3rem; color: #999; }
-
-        @media (max-width: 600px) {
-            .hero h1 { font-size: 1.6rem; }
-            .hero-actions { flex-direction: column; align-items: center; }
-            .loyalty-steps { flex-direction: column; align-items: center; }
-            .vitrine-nav-links a:not(.btn-login) { display: none; }
+        @media(max-width:600px){
+            .hero h1{font-size:1.6rem}
+            .hero-actions{flex-direction:column;align-items:center}
+            .loyalty-steps{flex-direction:column;align-items:center}
+            .vitrine-nav-links a:not(.btn-login):not(.btn-cart){display:none}
+            .payment-options{grid-template-columns:1fr}
         }
     </style>
 </head>
@@ -199,6 +148,9 @@
             <a href="#cardapio">Cardápio</a>
             <a href="#fidelidade">Fidelidade</a>
             <a href="/politica-privacidade">LGPD</a>
+            <button class="btn-cart" onclick="toggleCart()" title="Carrinho">
+                🛒<span class="cart-badge" id="cartBadge" style="display:none">0</span>
+            </button>
             {% if session.get('cliente_id') %}
                 <a href="/cliente/painel" class="btn-login">🎯 Meu Painel</a>
             {% else %}
@@ -213,8 +165,13 @@
         <h1>Combina Açaí</h1>
         <p>Os melhores açaís, bowls e sorvetes de Lorena/SP. Cadastre-se e ganhe pontos de fidelidade a cada compra!</p>
         <div class="hero-actions">
-            <a href="/cliente/cadastro" class="btn-primary-v">✅ Cadastrar e Ganhar Pontos</a>
-            <a href="#cardapio" class="btn-secondary-v">📋 Ver Cardápio</a>
+            {% if session.get('cliente_id') %}
+                <a href="#cardapio" class="btn-primary-v">📋 Fazer Pedido</a>
+                <a href="/cliente/painel" class="btn-secondary-v">🎯 Meu Painel</a>
+            {% else %}
+                <a href="/cliente/cadastro" class="btn-primary-v">✅ Cadastrar e Ganhar Pontos</a>
+                <a href="#cardapio" class="btn-secondary-v">📋 Ver Cardápio</a>
+            {% endif %}
         </div>
     </section>
 
@@ -225,26 +182,10 @@
             <p>Mais do que açaí — uma experiência completa</p>
         </div>
         <div class="benefits-grid">
-            <div class="benefit-card">
-                <span class="benefit-icon">🏆</span>
-                <h3>Programa de Fidelidade</h3>
-                <p>Acumule pontos a cada compra e troque por prêmios exclusivos</p>
-            </div>
-            <div class="benefit-card">
-                <span class="benefit-icon">🍓</span>
-                <h3>Ingredientes Frescos</h3>
-                <p>Frutas selecionadas e açaí 100% natural do Pará</p>
-            </div>
-            <div class="benefit-card">
-                <span class="benefit-icon">🎁</span>
-                <h3>Ofertas Exclusivas</h3>
-                <p>Clientes cadastrados recebem cupons e promoções especiais</p>
-            </div>
-            <div class="benefit-card">
-                <span class="benefit-icon">⚡</span>
-                <h3>Atendimento Rápido</h3>
-                <p>Pedido pronto em minutos — ideal para o seu dia corrido</p>
-            </div>
+            <div class="benefit-card"><span class="benefit-icon">🏆</span><h3>Programa de Fidelidade</h3><p>Acumule pontos a cada compra e troque por prêmios exclusivos</p></div>
+            <div class="benefit-card"><span class="benefit-icon">🍓</span><h3>Ingredientes Frescos</h3><p>Frutas selecionadas e açaí 100% natural do Pará</p></div>
+            <div class="benefit-card"><span class="benefit-icon">🎁</span><h3>Ofertas Exclusivas</h3><p>Clientes cadastrados recebem cupons e promoções especiais</p></div>
+            <div class="benefit-card"><span class="benefit-icon">⚡</span><h3>Atendimento Rápido</h3><p>Pedido pronto em minutos — ideal para o seu dia corrido</p></div>
         </div>
     </section>
 
@@ -252,10 +193,10 @@
     <section class="section" id="cardapio">
         <div class="section-title">
             <h2>🍨 Nosso Cardápio</h2>
-            <p>Confira nossos produtos fresquinhos</p>
+            <p>Escolha seus favoritos e adicione ao carrinho</p>
         </div>
         <div class="menu-filter" id="menuFilter">
-            <button class="active" onclick="filtrarCategoria('')">Todos</button>
+            <button class="active" onclick="filtrarCategoria('', this)">Todos</button>
         </div>
         <div class="menu-grid" id="menuGrid">
             <div class="loading">Carregando produtos...</div>
@@ -268,66 +209,267 @@
             <h2>🎯 Programa de Fidelidade</h2>
             <p>Ganhe pontos a cada compra e troque por prêmios!</p>
             <div class="loyalty-steps">
-                <div class="loyalty-step">
-                    <span class="step-icon">📝</span>
-                    <h4>1. Cadastre-se</h4>
-                    <p>Crie sua conta grátis e ganhe 10 pontos de boas-vindas</p>
-                </div>
-                <div class="loyalty-step">
-                    <span class="step-icon">🛒</span>
-                    <h4>2. Compre</h4>
-                    <p>A cada R$ 1 gasto, acumule 1 ponto no programa</p>
-                </div>
-                <div class="loyalty-step">
-                    <span class="step-icon">🎁</span>
-                    <h4>3. Resgate</h4>
-                    <p>Troque seus pontos por açaís grátis e descontos</p>
-                </div>
+                <div class="loyalty-step"><span class="step-icon">📝</span><h4>1. Cadastre-se</h4><p>Crie sua conta grátis e ganhe 10 pontos de boas-vindas</p></div>
+                <div class="loyalty-step"><span class="step-icon">🛒</span><h4>2. Compre</h4><p>A cada R$ 1 gasto, acumule 1 ponto no programa</p></div>
+                <div class="loyalty-step"><span class="step-icon">🎁</span><h4>3. Resgate</h4><p>Troque seus pontos por açaís grátis e descontos</p></div>
             </div>
-            <a href="/cliente/cadastro" style="display:inline-block; margin-top:1rem; padding:0.8rem 2rem; background:#F57F17; color:#fff; border-radius:50px; text-decoration:none; font-weight:700;">Quero Participar!</a>
+            {% if not session.get('cliente_id') %}
+                <a href="/cliente/cadastro" style="display:inline-block;margin-top:1rem;padding:.8rem 2rem;background:#F57F17;color:#fff;border-radius:50px;text-decoration:none;font-weight:700">Quero Participar!</a>
+            {% endif %}
         </div>
     </section>
 
     <!-- CTA -->
     <section class="cta-section">
         <h2>Pronto para experimentar?</h2>
-        <p>Cadastre-se agora e ganhe 10 pontos de boas-vindas!</p>
-        <div class="hero-actions">
-            <a href="/cliente/cadastro" class="btn-primary-v">Criar Minha Conta</a>
-            {% if not session.get('cliente_id') %}
+        {% if session.get('cliente_id') %}
+            <p>Monte seu pedido e ganhe pontos a cada compra!</p>
+            <div class="hero-actions">
+                <a href="#cardapio" class="btn-primary-v">📋 Ver Cardápio</a>
+            </div>
+        {% else %}
+            <p>Cadastre-se agora e ganhe 10 pontos de boas-vindas!</p>
+            <div class="hero-actions">
+                <a href="/cliente/cadastro" class="btn-primary-v">Criar Minha Conta</a>
                 <a href="/cliente/login" class="btn-secondary-v">Já Tenho Conta</a>
-            {% endif %}
-        </div>
+            </div>
+        {% endif %}
     </section>
 
-    <!-- Footer -->
     <footer class="vitrine-footer">
         <p>Açaiteria Combina Açaí — Lorena/SP | Projeto Integrador UNIVESP — Grupo 22</p>
         <p><a href="/politica-privacidade">Política de Privacidade (LGPD)</a></p>
     </footer>
 
-    <script>
-        const emojisPorCategoria = {
-            'açaí': '🍇', 'acai': '🍇', 'premium': '🍇',
-            'sorvete': '🍦', 'gelato': '🍦',
-            'suco': '🧃', 'bebida': '🥤',
-            'lanche': '🥪', 'salgado': '🥧',
-            'doce': '🍰', 'sobremesa': '🍮',
-            'fruta': '🍓', 'bowl': '🥣',
-        };
+    <!-- Cart Drawer -->
+    <div class="cart-overlay" id="cartOverlay" onclick="toggleCart()"></div>
+    <div class="cart-drawer" id="cartDrawer">
+        <div class="cart-header">
+            <h2>🛒 Carrinho</h2>
+            <button class="cart-close" onclick="toggleCart()">&times;</button>
+        </div>
+        <div class="cart-body" id="cartBody"></div>
+        <div class="cart-footer" id="cartFooter" style="display:none">
+            <div class="cart-points-info" id="cartPointsInfo"></div>
+            <div class="cart-total">
+                <span>Total</span>
+                <span class="total-value" id="cartTotal">R$ 0,00</span>
+            </div>
+            <button class="btn-checkout" id="btnCheckout" onclick="abrirCheckout()">Finalizar Pedido</button>
+        </div>
+    </div>
 
-        function getEmoji(nome, cat) {
-            const texto = ((cat || '') + ' ' + (nome || '')).toLowerCase();
-            for (const [k, v] of Object.entries(emojisPorCategoria)) {
-                if (texto.includes(k)) return v;
-            }
+    <!-- Checkout Modal -->
+    <div class="modal-overlay" id="checkoutModal">
+        <div class="modal-box" id="checkoutBox">
+            <!-- Preenchido via JS -->
+        </div>
+    </div>
+
+    <script>
+        /* ========== UTILITÁRIOS ========== */
+        const isLoggedIn = {{ 'true' if session.get('cliente_id') else 'false' }};
+        const emojisPorCategoria = {
+            'açaí':'🍇','acai':'🍇','premium':'🍇',
+            'sorvete':'🍦','gelato':'🍦',
+            'suco':'🧃','bebida':'🥤',
+            'lanche':'🥪','salgado':'🥧',
+            'doce':'🍰','sobremesa':'🍮',
+            'fruta':'🍓','bowl':'🥣',
+        };
+        function getEmoji(nome,cat){
+            const t=((cat||'')+' '+(nome||'')).toLowerCase();
+            for(const[k,v] of Object.entries(emojisPorCategoria)){if(t.includes(k))return v;}
             return '🍨';
         }
+        function escapeHtml(text){const d=document.createElement('div');d.textContent=text||'';return d.innerHTML;}
+        function fmt(v){return 'R$ '+v.toFixed(2).replace('.',',');}
 
+        /* ========== CARRINHO (localStorage) ========== */
+        let carrinho = JSON.parse(localStorage.getItem('acai_carrinho')||'[]');
         let todosProdutos = [];
-        let categoriaAtiva = '';
 
-        async function carregarProdutos() {
+        function salvarCarrinho(){
+            localStorage.setItem('acai_carrinho', JSON.stringify(carrinho));
+            atualizarBadge();
+            renderCarrinho();
+        }
+
+        function atualizarBadge(){
+            const badge = document.getElementById('cartBadge');
+            const total = carrinho.reduce((s,i)=>s+i.qty,0);
+            badge.textContent = total;
+            badge.style.display = total > 0 ? 'flex' : 'none';
+        }
+
+        function adicionarAoCarrinho(produto){
+            const existing = carrinho.find(i=>i.id===produto.id_produto);
+            if(existing){
+                existing.qty = Math.min(existing.qty+1, 99);
+            } else {
+                carrinho.push({
+                    id: produto.id_produto,
+                    nome: produto.nome_produto,
+                    preco: produto.preco,
+                    categoria: produto.categoria,
+                    qty: 1
+                });
+            }
+            salvarCarrinho();
+            // Feedback visual
+            const btn = document.getElementById('btn-add-'+produto.id_produto);
+            if(btn){
+                btn.classList.add('added');
+                btn.innerHTML = '✓ Adicionado';
+                setTimeout(()=>{btn.classList.remove('added');btn.innerHTML='+ Adicionar';},1200);
+            }
+        }
+
+        function alterarQtd(id, delta){
+            const item = carrinho.find(i=>i.id===id);
+            if(!item) return;
+            item.qty += delta;
+            if(item.qty < 1) carrinho = carrinho.filter(i=>i.id!==id);
+            salvarCarrinho();
+        }
+
+        function removerItem(id){
+            carrinho = carrinho.filter(i=>i.id!==id);
+            salvarCarrinho();
+        }
+
+        function getTotal(){return carrinho.reduce((s,i)=>s+i.preco*i.qty,0);}
+
+        function renderCarrinho(){
+            const body = document.getElementById('cartBody');
+            const footer = document.getElementById('cartFooter');
+            if(!carrinho.length){
+                body.innerHTML = '<div class="cart-empty"><span class="emoji">🛒</span><p>Seu carrinho está vazio</p><p style="font-size:.85rem;margin-top:.5rem">Adicione produtos do cardápio!</p></div>';
+                footer.style.display = 'none';
+                return;
+            }
+            body.innerHTML = carrinho.map(i=> `
+                <div class="cart-item">
+                    <span class="cart-item-emoji">${getEmoji(i.nome,i.categoria)}</span>
+                    <div class="cart-item-info">
+                        <div class="cart-item-name">${escapeHtml(i.nome)}</div>
+                        <div class="cart-item-price">${fmt(i.preco)} cada</div>
+                        <button class="cart-item-remove" onclick="removerItem(${i.id})">Remover</button>
+                    </div>
+                    <div>
+                        <div class="cart-item-qty">
+                            <button onclick="alterarQtd(${i.id},-1)">−</button>
+                            <span>${i.qty}</span>
+                            <button onclick="alterarQtd(${i.id},1)">+</button>
+                        </div>
+                        <div style="text-align:center;font-weight:700;color:#333;margin-top:.3rem;font-size:.9rem">${fmt(i.preco*i.qty)}</div>
+                    </div>
+                </div>
+            `).join('');
+            const total = getTotal();
+            document.getElementById('cartTotal').textContent = fmt(total);
+            document.getElementById('cartPointsInfo').textContent = '🎯 Você ganhará +' + Math.floor(total) + ' pontos com este pedido!';
+            footer.style.display = 'block';
+            document.getElementById('btnCheckout').disabled = !isLoggedIn;
+            if(!isLoggedIn){
+                document.getElementById('btnCheckout').textContent = 'Faça login para finalizar';
+            } else {
+                document.getElementById('btnCheckout').textContent = 'Finalizar Pedido';
+            }
+        }
+
+        function toggleCart(){
+            document.getElementById('cartOverlay').classList.toggle('open');
+            document.getElementById('cartDrawer').classList.toggle('open');
+        }
+
+        /* ========== CHECKOUT ========== */
+        function abrirCheckout(){
+            if(!isLoggedIn){window.location.href='/cliente/login';return;}
+            if(!carrinho.length) return;
+            const total = getTotal();
+            const box = document.getElementById('checkoutBox');
+            box.innerHTML = `
+                <h2>Finalizar Pedido</h2>
+                <div class="modal-summary">
+                    ${carrinho.map(i=>`<div class="sum-row"><span>${i.qty}x ${escapeHtml(i.nome)}</span><span>${fmt(i.preco*i.qty)}</span></div>`).join('')}
+                    <div class="sum-row sum-total"><span>Total</span><span>${fmt(total)}</span></div>
+                </div>
+                <p style="font-weight:600;margin-bottom:.5rem">Forma de Pagamento</p>
+                <div class="payment-options" id="paymentOpts">
+                    <div class="payment-opt" onclick="selectPayment(this,'Pix')"><span class="pay-icon">📱</span>Pix</div>
+                    <div class="payment-opt" onclick="selectPayment(this,'Cartão de Crédito')"><span class="pay-icon">💳</span>Crédito</div>
+                    <div class="payment-opt" onclick="selectPayment(this,'Cartão de Débito')"><span class="pay-icon">💳</span>Débito</div>
+                    <div class="payment-opt" onclick="selectPayment(this,'Dinheiro')"><span class="pay-icon">💵</span>Dinheiro</div>
+                </div>
+                <p style="font-weight:600;margin-top:.8rem;margin-bottom:.3rem">Observações (opcional)</p>
+                <textarea class="modal-obs" id="checkoutObs" placeholder="Ex: sem granola, com leite condensado extra..."></textarea>
+                <div class="cart-points-info">🎯 Você ganhará +${Math.floor(total)} pontos de fidelidade!</div>
+                <div class="modal-actions">
+                    <button class="btn-cancel" onclick="fecharCheckout()">Voltar</button>
+                    <button class="btn-confirm" id="btnConfirm" onclick="confirmarPedido()" disabled>Confirmar Pedido</button>
+                </div>
+            `;
+            document.getElementById('checkoutModal').classList.add('open');
+            toggleCart(); // fecha o drawer
+        }
+
+        let formaPagSelecionada = '';
+        function selectPayment(el, forma){
+            document.querySelectorAll('.payment-opt').forEach(o=>o.classList.remove('selected'));
+            el.classList.add('selected');
+            formaPagSelecionada = forma;
+            document.getElementById('btnConfirm').disabled = false;
+        }
+
+        function fecharCheckout(){
+            document.getElementById('checkoutModal').classList.remove('open');
+        }
+
+        async function confirmarPedido(){
+            const btn = document.getElementById('btnConfirm');
+            btn.disabled = true;
+            btn.textContent = 'Processando...';
+            try {
+                const resp = await fetch('/api/cliente/carrinho/checkout', {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({
+                        itens: carrinho.map(i=>({id_produto:i.id, quantidade:i.qty})),
+                        forma_pagamento: formaPagSelecionada,
+                        observacoes: document.getElementById('checkoutObs').value
+                    })
+                });
+                const data = await resp.json();
+                if(resp.ok && data.sucesso){
+                    carrinho = [];
+                    salvarCarrinho();
+                    const box = document.getElementById('checkoutBox');
+                    box.innerHTML = `
+                        <div class="success-box">
+                            <span class="check">✅</span>
+                            <h2>Pedido Realizado!</h2>
+                            <p>Pedido <strong>#${data.id_venda}</strong> registrado com sucesso</p>
+                            <p>Total: <strong>${fmt(data.valor_total)}</strong></p>
+                            <div class="points-earned">+${data.pontos_ganhos} pontos ganhos! 🎉</div>
+                            <p>Saldo: <strong>${data.pontos_total} pontos</strong></p>
+                            <a href="/cliente/painel">Ver Meu Painel</a>
+                        </div>
+                    `;
+                } else {
+                    alert(data.erro || 'Erro ao processar pedido.');
+                    btn.disabled = false;
+                    btn.textContent = 'Confirmar Pedido';
+                }
+            } catch {
+                alert('Erro de conexão. Tente novamente.');
+                btn.disabled = false;
+                btn.textContent = 'Confirmar Pedido';
+            }
+        }
+
+        /* ========== PRODUTOS ========== */
+        async function carregarProdutos(){
             try {
                 const [prodResp, catResp] = await Promise.all([
                     fetch('/api/vitrine/produtos'),
@@ -335,16 +477,13 @@
                 ]);
                 todosProdutos = await prodResp.json();
                 const categorias = await catResp.json();
-
-                // Filtros
                 const filterDiv = document.getElementById('menuFilter');
                 categorias.forEach(cat => {
                     const btn = document.createElement('button');
                     btn.textContent = cat;
-                    btn.onclick = () => filtrarCategoria(cat);
+                    btn.onclick = function(){ filtrarCategoria(cat, this); };
                     filterDiv.appendChild(btn);
                 });
-
                 renderProdutos(todosProdutos);
             } catch {
                 document.getElementById('menuGrid').innerHTML =
@@ -352,23 +491,16 @@
             }
         }
 
-        function filtrarCategoria(cat) {
-            categoriaAtiva = cat;
+        function filtrarCategoria(cat, btnEl){
             document.querySelectorAll('.menu-filter button').forEach(b => b.classList.remove('active'));
-            event.target.classList.add('active');
+            if(btnEl) btnEl.classList.add('active');
             const filtrados = cat ? todosProdutos.filter(p => p.categoria && p.categoria.toLowerCase().includes(cat.toLowerCase())) : todosProdutos;
             renderProdutos(filtrados);
         }
 
-        function escapeHtml(text) {
-            const d = document.createElement('div');
-            d.textContent = text || '';
-            return d.innerHTML;
-        }
-
-        function renderProdutos(lista) {
+        function renderProdutos(lista){
             const grid = document.getElementById('menuGrid');
-            if (!lista.length) {
+            if(!lista.length){
                 grid.innerHTML = '<p style="text-align:center;color:#999;padding:2rem;">Nenhum produto encontrado.</p>';
                 return;
             }
@@ -378,12 +510,20 @@
                     <span class="product-category">${escapeHtml(p.categoria || 'Geral')}</span>
                     <span class="product-name">${escapeHtml(p.nome_produto)}</span>
                     <span class="product-desc">${escapeHtml(p.descricao || '')}</span>
-                    <span class="product-price">R$ ${p.preco.toFixed(2).replace('.', ',')}</span>
+                    <div class="product-footer">
+                        <span class="product-price">${fmt(p.preco)}</span>
+                        <button class="btn-add-cart" id="btn-add-${p.id_produto}" onclick='adicionarAoCarrinho(${JSON.stringify({id_produto:p.id_produto,nome_produto:p.nome_produto,preco:p.preco,categoria:p.categoria})})'>
+                            + Adicionar
+                        </button>
+                    </div>
                 </div>
             `).join('');
         }
 
+        /* ========== INIT ========== */
         carregarProdutos();
+        atualizarBadge();
+        renderCarrinho();
     </script>
 </body>
 </html>
