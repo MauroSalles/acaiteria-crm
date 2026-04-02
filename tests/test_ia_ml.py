@@ -277,6 +277,45 @@ class TestIAStats:
         assert r.status_code == 401
 
 
+# ── PIX QR Code ──────────────────────────────────────────────────────
+
+
+class TestPixQRCode:
+    def test_pix_qrcode_com_valor(self, client):
+        r = client.get("/api/pix/qrcode?valor=25.50&txid=Pedido1")
+        assert r.status_code == 200
+        data = r.get_json()
+        assert "payload" in data
+        assert data["valor"] == 25.50
+        # Payload deve ser BRCode EMV válido: começa com 00 02 01
+        assert data["payload"].startswith("000201")
+        # Deve conter br.gov.bcb.pix
+        assert "br.gov.bcb.pix" in data["payload"]
+        # Deve terminar com CRC16 (4 hex chars)
+        assert len(data["payload"]) > 20
+
+    def test_pix_qrcode_sem_valor(self, client):
+        r = client.get("/api/pix/qrcode")
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["valor"] == 0
+        assert data["payload"].startswith("000201")
+
+    def test_pix_qrcode_valor_negativo(self, client):
+        r = client.get("/api/pix/qrcode?valor=-10")
+        assert r.status_code == 400
+
+    def test_pix_qrcode_sem_auth(self, unauthenticated_client):
+        """PIX endpoint deve ser público (sem autenticação)."""
+        r = unauthenticated_client.get("/api/pix/qrcode?valor=10")
+        assert r.status_code == 200
+
+    def test_pix_qrcode_chave_presente(self, client):
+        r = client.get("/api/pix/qrcode?valor=15")
+        data = r.get_json()
+        assert "@" in data["chave"]  # É email
+
+
 # ── Checkout LGPD ────────────────────────────────────────────────────
 
 
