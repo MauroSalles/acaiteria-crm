@@ -91,6 +91,48 @@
     </div>
 
     <script>
+        // Scroll para erros do servidor (se houver)
+        const erroBox = document.querySelector('.auth-erro');
+        if (erroBox) {
+            erroBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        // Validação JS antes do submit
+        const form = document.querySelector('form');
+        const lgpdCheck = document.getElementById('lgpd');
+        const lgpdBox = document.querySelector('.lgpd-box');
+
+        form.addEventListener('submit', function(e) {
+            // Remove aviso anterior
+            const oldWarn = document.getElementById('lgpd-warn');
+            if (oldWarn) oldWarn.remove();
+
+            if (!lgpdCheck.checked) {
+                e.preventDefault();
+                const warn = document.createElement('p');
+                warn.id = 'lgpd-warn';
+                warn.style.cssText = 'color:#D32F2F;font-size:0.85rem;font-weight:600;margin-top:0.3rem;';
+                warn.textContent = '⚠️ Você precisa aceitar a Política de Privacidade para continuar.';
+                lgpdBox.after(warn);
+                lgpdBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                lgpdBox.style.borderColor = '#D32F2F';
+                lgpdBox.style.background = '#FFEBEE';
+                return;
+            }
+        });
+
+        // Restaurar visual do LGPD ao marcar
+        if (lgpdCheck) {
+            lgpdCheck.addEventListener('change', function() {
+                if (this.checked) {
+                    lgpdBox.style.borderColor = '#FFD54F';
+                    lgpdBox.style.background = '#FFFDE7';
+                    const w = document.getElementById('lgpd-warn');
+                    if (w) w.remove();
+                }
+            });
+        }
+
         // Máscara de telefone
         const tel = document.getElementById('telefone');
         if (tel) {

@@ -2527,19 +2527,30 @@ def cliente_cadastro():
         if email and "@" not in email:
             erros.append("E-mail inválido.")
 
-        # Verificar duplicatas
+        # Verificar duplicatas (normaliza telefone para só dígitos)
         if not erros and telefone:
-            existente = Cliente.query.filter_by(
-                telefone=telefone, ativo=True
-            ).first()
-            if existente:
-                erros.append("Este telefone já está cadastrado.")
+            tel_digits = _re.sub(r"\D", "", telefone)
+            clientes_ativos = Cliente.query.filter_by(
+                ativo=True
+            ).filter(
+                Cliente.telefone.isnot(None)
+            ).all()
+            for c in clientes_ativos:
+                if _re.sub(r"\D", "", c.telefone or "") == tel_digits:
+                    erros.append(
+                        "Este telefone já está cadastrado. "
+                        "Use a opção 'Faça login'."
+                    )
+                    break
         if not erros and email:
             existente = Cliente.query.filter_by(
                 email=email, ativo=True
             ).first()
             if existente:
-                erros.append("Este e-mail já está cadastrado.")
+                erros.append(
+                    "Este e-mail já está cadastrado. "
+                    "Use a opção 'Faça login'."
+                )
 
         if erros:
             return render_template(
@@ -2588,8 +2599,9 @@ def cliente_cadastro():
             session["tipo_usuario"] = "cliente"
             return redirect("/cliente/painel")
 
-        except Exception:
+        except Exception as e:
             db.session.rollback()
+            logger.exception("Erro no cadastro cliente: %s", e)
             return render_template(
                 "cliente_cadastro.html",
                 erros=["Erro interno. Tente novamente."],
