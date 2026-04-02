@@ -130,6 +130,17 @@
         .success-box p{color:#666;margin:.5rem 0}
         .success-box a{display:inline-block;margin-top:1rem;padding:.7rem 2rem;background:#7B1FA2;color:#fff;border-radius:50px;text-decoration:none;font-weight:700}
 
+        /* PIX QR Code */
+        .pix-qr-section{text-align:center;margin:1rem 0;padding:1rem;background:#F3E5F5;border-radius:16px;border:2px dashed #7B1FA2;animation:pixFadeIn .4s ease}
+        @keyframes pixFadeIn{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
+        .pix-qr-section h3{color:#7B1FA2;margin-bottom:.5rem;font-size:1rem}
+        .pix-qr-canvas{margin:.5rem auto;display:block;border-radius:12px;background:#fff;padding:8px}
+        .pix-chave{font-size:.78rem;color:#666;word-break:break-all;margin:.4rem 0}
+        .pix-chave strong{color:#7B1FA2}
+        .pix-copiar{display:inline-block;margin-top:.4rem;padding:.4rem 1.2rem;background:#7B1FA2;color:#fff;border:none;border-radius:50px;font-weight:700;font-size:.8rem;cursor:pointer;transition:all .2s}
+        .pix-copiar:hover{background:#6A1B9A;transform:translateY(-1px)}
+        .pix-copiar:active{transform:scale(.97)}
+
         /* Toast */
         .toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%) translateY(80px);background:#333;color:#fff;padding:.8rem 1.5rem;border-radius:12px;font-weight:600;font-size:.95rem;z-index:400;opacity:0;transition:all .3s ease;pointer-events:none;box-shadow:0 4px 15px rgba(0,0,0,.2)}
         .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
@@ -150,6 +161,7 @@
             .fab-cart{display:flex;align-items:center;justify-content:center}
         }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
 </head>
 <body>
 
@@ -468,6 +480,7 @@
                     '<div class="payment-opt" data-pay="Cartão de Débito"><span class="pay-icon">💳</span>Débito</div>' +
                     '<div class="payment-opt" data-pay="Dinheiro"><span class="pay-icon">💵</span>Dinheiro</div>' +
                 '</div>' +
+                '<div id="pixQrArea"></div>' +
                 '<p style="font-weight:600;margin-top:.8rem;margin-bottom:.3rem">Observações (opcional)</p>' +
                 '<textarea class="modal-obs" id="checkoutObs" maxlength="500" placeholder="Ex: sem granola, com leite condensado extra..."></textarea>' +
                 '<div class="cart-points-info">🎯 Você ganhará +'+Math.floor(total)+' pontos de fidelidade!</div>' +
@@ -485,6 +498,13 @@
                     el.classList.add('selected');
                     formaPagSelecionada = el.getAttribute('data-pay');
                     document.getElementById('btnConfirm').disabled = false;
+                    // Mostrar QR Code PIX se selecionou Pix
+                    var pixArea = document.getElementById('pixQrArea');
+                    if(formaPagSelecionada === 'Pix'){
+                        gerarPixQrCode(total, pixArea);
+                    } else {
+                        pixArea.innerHTML = '';
+                    }
                 });
             });
 
@@ -495,6 +515,57 @@
         function fecharCheckout(){
             document.getElementById('checkoutModal').classList.remove('open');
             formaPagSelecionada = '';
+        }
+
+        function gerarPixQrCode(valor, container){
+            container.innerHTML = '<p style="text-align:center;color:#999;padding:1rem">Gerando QR Code PIX...</p>';
+            fetch('/api/pix/qrcode?valor='+encodeURIComponent(valor)+'&txid=AcaiCRM')
+            .then(function(r){return r.json();})
+            .then(function(data){
+                if(data.erro){
+                    container.innerHTML = '<p style="color:red;text-align:center">'+escapeHtml(data.erro)+'</p>';
+                    return;
+                }
+                var pixPayload = data.payload;
+                container.innerHTML =
+                    '<div class="pix-qr-section">' +
+                        '<h3>📱 Escaneie o QR Code para pagar via Pix</h3>' +
+                        '<canvas id="pixCanvas" class="pix-qr-canvas"></canvas>' +
+                        '<p class="pix-chave">Chave: <strong>'+escapeHtml(data.chave)+'</strong></p>' +
+                        '<p class="pix-chave">'+escapeHtml(data.nome)+' — '+escapeHtml(data.cidade)+'</p>' +
+                        '<button class="pix-copiar" id="btnCopiarPix">📋 Copiar código Pix</button>' +
+                    '</div>';
+                // Gerar QR code no canvas
+                if(typeof QRCode !== 'undefined'){
+                    QRCode.toCanvas(document.getElementById('pixCanvas'), pixPayload, {
+                        width: 220,
+                        margin: 2,
+                        color: {dark:'#7B1FA2', light:'#FFFFFF'}
+                    });
+                }
+                // Botão copiar Pix Copia e Cola
+                document.getElementById('btnCopiarPix').addEventListener('click', function(){
+                    if(navigator.clipboard && navigator.clipboard.writeText){
+                        navigator.clipboard.writeText(pixPayload).then(function(){
+                            showToast('Código PIX copiado!', 'success');
+                        });
+                    } else {
+                        // Fallback para navegadores sem clipboard API
+                        var ta = document.createElement('textarea');
+                        ta.value = pixPayload;
+                        ta.style.position = 'fixed';
+                        ta.style.left = '-9999px';
+                        document.body.appendChild(ta);
+                        ta.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(ta);
+                        showToast('Código PIX copiado!', 'success');
+                    }
+                });
+            })
+            .catch(function(){
+                container.innerHTML = '<p style="color:red;text-align:center">Erro ao gerar QR Code.</p>';
+            });
         }
 
         function confirmarPedido(){

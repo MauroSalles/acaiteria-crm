@@ -2627,7 +2627,7 @@ def cliente_login_required(f):
 @cliente_login_required
 def cliente_painel():
     """Painel do cliente — pontos, histórico de compras."""
-    cliente = Cliente.query.get(session["cliente_id"])
+    cliente = db.session.get(Cliente, session["cliente_id"])
     if not cliente or not cliente.ativo:
         session.clear()
         return redirect("/cliente/login")
@@ -2675,9 +2675,14 @@ def cliente_checkout():
         if forma_pagamento not in formas_validas:
             return jsonify({"erro": "Forma de pagamento inválida."}), 400
 
-        cliente = Cliente.query.get(session["cliente_id"])
+        cliente = db.session.get(Cliente, session["cliente_id"])
         if not cliente or not cliente.ativo:
             return jsonify({"erro": "Cliente não encontrado."}), 404
+
+        if not cliente.consentimento_lgpd:
+            return jsonify(
+                {"erro": "Consentimento LGPD necessário para compras."}
+            ), 403
 
         itens_req = dados["itens"]
         if len(itens_req) > 50:
@@ -2735,6 +2740,15 @@ def cliente_checkout():
         for iv in itens_venda:
             iv.id_venda = venda.id_venda
             db.session.add(iv)
+
+        # Criar registro de pagamento (consistente com admin criar_venda)
+        pagamento = Pagamento(
+            id_venda=venda.id_venda,
+            valor_pago=valor_total,
+            metodo=forma_pagamento,
+            status="Pendente",
+        )
+        db.session.add(pagamento)
 
         # 1 ponto por real gasto
         pontos_ganhos = int(valor_total)
@@ -3783,6 +3797,531 @@ def ia_resposta():
                 "ia": True,
             }
         )
+    except Exception as e:
+        return _erro_interno(e)
+
+
+# =============================================================================
+# PIX — Geração de QR Code (BRCode EMV padrão BACEN)
+# =============================================================================
+
+# Chave PIX da loja (email Nubank)
+_PIX_CHAVE = os.environ.get(
+    "PIX_CHAVE", "Maurosalles2006@gmail.com"
+)
+_PIX_NOME = os.environ.get("PIX_NOME", "Combina Acai")
+_PIX_CIDADE = os.environ.get("PIX_CIDADE", "Lorena")
+
+
+def _pix_campo(tag, valor):
+    """Monta campo EMV: ID (2 chars) + Length (2 chars) + Value."""
+    return "{}{:02d}{}".format(tag, len(valor), valor)
+
+
+def _pix_crc16(payload):
+    """CRC-16/CCITT-FALSE conforme especificação BRCode."""
+    crc = 0xFFFF
+    for byte in payload.encode("utf-8"):
+        crc ^= byte << 8
+        for _ in range(8):
+            if crc & 0x8000:
+                crc = (crc << 1) ^ 0x1021
+            else:
+                crc <<= 1
+            crc &= 0xFFFF
+    return "{:04X}".format(crc)
+
+
+def _gerar_pix_payload(valor, txid="***"):
+    """Gera payload PIX (BRCode) no padrão EMV estático."""
+    # 00 - Payload Format Indicator
+    pfi = _pix_campo("00", "01")
+    # 01 - Point of Initiation Method (12 = estático)
+    pim = _pix_campo("01", "12")
+    # 26 - Merchant Account Information (PIX)
+    gui = _pix_campo("00", "br.gov.bcb.pix")
+    chave = _pix_campo("01", _PIX_CHAVE)
+    mai = _pix_campo("26", gui + chave)
+    # 52 - Merchant Category Code
+    mcc = _pix_campo("52", "0000")
+    # 53 - Transaction Currency (986 = BRL)
+    trc = _pix_campo("53", "986")
+    # 54 - Transaction Amount (se informado)
+    tra = ""
+    if valor and float(valor) > 0:
+        tra = _pix_campo("54", "{:.2f}".format(float(valor)))
+    # 58 - Country Code
+    cc = _pix_campo("58", "BR")
+    # 59 - Merchant Name (max 25 chars, ASCII)
+    nome = _PIX_NOME[:25]
+    mn = _pix_campo("59", nome)
+    # 60 - Merchant City (max 15 chars)
+    cidade = _PIX_CIDADE[:15]
+    mc = _pix_campo("60", cidade)
+    # 62 - Additional Data Field Template
+    ref = _pix_campo("05", txid[:25])
+    adft = _pix_campo("62", ref)
+    # 63 - CRC16 (placeholder com 4 chars)
+    payload_sem_crc = pfi + pim + mai + mcc + trc + tra + cc + mn + mc + adft
+    payload_sem_crc += "6304"
+    crc = _pix_crc16(payload_sem_crc)
+    return payload_sem_crc + crc
+
+
+@app.route("/api/pix/qrcode")
+@limiter.limit("30 per minute")
+def pix_qrcode():
+    """Gera payload PIX BRCode para QR Code."""
+    try:
+        valor = request.args.get("valor", 0, type=float)
+        txid = request.args.get("txid", "AcaiCRM")
+        # Sanitizar txid (apenas alfanuméricos)
+        txid = _re.sub(r"[^a-zA-Z0-9]", "", txid)[:25] or "AcaiCRM"
+        if valor < 0 or valor > 99999.99:
+            return jsonify({"erro": "Valor inválido"}), 400
+        payload = _gerar_pix_payload(valor, txid)
+        return jsonify({
+            "payload": payload,
+            "chave": _PIX_CHAVE,
+            "valor": round(valor, 2),
+            "nome": _PIX_NOME,
+            "cidade": _PIX_CIDADE,
+        })
+    except Exception as e:
+        return _erro_interno(e)
+
+
+# =============================================================================
+# IA / ML — Recomendação de Produtos (Collaborative Filtering)
+# =============================================================================
+
+
+def _construir_matriz_compras():
+    """Constrói matriz cliente×produto a partir do histórico de vendas."""
+    vendas = Venda.query.all()
+    # {id_cliente: {id_produto: quantidade_total}}
+    matriz = {}
+    for v in vendas:
+        cid = v.id_cliente
+        if cid not in matriz:
+            matriz[cid] = {}
+        for item in v.itens:
+            pid = item.id_produto
+            matriz[cid][pid] = matriz[cid].get(pid, 0) + item.quantidade
+    return matriz
+
+
+def _similaridade_clientes(vetor_a, vetor_b):
+    """Cosine similarity entre dois vetores de compra (dicts esparsos)."""
+    comuns = set(vetor_a.keys()) & set(vetor_b.keys())
+    if not comuns:
+        return 0.0
+    dot = sum(vetor_a[k] * vetor_b[k] for k in comuns)
+    norm_a = math.sqrt(sum(v * v for v in vetor_a.values()))
+    norm_b = math.sqrt(sum(v * v for v in vetor_b.values()))
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+    return dot / (norm_a * norm_b)
+
+
+@app.route("/api/ia/recomendacoes/<int:id_cliente>")
+@limiter.limit("30 per minute")
+@api_login_required
+def ia_recomendacoes(id_cliente):
+    """ML — Recomendação de produtos via Collaborative Filtering."""
+    try:
+        cliente = db.session.get(Cliente, id_cliente)
+        if not cliente:
+            return jsonify({"erro": "Cliente não encontrado"}), 404
+
+        matriz = _construir_matriz_compras()
+        compras_alvo = matriz.get(id_cliente, {})
+
+        if not compras_alvo:
+            # Cold start: recomendar mais vendidos
+            top = (
+                db.session.query(
+                    ItemVenda.id_produto,
+                    db.func.sum(ItemVenda.quantidade).label("total"),
+                )
+                .group_by(ItemVenda.id_produto)
+                .order_by(db.text("total DESC"))
+                .limit(5)
+                .all()
+            )
+            produtos_rec = []
+            for pid, total in top:
+                p = db.session.get(Produto, pid)
+                if p and p.ativo:
+                    produtos_rec.append({
+                        **p.to_dict(),
+                        "score": 1.0,
+                        "motivo": "popular",
+                    })
+            return jsonify({
+                "recomendacoes": produtos_rec,
+                "metodo": "popularidade_cold_start",
+                "cliente": cliente.nome,
+            })
+
+        # KNN: encontrar clientes mais similares
+        similaridades = []
+        for cid, compras in matriz.items():
+            if cid == id_cliente:
+                continue
+            sim = _similaridade_clientes(compras_alvo, compras)
+            if sim > 0.1:
+                similaridades.append((cid, sim, compras))
+
+        similaridades.sort(key=lambda x: x[1], reverse=True)
+        vizinhos = similaridades[:10]  # Top-10 vizinhos
+
+        # Calcular scores para produtos não comprados pelo alvo
+        scores = {}
+        for _cid, sim, compras in vizinhos:
+            for pid, qtd in compras.items():
+                if pid not in compras_alvo:
+                    scores[pid] = scores.get(pid, 0) + sim * qtd
+
+        # Ordenar e pegar top-5
+        ranking = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+        max_score = ranking[0][1] if ranking else 1
+
+        produtos_rec = []
+        for pid, score in ranking[:5]:
+            p = db.session.get(Produto, pid)
+            if p and p.ativo:
+                produtos_rec.append({
+                    **p.to_dict(),
+                    "score": round(score / max_score, 3),
+                    "motivo": "collaborative_filtering",
+                })
+
+        return jsonify({
+            "recomendacoes": produtos_rec,
+            "metodo": "collaborative_filtering_knn",
+            "vizinhos_encontrados": len(vizinhos),
+            "cliente": cliente.nome,
+        })
+    except Exception as e:
+        return _erro_interno(e)
+
+
+# =============================================================================
+# IA / ML — Segmentação de Clientes (Análise RFM)
+# =============================================================================
+
+
+def _calcular_rfm():
+    """Calcula scores RFM (Recency, Frequency, Monetary) por cliente."""
+    agora = datetime.now(timezone.utc)
+    clientes = Cliente.query.filter_by(ativo=True).all()
+    rfm_data = []
+
+    for c in clientes:
+        vendas = Venda.query.filter_by(id_cliente=c.id_cliente).all()
+        if not vendas:
+            continue
+
+        # Recency: dias desde última compra
+        ultima = max(v.data_venda for v in vendas)
+        if ultima.tzinfo is None:
+            ultima = ultima.replace(tzinfo=timezone.utc)
+        recency = (agora - ultima).days
+
+        # Frequency: total de compras
+        frequency = len(vendas)
+
+        # Monetary: valor total gasto
+        monetary = sum(float(v.valor_total) for v in vendas)
+
+        rfm_data.append({
+            "id_cliente": c.id_cliente,
+            "nome": c.nome,
+            "recency": recency,
+            "frequency": frequency,
+            "monetary": round(monetary, 2),
+            "pontos": c.pontos_fidelidade or 0,
+        })
+
+    return rfm_data
+
+
+def _segmentar_rfm(rfm_data):
+    """Segmenta clientes em grupos com base nos scores RFM."""
+    if not rfm_data:
+        return []
+
+    # Calcular percentis usando ordenação simples
+    def _percentil_rank(dados, campo, inverso=False):
+        """Atribui rank percentil (1-5) para cada item."""
+        ordenados = sorted(
+            dados, key=lambda x: x[campo], reverse=inverso
+        )
+        n = len(ordenados)
+        for i, item in enumerate(ordenados):
+            item[f"{campo}_score"] = min(int((i / max(n - 1, 1)) * 4) + 1, 5)
+
+    _percentil_rank(rfm_data, "recency", inverso=False)   # Menor = melhor
+    _percentil_rank(rfm_data, "frequency", inverso=True)   # Maior = melhor
+    _percentil_rank(rfm_data, "monetary", inverso=True)     # Maior = melhor
+
+    for item in rfm_data:
+        r = item["recency_score"]
+        f = item["frequency_score"]
+        m = item["monetary_score"]
+        media = (r + f + m) / 3.0
+
+        if media >= 4.0:
+            segmento = "Campeão"
+        elif f >= 4 and m >= 3:
+            segmento = "Cliente Fiel"
+        elif r >= 4 and f <= 2:
+            segmento = "Novo Promissor"
+        elif r <= 2 and f >= 3:
+            segmento = "Em Risco"
+        elif r <= 2 and f <= 2:
+            segmento = "Hibernando"
+        else:
+            segmento = "Regular"
+
+        item["segmento"] = segmento
+        item["rfm_score"] = round(media, 2)
+
+    return rfm_data
+
+
+@app.route("/api/ia/segmentacao")
+@limiter.limit("10 per minute")
+@api_login_required
+def ia_segmentacao():
+    """ML — Segmentação RFM de clientes."""
+    try:
+        rfm_data = _calcular_rfm()
+        segmentados = _segmentar_rfm(rfm_data)
+
+        # Resumo por segmento
+        resumo = {}
+        for item in segmentados:
+            seg = item["segmento"]
+            if seg not in resumo:
+                resumo[seg] = {"total": 0, "receita": 0}
+            resumo[seg]["total"] += 1
+            resumo[seg]["receita"] += item["monetary"]
+
+        for seg in resumo:
+            resumo[seg]["receita"] = round(resumo[seg]["receita"], 2)
+
+        return jsonify({
+            "segmentacao": segmentados,
+            "resumo": resumo,
+            "total_clientes": len(segmentados),
+            "metodo": "rfm_analysis",
+        })
+    except Exception as e:
+        return _erro_interno(e)
+
+
+# =============================================================================
+# IA / ML — Análise de Tendências de Vendas
+# =============================================================================
+
+
+@app.route("/api/ia/tendencias")
+@limiter.limit("10 per minute")
+@api_login_required
+def ia_tendencias():
+    """ML — Tendências de vendas com regressão linear simples."""
+    try:
+        dias = request.args.get("dias", 30, type=int)
+        dias = min(max(dias, 7), 365)
+        inicio = datetime.now(timezone.utc) - timedelta(days=dias)
+
+        vendas = (
+            Venda.query
+            .filter(Venda.data_venda >= inicio)
+            .order_by(Venda.data_venda)
+            .all()
+        )
+
+        # Agrupar vendas por dia
+        vendas_dia = {}
+        for v in vendas:
+            dia = v.data_venda.strftime("%Y-%m-%d")
+            if dia not in vendas_dia:
+                vendas_dia[dia] = {"qtd": 0, "receita": 0.0}
+            vendas_dia[dia]["qtd"] += 1
+            vendas_dia[dia]["receita"] += float(v.valor_total)
+
+        # Regressão linear simples para projeção de receita
+        if len(vendas_dia) >= 2:
+            dias_list = sorted(vendas_dia.keys())
+            y_vals = [vendas_dia[d]["receita"] for d in dias_list]
+            n = len(y_vals)
+            x_vals = list(range(n))
+
+            # y = a + bx (mínimos quadrados)
+            x_mean = sum(x_vals) / n
+            y_mean = sum(y_vals) / n
+            numerador = sum(
+                (x - x_mean) * (y - y_mean)
+                for x, y in zip(x_vals, y_vals)
+            )
+            denominador = sum((x - x_mean) ** 2 for x in x_vals)
+            b = numerador / denominador if denominador != 0 else 0
+            a = y_mean - b * x_mean
+
+            # R² (coeficiente de determinação)
+            ss_res = sum((y - (a + b * x)) ** 2
+                         for x, y in zip(x_vals, y_vals))
+            ss_tot = sum((y - y_mean) ** 2 for y in y_vals)
+            r_squared = 1 - (ss_res / ss_tot) if ss_tot != 0 else 0
+
+            # Projeção para próximos 7 dias
+            projecao = []
+            ultimo_dia = datetime.strptime(dias_list[-1], "%Y-%m-%d").date()
+            for i in range(1, 8):
+                dia_futuro = ultimo_dia + timedelta(days=i)
+                valor_proj = max(a + b * (n + i - 1), 0)
+                projecao.append({
+                    "data": dia_futuro.isoformat(),
+                    "receita_projetada": round(valor_proj, 2),
+                })
+
+            tendencia = "alta" if b > 0.5 else "baixa" if b < -0.5 else "estável"
+        else:
+            a, b, r_squared = 0, 0, 0
+            projecao = []
+            tendencia = "dados_insuficientes"
+
+        # Produto mais vendido no período
+        produto_top = (
+            db.session.query(
+                Produto.nome_produto,
+                db.func.sum(ItemVenda.quantidade).label("total"),
+            )
+            .join(ItemVenda, Produto.id_produto == ItemVenda.id_produto)
+            .join(Venda, ItemVenda.id_venda == Venda.id_venda)
+            .filter(Venda.data_venda >= inicio)
+            .group_by(Produto.nome_produto)
+            .order_by(db.text("total DESC"))
+            .first()
+        )
+
+        return jsonify({
+            "periodo_dias": dias,
+            "total_vendas": len(vendas),
+            "receita_total": round(
+                sum(d["receita"] for d in vendas_dia.values()), 2
+            ),
+            "media_diaria": round(
+                sum(d["receita"] for d in vendas_dia.values())
+                / max(len(vendas_dia), 1), 2
+            ),
+            "tendencia": tendencia,
+            "regressao": {
+                "intercepto": round(a, 4),
+                "coeficiente": round(b, 4),
+                "r_squared": round(r_squared, 4),
+            },
+            "projecao_7dias": projecao,
+            "produto_mais_vendido": (
+                {"nome": produto_top[0], "quantidade": produto_top[1]}
+                if produto_top else None
+            ),
+            "vendas_por_dia": {
+                k: round(v["receita"], 2)
+                for k, v in sorted(vendas_dia.items())
+            },
+            "metodo": "regressao_linear_simples",
+        })
+    except Exception as e:
+        return _erro_interno(e)
+
+
+# =============================================================================
+# IA / ML — Feedback Loop (Melhoria Contínua do Chatbot)
+# =============================================================================
+
+_ia_feedback_stats = {"positivo": 0, "negativo": 0}
+
+
+@app.route("/api/suporte/ia-feedback", methods=["POST"])
+@limiter.limit("30 per minute")
+@api_login_required
+def ia_feedback():
+    """Feedback loop — registra se resposta da IA foi útil."""
+    try:
+        dados = request.get_json(silent=True) or {}
+        util = dados.get("util")  # True/False
+        pergunta = (dados.get("pergunta") or "").strip()[:500]
+
+        if util is None or not isinstance(util, bool):
+            return jsonify({"erro": "Campo 'util' (bool) obrigatório"}), 400
+
+        if util:
+            _ia_feedback_stats["positivo"] += 1
+        else:
+            _ia_feedback_stats["negativo"] += 1
+
+        total = (
+            _ia_feedback_stats["positivo"] + _ia_feedback_stats["negativo"]
+        )
+        taxa_sucesso = (
+            _ia_feedback_stats["positivo"] / total if total > 0 else 0
+        )
+
+        logger.info(
+            "IA Feedback: %s | pergunta='%s' | taxa=%.1f%%",
+            "positivo" if util else "negativo",
+            pergunta[:80],
+            taxa_sucesso * 100,
+        )
+
+        return jsonify({
+            "registrado": True,
+            "stats": {
+                "positivo": _ia_feedback_stats["positivo"],
+                "negativo": _ia_feedback_stats["negativo"],
+                "taxa_sucesso": round(taxa_sucesso, 3),
+            },
+        })
+    except Exception as e:
+        return _erro_interno(e)
+
+
+@app.route("/api/ia/stats")
+@limiter.limit("30 per minute")
+@api_login_required
+def ia_stats():
+    """Estatísticas do motor de IA/ML."""
+    try:
+        total_fb = (
+            _ia_feedback_stats["positivo"] + _ia_feedback_stats["negativo"]
+        )
+        return jsonify({
+            "engine": {
+                "tipo": "TF-IDF + Cosine Similarity",
+                "documentos_treinados": len(_ia_engine.documentos),
+                "vocabulario_tamanho": len(_ia_engine.vocabulario),
+                "threshold_similaridade": 0.08,
+            },
+            "modulos": [
+                "chatbot_tfidf",
+                "recomendacao_collaborative_filtering",
+                "segmentacao_rfm",
+                "tendencias_regressao_linear",
+                "feedback_loop",
+            ],
+            "feedback": {
+                **_ia_feedback_stats,
+                "total": total_fb,
+                "taxa_sucesso": round(
+                    _ia_feedback_stats["positivo"] / total_fb
+                    if total_fb > 0 else 0, 3
+                ),
+            },
+        })
     except Exception as e:
         return _erro_interno(e)
 

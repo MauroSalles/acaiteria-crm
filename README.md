@@ -64,39 +64,47 @@ Interface responsiva adequada ao balcão de atendimento.
 
 ### Stack Tecnológico
 
-- **Backend**: Python 3.9+ com Flask
+- **Backend**: Python 3.11+ com Flask
 - **Frontend**: HTML5, CSS3, JavaScript (vanilla)
-- **Banco de Dados**: SQLite (dev) / MySQL (produção)
+- **Banco de Dados**: SQLite (dev) / PostgreSQL (produção — Render)
+- **IA/ML**: Motor TF-IDF + Cosine Similarity (hand-coded, zero dependências externas)
 - **Versionamento**: Git e GitHub
-- **Hospedagem**: Local (localhost:5000) ou servidor simples
+- **CI/CD**: GitHub Actions (flake8 + pytest + Codecov)
+- **Hospedagem**: Render (Docker + PostgreSQL)
 
 ### Estrutura de Pastas
 
 ```text
-AcaiteriaCRM/
+cloud_version/
 ├── backend/                    # Backend Flask
-│   ├── app.py                 # Aplicação principal
+│   ├── app.py                 # Aplicação principal (rotas, API, IA/ML)
 │   ├── models.py              # Modelos de dados (SQLAlchemy)
-│   ├── routes.py              # Rotas/endpoints
-│   ├── database.py            # Configuração do banco
-│   └── utils.py               # Funções auxiliares
+│   └── __init__.py
 ├── frontend/                   # Frontend HTML/CSS/JS
-│   ├── index.html             # Dashboard principal
-│   ├── cadastro_cliente.html  # Formulário de cadastro
-│   ├── venda.html             # Interface de vendas
-│   ├── relatorios.html        # Relatórios e análises
-│   ├── estilos.css            # Estilos globais
-│   └── script.js              # JavaScript cliente
-├── database/                   # Scripts SQL
-│   ├── schema.sql             # Criação das tabelas
-│   └── seed_data.sql          # Dados de teste
+│   ├── index.html             # Dashboard principal (Chart.js)
+│   ├── vitrine.html           # Vitrine pública com carrinho
+│   ├── cliente_login.html     # Login do cliente
+│   ├── cliente_cadastro.html  # Cadastro com LGPD
+│   ├── cliente_painel.html    # Painel do cliente (pontos/fidelidade)
+│   └── static/                # CSS, JS, imagens
+├── tests/                      # Testes automatizados (199 testes)
+│   ├── conftest.py            # Fixtures compartilhadas
+│   ├── test_clientes.py
+│   ├── test_e2e.py
+│   ├── test_health_relatorios.py
+│   ├── test_ia_ml.py          # Testes IA/ML
+│   ├── test_produtos.py
+│   ├── test_suporte.py
+│   └── test_vendas.py
 ├── docs/                       # Documentação
 │   ├── MER.md                 # Modelo Entidade-Relacionamento
-│   ├── API.md                 # Documentação de endpoints
 │   └── LGPD.md                # Política de privacidade
 ├── requirements.txt           # Dependências Python
-├── .gitignore                # Arquivos ignorados no Git
-└── README.md                 # Este arquivo
+├── pyproject.toml             # Configuração pytest/tools
+├── Dockerfile                 # Container para deploy
+├── render.yaml                # Configuração Render
+├── .github/workflows/ci.yml  # GitHub Actions CI/CD
+└── README.md                  # Este arquivo
 ```
 
 ---
@@ -148,7 +156,7 @@ id_pagamento (PK) | id_venda (FK) | data_pagamento | valor_pago | metodo | statu
 
 ### Pré-requisitos
 
-- Python 3.9 ou superior
+- Python 3.11 ou superior
 - pip (gerenciador de pacotes Python)
 - Git
 
@@ -158,7 +166,7 @@ id_pagamento (PK) | id_venda (FK) | data_pagamento | valor_pago | metodo | statu
 
    ```bash
    git clone https://github.com/MauroSalles/acaiteria-crm.git
-   cd AcaiteriaCRM
+   cd AcaiteriaCRM/cloud_version
    ```
 
 2. **Criar ambiente virtual**
@@ -177,21 +185,13 @@ id_pagamento (PK) | id_venda (FK) | data_pagamento | valor_pago | metodo | statu
    pip install -r requirements.txt
    ```
 
-4. **Criar banco de dados**
+4. **Executar aplicação**
 
    ```bash
-   # Windows
-   python backend/database.py
-   # Ou importar schema.sql em seu gerenciador SQL
+   python -m backend.app
    ```
 
-5. **Executar aplicação**
-
-   ```bash
-   python backend/app.py
-   ```
-
-6. **Acessar no navegador**
+5. **Acessar no navegador**
 
    ```text
    http://localhost:5000
@@ -260,6 +260,51 @@ melhorar relacionamento com clientela.
 
 Seus dados não serão compartilhados com terceiros,
 usados para fins diferentes, nem retidos após sua solicitação de exclusão.
+
+---
+
+## Módulos de Inteligência Artificial e Machine Learning
+
+O sistema incorpora **IA/ML iterativa** 100% hand-coded (zero dependências externas), aplicando técnicas de NLP e análise estatística para potencializar a gestão do CRM.
+
+### 1. Chatbot IA — TF-IDF + Cosine Similarity
+
+- **Endpoint**: `POST /api/suporte/ia-resposta`
+- Motor NLP com pipeline completo para português: normalização Unicode → tokenização → remoção de stopwords (pt-BR) → stemming RSLP simplificado
+- 12 documentos de treinamento cobrindo: login, vendas, cadastro, LGPD, estoque, relatórios, fidelidade, atalhos, suporte, cardápio, WhatsApp, erros técnicos
+- Classificação por similaridade do cosseno com threshold adaptativo
+
+### 2. Recomendação de Produtos — Collaborative Filtering (KNN)
+
+- **Endpoint**: `GET /api/ia/recomendacoes/<id_cliente>`
+- Filtragem colaborativa baseada em histórico de compras
+- KNN com Top-10 vizinhos por similaridade do cosseno
+- Cold start: fallback para ranking de popularidade global
+- Score normalizado 0-1 para cada recomendação
+
+### 3. Segmentação de Clientes — Análise RFM
+
+- **Endpoint**: `GET /api/ia/segmentacao`
+- Recency, Frequency, Monetary analysis
+- Percentil rank (1-5) para cada dimensão
+- 6 segmentos automáticos: Campeão, Cliente Fiel, Novo Promissor, Regular, Em Risco, Hibernando
+- Resumo agregado por segmento com receita total
+
+### 4. Tendências de Vendas — Regressão Linear
+
+- **Endpoint**: `GET /api/ia/tendencias?dias=30`
+- Regressão linear simples (mínimos quadrados) sobre receita diária
+- R² (coeficiente de determinação) para qualidade do modelo
+- Projeção automática de receita para 7 dias futuros
+- Classificação: tendência de alta, baixa ou estável
+- Produto mais vendido no período
+
+### 5. Feedback Loop — Melhoria Contínua
+
+- **Endpoint**: `POST /api/suporte/ia-feedback`
+- Registro de satisfação (util/não util) por resposta da IA
+- Taxa de sucesso calculada em tempo real
+- Estatísticas do motor: `GET /api/ia/stats`
 
 ---
 
