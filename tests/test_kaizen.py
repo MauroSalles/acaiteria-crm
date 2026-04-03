@@ -2,7 +2,6 @@
 Testes Kaizen — cobertura de endpoints e funcionalidades não testadas.
 Melhoria contínua de qualidade.
 """
-import pytest
 
 
 # ===================== DASHBOARD GRÁFICOS =====================
@@ -109,7 +108,8 @@ class TestRankingFidelidade:
 class TestVitrine:
     """Testes para endpoints públicos da vitrine"""
 
-    def test_vitrine_produtos_sem_auth(self, unauthenticated_client, db_session):
+    def test_vitrine_produtos_sem_auth(
+            self, unauthenticated_client, db_session):
         from backend.models import Produto
         p = Produto(nome_produto="Açaí 300ml", categoria="Açaí",
                     preco=15.0, ativo=True)
@@ -122,7 +122,8 @@ class TestVitrine:
         assert len(dados) >= 1
         assert dados[0]["nome_produto"] == "Açaí 300ml"
 
-    def test_vitrine_filtro_categoria(self, unauthenticated_client, db_session):
+    def test_vitrine_filtro_categoria(
+            self, unauthenticated_client, db_session):
         from backend.models import Produto
         p1 = Produto(nome_produto="Açaí 300ml", categoria="Açaí",
                      preco=15.0, ativo=True)
@@ -138,7 +139,8 @@ class TestVitrine:
         assert len(dados) == 1
         assert dados[0]["categoria"] == "Açaí"
 
-    def test_vitrine_nao_mostra_inativos(self, unauthenticated_client, db_session):
+    def test_vitrine_nao_mostra_inativos(
+            self, unauthenticated_client, db_session):
         from backend.models import Produto
         p = Produto(nome_produto="Produto Off", categoria="Teste",
                     preco=10.0, ativo=False)

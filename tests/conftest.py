@@ -8,13 +8,14 @@ import pytest
 from sqlalchemy.pool import StaticPool
 
 # Garantir que o diretório cloud_version esteja no path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(
+    os.path.join(os.path.dirname(__file__), '..')))
 
 # Definir DATABASE_URL ANTES de importar o app, para que o app use memória
 os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
 
-from backend.app import app as flask_app, limiter
-from backend.models import db as _db, Usuario
+from backend.app import app as flask_app, limiter  # noqa: E402
+from backend.models import db as _db, Usuario  # noqa: E402
 
 
 @pytest.fixture()
@@ -35,7 +36,8 @@ def app():
         _db.drop_all()
         _db.create_all()
         # Criar admin de teste
-        admin = Usuario(nome='Admin Teste', email='admin@teste.com', papel='admin')
+        admin = Usuario(nome='Admin Teste',
+                        email='admin@teste.com', papel='admin')
         admin.set_senha('admin123')
         _db.session.add(admin)
         _db.session.commit()

@@ -2,7 +2,6 @@
 Testes da API de Clientes — Açaiteria CRM
 Cobertura: CRUD, validação Pydantic, LGPD (consentimento, anonimização, histórico).
 """
-import json
 
 
 # ============================================================
@@ -99,7 +98,8 @@ class TestCrudCliente:
     def test_atualizar_cliente(self, client):
         r = _criar_cliente(client)
         cid = r.get_json()['id_cliente']
-        resp = client.put(f'/api/clientes/{cid}', json={'nome': 'Maria Atualizada'})
+        resp = client.put(
+            f'/api/clientes/{cid}', json={'nome': 'Maria Atualizada'})
         assert resp.status_code == 200
         assert resp.get_json()['nome'] == 'Maria Atualizada'
 

@@ -49,7 +49,8 @@ class TestAtualizarProduto:
     def test_atualizar_nome(self, client):
         r = _criar_produto(client)
         pid = r.get_json()['id_produto']
-        resp = client.put(f'/api/produtos/{pid}', json={'nome_produto': 'Açaí 1L'})
+        resp = client.put(
+            f'/api/produtos/{pid}', json={'nome_produto': 'Açaí 1L'})
         assert resp.status_code == 200
         assert resp.get_json()['nome_produto'] == 'Açaí 1L'
 

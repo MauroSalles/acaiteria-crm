@@ -726,6 +726,19 @@ def atualizar_cliente(id_cliente):
             email = (dados["email"] or "").strip().lower() or None
             if email and "@" not in email:
                 return jsonify({"erro": "E-mail inválido"}), 400
+            # Impedir remoção de e-mail se cliente tem senha
+            if not email and cliente.senha_hash:
+                return (
+                    jsonify(
+                        {
+                            "erro": (
+                                "Não é possível remover o e-mail"
+                                " de cliente com senha cadastrada"
+                            )
+                        }
+                    ),
+                    400,
+                )
             # Verificar duplicidade
             if email:
                 existente = Cliente.query.filter(
@@ -2896,24 +2909,59 @@ def cliente_checkout():
                     {"erro": "Item inválido no carrinho."}
                 ), 400
 
-            produto = Produto.query.filter_by(
-                id_produto=id_produto, ativo=True
-            ).first()
+            # Lock pessimista para evitar race condition no estoque
+            produto = (
+                db.session.query(Produto)
+                .filter_by(id_produto=id_produto, ativo=True)
+                .with_for_update()
+                .first()
+            )
             if not produto:
                 return jsonify(
                     {"erro": f"Produto ID {id_produto} indisponível."}
                 ), 400
 
-            subtotal = float(produto.preco) * quantidade
+            # Verificar estoque (consistente com admin criar_venda)
+            controle_ativo = (
+                (produto.estoque_atual or 0) > 0
+                or (produto.estoque_minimo or 0) > 0
+            )
+            if controle_ativo and (
+                produto.estoque_atual or 0
+            ) < quantidade:
+                return jsonify(
+                    {
+                        "erro": (
+                            f'Estoque insuficiente para'
+                            f' "{produto.nome_produto}":'
+                            f" disponível"
+                            f" {produto.estoque_atual},"
+                            f" solicitado {quantidade}"
+                        )
+                    }
+                ), 400
+
+            preco = (
+                float(produto.preco_promocional)
+                if produto.preco_promocional
+                else float(produto.preco)
+            )
+            subtotal = preco * quantidade
             itens_venda.append(
                 ItemVenda(
                     id_produto=produto.id_produto,
                     quantidade=quantidade,
-                    preco_unitario=float(produto.preco),
+                    preco_unitario=preco,
                     subtotal=subtotal,
                 )
             )
             valor_total += subtotal
+
+            # Descontar estoque atomicamente (row já locked)
+            if controle_ativo:
+                produto.estoque_atual = max(
+                    0, (produto.estoque_atual or 0) - quantidade
+                )
 
         observacoes = (
             dados.get("observacoes", "").strip()[:500] or None

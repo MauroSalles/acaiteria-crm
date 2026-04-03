@@ -11,12 +11,16 @@ def _setup_cliente_e_produto(client, consentimento=True):
         'consentimento_lgpd': consentimento,
         'versao_politica': 'v1.0',
     })
-    assert rc.status_code == 201, f'Falha ao criar cliente: {rc.status_code} {rc.data}'
+    assert rc.status_code == 201, (
+        f'Falha ao criar cliente: {rc.status_code} {rc.data}'
+    )
     rp = client.post('/api/produtos', json={
         'nome_produto': 'Açaí 500ml',
         'preco': 18.90,
     })
-    assert rp.status_code == 201, f'Falha ao criar produto: {rp.status_code} {rp.data}'
+    assert rp.status_code == 201, (
+        f'Falha ao criar produto: {rp.status_code} {rp.data}'
+    )
     return rc.get_json()['id_cliente'], rp.get_json()['id_produto']
 
 

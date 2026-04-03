@@ -1,7 +1,6 @@
 """
 Testes dos endpoints de Suporte (Tickets + Mensagens) — Açaiteria CRM
 """
-import json
 
 
 class TestListarTickets:
@@ -255,17 +254,20 @@ class TestAtualizarStatusTicket:
         id_ticket = self._criar_ticket(client)
 
         # aberto → em_andamento
-        resp = client.put(f'/api/suporte/tickets/{id_ticket}/status', json={'status': 'em_andamento'})
+        resp = client.put(
+            f'/api/suporte/tickets/{id_ticket}/status', json={'status': 'em_andamento'})
         assert resp.status_code == 200
         assert resp.get_json()['status'] == 'em_andamento'
 
         # em_andamento → resolvido
-        resp = client.put(f'/api/suporte/tickets/{id_ticket}/status', json={'status': 'resolvido'})
+        resp = client.put(
+            f'/api/suporte/tickets/{id_ticket}/status', json={'status': 'resolvido'})
         assert resp.status_code == 200
         assert resp.get_json()['status'] == 'resolvido'
 
         # resolvido → fechado
-        resp = client.put(f'/api/suporte/tickets/{id_ticket}/status', json={'status': 'fechado'})
+        resp = client.put(
+            f'/api/suporte/tickets/{id_ticket}/status', json={'status': 'fechado'})
         assert resp.status_code == 200
         assert resp.get_json()['status'] == 'fechado'
 
@@ -292,7 +294,8 @@ class TestIAAutoResponder:
         data = resp.get_json()
         assert data['ia'] is True
         assert data['confianca'] > 0
-        assert 'senha' in data['resposta'].lower() or 'login' in data['resposta'].lower()
+        assert 'senha' in data['resposta'].lower(
+        ) or 'login' in data['resposta'].lower()
         assert 'categoria_sugerida' in data
         assert 'metodo' in data
         assert 'similaridade' in data
@@ -316,7 +319,8 @@ class TestIAAutoResponder:
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['confianca'] > 0
-        assert 'lgpd' in data['resposta'].lower() or 'dados' in data['resposta'].lower()
+        assert 'lgpd' in data['resposta'].lower(
+        ) or 'dados' in data['resposta'].lower()
 
     def test_ia_resposta_sem_match(self, client):
         """Pergunta sem match deve retornar confianca 0 com fallback."""
@@ -389,4 +393,5 @@ class TestIAAutoResponder:
             'mensagem': 'erro bug o sistema não funciona travou',
         })
         data = resp.get_json()
-        assert data['categoria_sugerida'] in ('duvida', 'problema', 'sugestao', 'outro')
+        assert data['categoria_sugerida'] in (
+            'duvida', 'problema', 'sugestao', 'outro')

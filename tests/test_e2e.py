@@ -102,7 +102,10 @@ class TestAuditLog:
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['total'] >= 1
-        assert any('Log Test' in (l.get('detalhes') or '') for l in data['logs'])
+        assert any(
+            'Log Test' in (log.get('detalhes') or '')
+            for log in data['logs']
+        )
 
     def test_log_criacao_produto(self, client):
         client.post('/api/produtos', json={
@@ -315,7 +318,8 @@ class TestFidelidade:
                 'itens': [{'id_produto': pid, 'quantidade': 4}],  # 100 cada
             })
 
-        resp = client.post(f'/api/clientes/{cid}/pontos/resgatar', json={'pontos': 200})
+        resp = client.post(
+            f'/api/clientes/{cid}/pontos/resgatar', json={'pontos': 200})
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['pontos_resgatados'] == 200
@@ -324,7 +328,8 @@ class TestFidelidade:
 
     def test_resgatar_insuficiente(self, client):
         cid, pid = self._criar_cliente_e_produto(client)
-        resp = client.post(f'/api/clientes/{cid}/pontos/resgatar', json={'pontos': 500})
+        resp = client.post(
+            f'/api/clientes/{cid}/pontos/resgatar', json={'pontos': 500})
         assert resp.status_code == 400
 
     def test_resgatar_minimo_100(self, client):
@@ -333,7 +338,8 @@ class TestFidelidade:
             'id_cliente': cid,
             'itens': [{'id_produto': pid, 'quantidade': 2}],  # 50 pontos
         })
-        resp = client.post(f'/api/clientes/{cid}/pontos/resgatar', json={'pontos': 50})
+        resp = client.post(
+            f'/api/clientes/{cid}/pontos/resgatar', json={'pontos': 50})
         assert resp.status_code == 400
         assert 'Mínimo' in resp.get_json()['erro']
 
@@ -487,7 +493,8 @@ class TestCancelamentoVenda:
         vid, cid, pid = self._criar_venda(client)
 
         # Estoque deve ser 7 (10 - 3)
-        assert client.get(f'/api/produtos/{pid}').get_json()['estoque_atual'] == 7
+        assert client.get(
+            f'/api/produtos/{pid}').get_json()['estoque_atual'] == 7
 
         resp = client.post(f'/api/vendas/{vid}/cancelar', json={
             'motivo': 'Cliente desistiu da compra',
@@ -498,7 +505,8 @@ class TestCancelamentoVenda:
         assert data['pontos_removidos'] == 60  # 3 x 20 = 60
 
         # Estoque restaurado para 10
-        assert client.get(f'/api/produtos/{pid}').get_json()['estoque_atual'] == 10
+        assert client.get(
+            f'/api/produtos/{pid}').get_json()['estoque_atual'] == 10
 
         # Venda marcada como cancelada
         venda = client.get(f'/api/vendas/{vid}').get_json()
@@ -512,30 +520,36 @@ class TestCancelamentoVenda:
 
     def test_cancelar_venda_duplicada(self, client):
         vid, _, _ = self._criar_venda(client)
-        client.post(f'/api/vendas/{vid}/cancelar', json={'motivo': 'Primeira vez'})
-        resp = client.post(f'/api/vendas/{vid}/cancelar', json={'motivo': 'Segunda vez'})
+        client.post(f'/api/vendas/{vid}/cancelar',
+                    json={'motivo': 'Primeira vez'})
+        resp = client.post(
+            f'/api/vendas/{vid}/cancelar', json={'motivo': 'Segunda vez'})
         assert resp.status_code == 400
         assert 'já foi cancelada' in resp.get_json()['erro']
 
     def test_cancelar_venda_inexistente(self, client):
-        resp = client.post('/api/vendas/9999/cancelar', json={'motivo': 'Teste'})
+        resp = client.post('/api/vendas/9999/cancelar',
+                           json={'motivo': 'Teste'})
         assert resp.status_code == 404
 
     def test_cancelar_venda_requer_admin(self, client):
         vid, _, _ = self._criar_venda(client)
         with client.session_transaction() as sess:
             sess['papel'] = 'operador'
-        resp = client.post(f'/api/vendas/{vid}/cancelar', json={'motivo': 'Teste'})
+        resp = client.post(
+            f'/api/vendas/{vid}/cancelar', json={'motivo': 'Teste'})
         assert resp.status_code == 403
 
     def test_cancelar_remove_pontos_fidelidade(self, client):
         vid, cid, _ = self._criar_venda(client)
         # Após venda de R$60, deve ter 60 pontos
-        pontos_antes = client.get(f'/api/clientes/{cid}/pontos').get_json()['pontos']
+        pontos_antes = client.get(
+            f'/api/clientes/{cid}/pontos').get_json()['pontos']
         assert pontos_antes == 60
 
         client.post(f'/api/vendas/{vid}/cancelar', json={'motivo': 'Estorno'})
-        pontos_depois = client.get(f'/api/clientes/{cid}/pontos').get_json()['pontos']
+        pontos_depois = client.get(
+            f'/api/clientes/{cid}/pontos').get_json()['pontos']
         assert pontos_depois == 0
 
 
@@ -581,7 +595,8 @@ class TestSegurancaRotas:
 class TestEdicaoCliente:
     """Testa a edição de clientes com validação aprimorada."""
 
-    def _criar_cliente(self, client, nome='Edit Test', telefone=None, email=None):
+    def _criar_cliente(self, client, nome='Edit Test',
+                       telefone=None, email=None):
         resp = client.post('/api/clientes', json={
             'nome': nome, 'telefone': telefone, 'email': email,
             'consentimento_lgpd': True, 'versao_politica': 'v1.0',
@@ -590,21 +605,24 @@ class TestEdicaoCliente:
 
     def test_editar_nome(self, client):
         cid = self._criar_cliente(client)
-        resp = client.put(f'/api/clientes/{cid}', json={'nome': 'Nome Editado'})
+        resp = client.put(
+            f'/api/clientes/{cid}', json={'nome': 'Nome Editado'})
         assert resp.status_code == 200
         assert resp.get_json()['nome'] == 'Nome Editado'
 
     def test_editar_email_duplicado(self, client):
-        c1 = self._criar_cliente(client, nome='C1', email='unico@teste.com')
+        self._criar_cliente(client, nome='C1', email='unico@teste.com')
         c2 = self._criar_cliente(client, nome='C2', email='outro@teste.com')
-        resp = client.put(f'/api/clientes/{c2}', json={'email': 'unico@teste.com'})
+        resp = client.put(
+            f'/api/clientes/{c2}', json={'email': 'unico@teste.com'})
         assert resp.status_code == 409
         assert 'E-mail' in resp.get_json()['erro']
 
     def test_editar_telefone_duplicado(self, client):
-        c1 = self._criar_cliente(client, nome='T1', telefone='(12) 91111-0001')
+        self._criar_cliente(client, nome='T1', telefone='(12) 91111-0001')
         c2 = self._criar_cliente(client, nome='T2', telefone='(12) 92222-0002')
-        resp = client.put(f'/api/clientes/{c2}', json={'telefone': '(12) 91111-0001'})
+        resp = client.put(
+            f'/api/clientes/{c2}', json={'telefone': '(12) 91111-0001'})
         assert resp.status_code == 409
         assert 'Telefone' in resp.get_json()['erro']
 
@@ -767,3 +785,50 @@ class TestSenhaMinima:
             'senha': 'abc',
         })
         assert resp.status_code == 400
+
+
+# ===================== PROTEÇÃO DE E-MAIL =====================
+
+class TestProtecaoEmail:
+    """Testa que admin não pode remover e-mail
+    de cliente com senha cadastrada."""
+
+    def _criar_cliente_com_senha(self, client):
+        """Helper: cria cliente que fez auto-cadastro
+        (tem senha_hash)."""
+        from backend.models import db, Cliente
+        with client.application.app_context():
+            c = Cliente(
+                nome='Com Senha',
+                email='comsenha@teste.com',
+                consentimento_lgpd=True,
+                ativo=True,
+            )
+            c.set_senha('minhaSenha123')
+            db.session.add(c)
+            db.session.commit()
+            return c.id_cliente
+
+    def test_remover_email_cliente_com_senha(self, client):
+        cid = self._criar_cliente_com_senha(client)
+        resp = client.put(
+            f'/api/clientes/{cid}',
+            json={'email': ''},
+        )
+        assert resp.status_code == 400
+        assert 'senha' in resp.get_json()['erro'].lower()
+
+    def test_remover_email_cliente_sem_senha(self, client):
+        """Cliente sem senha pode ter e-mail removido."""
+        rc = client.post('/api/clientes', json={
+            'nome': 'Sem Senha',
+            'email': 'semsnh@teste.com',
+            'consentimento_lgpd': True,
+            'versao_politica': 'v1.0',
+        })
+        cid = rc.get_json()['id_cliente']
+        resp = client.put(
+            f'/api/clientes/{cid}',
+            json={'email': ''},
+        )
+        assert resp.status_code == 200

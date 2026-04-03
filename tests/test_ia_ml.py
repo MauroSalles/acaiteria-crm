@@ -3,7 +3,6 @@ Testes para endpoints de IA/ML — Açaiteria CRM
 Cobre: chatbot TF-IDF, recomendações, segmentação RFM,
        tendências, feedback loop, stats.
 """
-import pytest
 from backend.models import db, Cliente, Produto, Venda, ItemVenda
 
 
@@ -67,7 +66,8 @@ class TestIAChatbot:
         data = r.get_json()
         assert data["ia"] is True
         assert data["confianca"] > 0
-        assert "senha" in data["resposta"].lower() or "login" in data["resposta"].lower()
+        assert "senha" in data["resposta"].lower(
+        ) or "login" in data["resposta"].lower()
 
     def test_ia_resposta_venda(self, client):
         r = client.post("/api/suporte/ia-resposta",
@@ -339,6 +339,71 @@ class TestCheckoutLGPD:
             })
             assert r.status_code == 403
             assert "LGPD" in r.get_json()["erro"]
+
+
+class TestCheckoutEstoque:
+    """Checkout deve validar estoque disponível."""
+
+    def test_checkout_estoque_insuficiente(self, client, app):
+        with app.app_context():
+            c = _criar_cliente(
+                "Comprador", "11900000100", "comprador@t.com"
+            )
+            p = _criar_produto("Açaí Limitado", 15.0)
+            p.estoque_atual = 2
+            p.estoque_minimo = 1
+            db.session.commit()
+
+            with client.session_transaction() as sess:
+                sess["cliente_id"] = c.id_cliente
+                sess["cliente_nome"] = c.nome
+
+            r = client.post(
+                "/api/cliente/carrinho/checkout",
+                json={
+                    "itens": [
+                        {
+                            "id_produto": p.id_produto,
+                            "quantidade": 10,
+                        }
+                    ],
+                    "forma_pagamento": "Pix",
+                },
+            )
+            assert r.status_code == 400
+            assert "Estoque" in r.get_json()["erro"]
+
+    def test_checkout_desconta_estoque(self, client, app):
+        with app.app_context():
+            c = _criar_cliente(
+                "Comprador2", "11900000101", "compra2@t.com"
+            )
+            p = _criar_produto("Açaí Estoque", 10.0)
+            p.estoque_atual = 5
+            p.estoque_minimo = 1
+            db.session.commit()
+            pid = p.id_produto
+
+            with client.session_transaction() as sess:
+                sess["cliente_id"] = c.id_cliente
+                sess["cliente_nome"] = c.nome
+
+            r = client.post(
+                "/api/cliente/carrinho/checkout",
+                json={
+                    "itens": [
+                        {
+                            "id_produto": pid,
+                            "quantidade": 2,
+                        }
+                    ],
+                    "forma_pagamento": "Pix",
+                },
+            )
+            assert r.status_code == 201
+
+            prod = db.session.get(Produto, pid)
+            assert prod.estoque_atual == 3
 
 
 # ── Testes de Complementos ───────────────────────────────────────────
