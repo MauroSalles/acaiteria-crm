@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
@@ -8,7 +8,7 @@
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
     <meta name="theme-color" content="#7B1FA2">
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='icon-192.svg') }}">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <script nonce="{{ csp_nonce }}" src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -26,6 +26,7 @@
                     <a href="#" onclick="navDropdown(this);return false">🛒 Vendas <span class="arrow">▾</span></a>
                     <ul class="dropdown">
                         <li><a href="/nova-venda">➕ Registrar Venda</a></li>
+                        <li><a href="/vendas">📋 Gerenciar Vendas</a></li>
                     </ul>
                 </li>
                 <li class="has-dropdown">
@@ -36,6 +37,7 @@
                     </ul>
                 </li>
                 <li><a href="/produtos">📦 Produtos</a></li>
+                <li><a href="/compras">📥 Compras</a></li>
                 <li class="has-dropdown">
                     <a href="#" onclick="navDropdown(this);return false">💰 Financeiro <span class="arrow">▾</span></a>
                     <ul class="dropdown">
@@ -261,8 +263,8 @@
         </footer>
     </div>
 
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
-    <script>
+    <script nonce="{{ csp_nonce }}" src="{{ url_for('static', filename='script.js') }}"></script>
+    <script nonce="{{ csp_nonce }}">
     (async function carregarGraficos() {
         try {
             const resp = await requisicao('/api/dashboard/graficos');

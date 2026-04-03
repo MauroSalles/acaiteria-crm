@@ -8,6 +8,7 @@ Data: 2026
 
 from flask import (
     Flask,
+    g,
     render_template,
     request,
     jsonify,
@@ -18,6 +19,7 @@ from flask import (
 from flask_restx import Api, Namespace, Resource
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from flask_wtf.csrf import CSRFProtect
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from functools import wraps
@@ -27,6 +29,7 @@ import logging
 import math
 import os
 import re as _re
+import secrets
 import unicodedata
 from pydantic import BaseModel, EmailStr, ValidationError, field_validator
 
@@ -43,6 +46,10 @@ from .models import (
     LogAcao,
     TicketSuporte,
     MensagemTicket,
+    Fornecedor,
+    CompraEstoque,
+    ItemCompra,
+    CupomDesconto,
 )
 
 # =============================================================================
@@ -110,6 +117,24 @@ health_ns = Namespace(
 )
 api.add_namespace(health_ns)
 
+# Proteção CSRF — ativamos apenas para rotas de formulário (não-API)
+# Rotas /api/* são protegidas por session auth + corpo JSON
+app.config["WTF_CSRF_CHECK_DEFAULT"] = False
+csrf = CSRFProtect(app)
+
+
+@app.before_request
+def _csrf_protect_forms():
+    """Aplicar CSRF apenas em formulários HTML (fora de /api/)."""
+    if app.config.get("TESTING"):
+        return
+    if (
+        request.method in ("POST", "PUT", "DELETE", "PATCH")
+        and not request.path.startswith("/api/")
+    ):
+        csrf.protect()
+
+
 # Configuração do banco de dados
 # Railway fornece postgres:// mas SQLAlchemy 2.x exige postgresql://
 # Usar caminho absoluto para SQLite evitar criar bancos em locais diferentes
@@ -148,6 +173,8 @@ with app.app_context():
         ("produto", "volume", "VARCHAR(20)"),
         ("cliente", "pontos_fidelidade", "INTEGER DEFAULT 0"),
         ("cliente", "senha_hash", "VARCHAR(256)"),
+        ("venda", "status_pedido", "VARCHAR(30) DEFAULT 'Recebido'"),
+        ("produto", "preco_promocional", "DECIMAL(10,2)"),
     ]
     with db.engine.connect() as conn:
         for tabela, coluna, tipo in _migracoes:
@@ -194,8 +221,10 @@ def adicionar_headers_seguranca(response):
     )
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        f"script-src 'self' 'nonce-{g.get('csp_nonce', '')}' "
+        "https://cdn.jsdelivr.net; "
+        f"style-src 'self' 'nonce-{g.get('csp_nonce', '')}' "
+        "https://fonts.googleapis.com; "
         "font-src 'self' https://fonts.gstatic.com; "
         "img-src 'self' data:; "
         "connect-src 'self'; "
@@ -213,12 +242,19 @@ def adicionar_headers_seguranca(response):
     return response
 
 
+@app.before_request
+def gerar_csp_nonce():
+    """Gera nonce CSP único por request para scripts inline."""
+    g.csp_nonce = secrets.token_hex(16)
+
+
 @app.context_processor
 def inject_user():
-    """Injeta dados do usuário logado em todos os templates."""
+    """Injeta dados do usuário logado e nonce CSP em todos os templates."""
     return {
         "usuario_nome": session.get("usuario_nome", ""),
         "papel": session.get("papel", ""),
+        "csp_nonce": g.get("csp_nonce", ""),
     }
 
 
@@ -2245,6 +2281,13 @@ def pagina_nova_venda():
     return render_template("venda.html")
 
 
+@app.route("/vendas")
+@login_required
+def pagina_vendas():
+    """Página de gerenciamento de vendas e pedidos"""
+    return render_template("vendas_lista.html")
+
+
 @app.route("/relatorios")
 @login_required
 def pagina_relatorios():
@@ -3299,6 +3342,742 @@ def atualizar_status_ticket(id_ticket):
             "atualizar", "ticket_suporte", id_ticket, f"status → {novo_status}"
         )
         return jsonify(ticket.to_dict())
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
+# =============================================================================
+# ROTAS - FORNECEDORES
+# =============================================================================
+
+
+@app.route("/api/fornecedores", methods=["GET"])
+@api_login_required
+def listar_fornecedores():
+    """Listar fornecedores com busca opcional."""
+    try:
+        busca = (request.args.get("busca") or "").strip()
+        query = Fornecedor.query
+        if busca:
+            query = query.filter(
+                db.or_(
+                    Fornecedor.nome.ilike(f"%{busca}%"),
+                    Fornecedor.cnpj.ilike(f"%{busca}%"),
+                )
+            )
+        incluir_inativos = request.args.get("incluir_inativos") == "true"
+        if not incluir_inativos:
+            query = query.filter_by(ativo=True)
+        fornecedores = query.order_by(Fornecedor.nome).all()
+        return jsonify([f.to_dict() for f in fornecedores])
+    except Exception as e:
+        return _erro_interno(e)
+
+
+@app.route("/api/fornecedores", methods=["POST"])
+@limiter.limit("20 per minute")
+@api_admin_required
+def criar_fornecedor():
+    """Criar novo fornecedor."""
+    try:
+        dados = request.get_json(silent=True) or {}
+        nome = (dados.get("nome") or "").strip()
+        if not nome or len(nome) < 2:
+            return (
+                jsonify({"erro": "Nome obrigatório (mínimo 2 caracteres)"}),
+                400,
+            )
+        cnpj = (dados.get("cnpj") or "").strip() or None
+        if cnpj:
+            existente = Fornecedor.query.filter_by(cnpj=cnpj).first()
+            if existente:
+                return jsonify({"erro": "CNPJ já cadastrado"}), 400
+
+        fornecedor = Fornecedor(
+            nome=nome,
+            cnpj=cnpj,
+            telefone=(dados.get("telefone") or "").strip() or None,
+            email=(dados.get("email") or "").strip() or None,
+            endereco=(dados.get("endereco") or "").strip() or None,
+            observacoes=(dados.get("observacoes") or "").strip() or None,
+        )
+        db.session.add(fornecedor)
+        db.session.commit()
+        registrar_log(
+            "criar", "fornecedor", fornecedor.id_fornecedor, nome
+        )
+        return jsonify(fornecedor.to_dict()), 201
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
+@app.route("/api/fornecedores/<int:fid>", methods=["GET"])
+@api_login_required
+def obter_fornecedor(fid):
+    """Obter detalhes de um fornecedor."""
+    try:
+        fornecedor = db.session.get(Fornecedor, fid)
+        if not fornecedor:
+            return jsonify({"erro": "Fornecedor não encontrado"}), 404
+        return jsonify(fornecedor.to_dict())
+    except Exception as e:
+        return _erro_interno(e)
+
+
+@app.route("/api/fornecedores/<int:fid>", methods=["PUT"])
+@api_admin_required
+def atualizar_fornecedor(fid):
+    """Atualizar dados de um fornecedor."""
+    try:
+        fornecedor = db.session.get(Fornecedor, fid)
+        if not fornecedor:
+            return jsonify({"erro": "Fornecedor não encontrado"}), 404
+
+        dados = request.get_json(silent=True) or {}
+        if "nome" in dados:
+            nome = (dados["nome"] or "").strip()
+            if len(nome) < 2:
+                return (
+                    jsonify({"erro": "Nome mínimo 2 caracteres"}), 400
+                )
+            fornecedor.nome = nome
+        if "cnpj" in dados:
+            cnpj = (dados["cnpj"] or "").strip() or None
+            if cnpj:
+                dup = Fornecedor.query.filter(
+                    Fornecedor.cnpj == cnpj,
+                    Fornecedor.id_fornecedor != fid,
+                ).first()
+                if dup:
+                    return jsonify({"erro": "CNPJ já cadastrado"}), 400
+            fornecedor.cnpj = cnpj
+        for campo in ("telefone", "email", "endereco", "observacoes"):
+            if campo in dados:
+                setattr(
+                    fornecedor, campo,
+                    (dados[campo] or "").strip() or None,
+                )
+        if "ativo" in dados:
+            fornecedor.ativo = bool(dados["ativo"])
+
+        db.session.commit()
+        registrar_log(
+            "editar", "fornecedor", fid, fornecedor.nome
+        )
+        return jsonify(fornecedor.to_dict())
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
+@app.route("/api/fornecedores/<int:fid>", methods=["DELETE"])
+@api_admin_required
+def desativar_fornecedor(fid):
+    """Desativar fornecedor (soft delete)."""
+    try:
+        fornecedor = db.session.get(Fornecedor, fid)
+        if not fornecedor:
+            return jsonify({"erro": "Fornecedor não encontrado"}), 404
+        fornecedor.ativo = False
+        db.session.commit()
+        registrar_log("desativar", "fornecedor", fid, fornecedor.nome)
+        return jsonify({"mensagem": "Fornecedor desativado"})
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
+# =============================================================================
+# ROTAS - COMPRAS DE ESTOQUE
+# =============================================================================
+
+
+@app.route("/compras")
+@login_required
+def pagina_compras():
+    """Página de gerenciamento de compras/estoque"""
+    return render_template("compras.html")
+
+
+@app.route("/api/compras", methods=["GET"])
+@api_login_required
+def listar_compras():
+    """Listar compras de estoque com filtros."""
+    try:
+        pagina, por_pagina = get_pagination_params()
+        query = CompraEstoque.query
+
+        status = request.args.get("status")
+        if status:
+            query = query.filter_by(status=status)
+
+        id_fornecedor = request.args.get("id_fornecedor", type=int)
+        if id_fornecedor:
+            query = query.filter_by(id_fornecedor=id_fornecedor)
+
+        total = query.count()
+        total_paginas = max(1, math.ceil(total / por_pagina))
+        pagina = min(pagina, total_paginas)
+
+        compras = (
+            query.order_by(CompraEstoque.data_compra.desc())
+            .offset((pagina - 1) * por_pagina)
+            .limit(por_pagina)
+            .all()
+        )
+        return jsonify({
+            "compras": [c.to_dict() for c in compras],
+            "total": total,
+            "pagina": pagina,
+            "total_paginas": total_paginas,
+        })
+    except Exception as e:
+        return _erro_interno(e)
+
+
+@app.route("/api/compras", methods=["POST"])
+@limiter.limit("20 per minute")
+@api_admin_required
+def criar_compra():
+    """Registrar nova compra de estoque."""
+    try:
+        dados = request.get_json(silent=True) or {}
+
+        id_fornecedor = dados.get("id_fornecedor")
+        if not id_fornecedor:
+            return jsonify({"erro": "Fornecedor obrigatório"}), 400
+
+        fornecedor = db.session.get(Fornecedor, id_fornecedor)
+        if not fornecedor:
+            return jsonify({"erro": "Fornecedor não encontrado"}), 404
+
+        itens = dados.get("itens")
+        if not itens or not isinstance(itens, list) or len(itens) == 0:
+            return (
+                jsonify({"erro": "Compra deve ter pelo menos um item"}), 400
+            )
+
+        compra = CompraEstoque(
+            id_fornecedor=id_fornecedor,
+            nota_fiscal=(dados.get("nota_fiscal") or "").strip() or None,
+            status=dados.get("status", "Pendente"),
+            observacoes=(dados.get("observacoes") or "").strip() or None,
+        )
+
+        valor_total = Decimal("0.00")
+        for item_dados in itens:
+            id_produto = item_dados.get("id_produto")
+            produto = db.session.get(Produto, id_produto)
+            if not produto:
+                return (
+                    jsonify(
+                        {"erro": f"Produto {id_produto} não encontrado"}
+                    ),
+                    404,
+                )
+            quantidade = int(item_dados.get("quantidade", 0))
+            if quantidade <= 0:
+                return (
+                    jsonify({"erro": "Quantidade deve ser positiva"}), 400
+                )
+            preco_unit = Decimal(
+                str(item_dados.get("preco_unitario", 0))
+            )
+            if preco_unit <= 0:
+                return (
+                    jsonify({"erro": "Preço unitário deve ser positivo"}),
+                    400,
+                )
+            subtotal = preco_unit * quantidade
+            item = ItemCompra(
+                id_produto=id_produto,
+                quantidade=quantidade,
+                preco_unitario=preco_unit,
+                subtotal=subtotal,
+            )
+            compra.itens.append(item)
+            valor_total += subtotal
+
+            # Se status é Recebido, atualizar estoque imediatamente
+            if compra.status == "Recebido":
+                produto.estoque_atual = (
+                    produto.estoque_atual or 0
+                ) + quantidade
+
+        compra.valor_total = valor_total
+        db.session.add(compra)
+        db.session.commit()
+        registrar_log(
+            "criar", "compra", compra.id_compra,
+            f"Compra #{compra.id_compra} — R${float(valor_total):.2f}"
+            f" — Fornecedor: {fornecedor.nome}",
+        )
+        return jsonify(compra.to_dict()), 201
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
+@app.route("/api/compras/<int:cid>", methods=["GET"])
+@api_login_required
+def obter_compra(cid):
+    """Obter detalhes de uma compra."""
+    try:
+        compra = db.session.get(CompraEstoque, cid)
+        if not compra:
+            return jsonify({"erro": "Compra não encontrada"}), 404
+        return jsonify(compra.to_dict())
+    except Exception as e:
+        return _erro_interno(e)
+
+
+@app.route("/api/compras/<int:cid>", methods=["PUT"])
+@api_admin_required
+def atualizar_compra(cid):
+    """Atualizar compra (nota fiscal, observações)."""
+    try:
+        compra = db.session.get(CompraEstoque, cid)
+        if not compra:
+            return jsonify({"erro": "Compra não encontrada"}), 404
+        if compra.status == "Cancelado":
+            return jsonify({"erro": "Compra cancelada não pode ser editada"}), 400
+
+        dados = request.get_json(silent=True) or {}
+        if "nota_fiscal" in dados:
+            compra.nota_fiscal = (dados["nota_fiscal"] or "").strip() or None
+        if "observacoes" in dados:
+            compra.observacoes = (dados["observacoes"] or "").strip() or None
+
+        db.session.commit()
+        registrar_log("editar", "compra", cid, f"Compra #{cid} atualizada")
+        return jsonify(compra.to_dict())
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
+@app.route("/api/compras/<int:cid>/receber", methods=["POST"])
+@api_admin_required
+def receber_compra(cid):
+    """Marcar compra como recebida — atualiza estoque."""
+    try:
+        compra = db.session.get(CompraEstoque, cid)
+        if not compra:
+            return jsonify({"erro": "Compra não encontrada"}), 404
+        if compra.status == "Recebido":
+            return jsonify({"erro": "Compra já recebida"}), 400
+        if compra.status == "Cancelado":
+            return jsonify({"erro": "Compra cancelada"}), 400
+
+        # Atualizar estoque de cada produto
+        for item in compra.itens:
+            produto = db.session.get(Produto, item.id_produto)
+            if produto:
+                produto.estoque_atual = (
+                    produto.estoque_atual or 0
+                ) + item.quantidade
+
+        compra.status = "Recebido"
+        db.session.commit()
+        registrar_log(
+            "receber", "compra", cid,
+            f"Compra #{cid} recebida — estoque atualizado",
+        )
+        return jsonify({
+            "mensagem": f"Compra #{cid} recebida — estoque atualizado",
+            "compra": compra.to_dict(),
+        })
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
+@app.route("/api/compras/<int:cid>/cancelar", methods=["POST"])
+@api_admin_required
+def cancelar_compra(cid):
+    """Cancelar compra — reverte estoque se já recebida."""
+    try:
+        compra = db.session.get(CompraEstoque, cid)
+        if not compra:
+            return jsonify({"erro": "Compra não encontrada"}), 404
+        if compra.status == "Cancelado":
+            return jsonify({"erro": "Compra já cancelada"}), 400
+
+        # Se já recebida, reverter estoque
+        if compra.status == "Recebido":
+            for item in compra.itens:
+                produto = db.session.get(Produto, item.id_produto)
+                if produto:
+                    produto.estoque_atual = max(
+                        0, (produto.estoque_atual or 0) - item.quantidade
+                    )
+
+        compra.status = "Cancelado"
+        db.session.commit()
+        registrar_log(
+            "cancelar", "compra", cid, f"Compra #{cid} cancelada"
+        )
+        return jsonify({
+            "mensagem": f"Compra #{cid} cancelada",
+            "compra": compra.to_dict(),
+        })
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
+# =============================================================================
+# ROTAS - EDITAR VENDA + STATUS PEDIDO
+# =============================================================================
+
+
+@app.route("/api/vendas/<int:id_venda>", methods=["PUT"])
+@api_admin_required
+def editar_venda(id_venda):
+    """Editar venda existente — forma pagamento, observações, desconto."""
+    try:
+        venda = db.session.get(Venda, id_venda)
+        if not venda:
+            return jsonify({"erro": "Venda não encontrada"}), 404
+        if venda.status_pagamento == "Cancelado":
+            return (
+                jsonify({"erro": "Venda cancelada não pode ser editada"}),
+                400,
+            )
+
+        dados = request.get_json(silent=True) or {}
+        campos_editados = []
+
+        if "forma_pagamento" in dados:
+            venda.forma_pagamento = dados["forma_pagamento"]
+            if venda.pagamento:
+                venda.pagamento.metodo = dados["forma_pagamento"]
+            campos_editados.append("forma_pagamento")
+
+        if "observacoes" in dados:
+            venda.observacoes = (dados["observacoes"] or "").strip() or None
+            campos_editados.append("observacoes")
+
+        if "status_pagamento" in dados:
+            status_validos = ("Pendente", "Concluído", "Cancelado")
+            if dados["status_pagamento"] not in status_validos:
+                return (
+                    jsonify({"erro": f"Status inválido. Use: {status_validos}"}),
+                    400,
+                )
+            venda.status_pagamento = dados["status_pagamento"]
+            if venda.pagamento:
+                venda.pagamento.status = dados["status_pagamento"]
+            campos_editados.append("status_pagamento")
+
+        db.session.commit()
+        registrar_log(
+            "editar", "venda", id_venda,
+            f"Venda #{id_venda} editada: {', '.join(campos_editados)}",
+        )
+        return jsonify(venda.to_dict())
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
+@app.route(
+    "/api/vendas/<int:id_venda>/status-pedido", methods=["PUT"]
+)
+@api_login_required
+def atualizar_status_pedido(id_venda):
+    """Atualizar status do pedido (workflow iFood-like)."""
+    try:
+        venda = db.session.get(Venda, id_venda)
+        if not venda:
+            return jsonify({"erro": "Venda não encontrada"}), 404
+
+        dados = request.get_json(silent=True) or {}
+        novo_status = (dados.get("status_pedido") or "").strip()
+        _status_validos = (
+            "Recebido", "Preparando", "Pronto", "Entregue", "Cancelado"
+        )
+        if novo_status not in _status_validos:
+            return (
+                jsonify(
+                    {"erro": f"Status inválido. Use: {_status_validos}"}
+                ),
+                400,
+            )
+
+        # Workflow: não pode retroceder (exceto cancelar)
+        _ordem = {
+            "Recebido": 0, "Preparando": 1, "Pronto": 2,
+            "Entregue": 3, "Cancelado": 99,
+        }
+        status_atual = venda.status_pedido or "Recebido"
+        if (
+            novo_status != "Cancelado"
+            and _ordem.get(novo_status, 0) <= _ordem.get(status_atual, 0)
+        ):
+            return (
+                jsonify(
+                    {
+                        "erro": (
+                            f"Não pode retroceder de"
+                            f" '{status_atual}' para '{novo_status}'"
+                        )
+                    }
+                ),
+                400,
+            )
+
+        venda.status_pedido = novo_status
+        db.session.commit()
+        registrar_log(
+            "status_pedido", "venda", id_venda,
+            f"Pedido #{id_venda}: {status_atual} → {novo_status}",
+        )
+        return jsonify({
+            "mensagem": f"Pedido #{id_venda} → {novo_status}",
+            "venda": venda.to_dict(),
+        })
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
+# =============================================================================
+# ROTAS - CUPONS DE DESCONTO
+# =============================================================================
+
+
+@app.route("/api/cupons", methods=["GET"])
+@api_login_required
+def listar_cupons():
+    """Listar cupons de desconto."""
+    try:
+        query = CupomDesconto.query
+        ativo_only = request.args.get("ativo_only") != "false"
+        if ativo_only:
+            query = query.filter_by(ativo=True)
+        cupons = query.order_by(CupomDesconto.data_criacao.desc()).all()
+        return jsonify([c.to_dict() for c in cupons])
+    except Exception as e:
+        return _erro_interno(e)
+
+
+@app.route("/api/cupons", methods=["POST"])
+@limiter.limit("20 per minute")
+@api_admin_required
+def criar_cupom():
+    """Criar novo cupom de desconto."""
+    try:
+        dados = request.get_json(silent=True) or {}
+        codigo = (dados.get("codigo") or "").strip().upper()
+        if not codigo or len(codigo) < 3:
+            return (
+                jsonify({"erro": "Código obrigatório (mínimo 3 caracteres)"}),
+                400,
+            )
+
+        # Validar código único
+        existente = CupomDesconto.query.filter_by(codigo=codigo).first()
+        if existente:
+            return jsonify({"erro": f"Código '{codigo}' já existe"}), 400
+
+        tipo = dados.get("tipo_desconto", "percentual")
+        if tipo not in ("percentual", "fixo"):
+            return (
+                jsonify({"erro": "tipo_desconto: 'percentual' ou 'fixo'"}),
+                400,
+            )
+
+        valor = Decimal(str(dados.get("valor_desconto", 0)))
+        if valor <= 0:
+            return (
+                jsonify({"erro": "Valor do desconto deve ser positivo"}), 400
+            )
+        if tipo == "percentual" and valor > 100:
+            return (
+                jsonify({"erro": "Percentual máximo é 100%"}), 400
+            )
+
+        cupom = CupomDesconto(
+            codigo=codigo,
+            descricao=(dados.get("descricao") or "").strip() or None,
+            tipo_desconto=tipo,
+            valor_desconto=valor,
+            valor_minimo_pedido=Decimal(
+                str(dados.get("valor_minimo_pedido", 0))
+            ),
+            usos_maximos=int(dados.get("usos_maximos", 0)),
+        )
+
+        data_fim = dados.get("data_fim")
+        if data_fim:
+            cupom.data_fim = datetime.fromisoformat(data_fim)
+
+        db.session.add(cupom)
+        db.session.commit()
+        registrar_log(
+            "criar", "cupom", cupom.id_cupom,
+            f"Cupom {codigo} — {tipo} {float(valor)}",
+        )
+        return jsonify(cupom.to_dict()), 201
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
+@app.route("/api/cupons/<int:cid>", methods=["PUT"])
+@api_admin_required
+def atualizar_cupom(cid):
+    """Atualizar cupom de desconto."""
+    try:
+        cupom = db.session.get(CupomDesconto, cid)
+        if not cupom:
+            return jsonify({"erro": "Cupom não encontrado"}), 404
+
+        dados = request.get_json(silent=True) or {}
+        if "descricao" in dados:
+            cupom.descricao = (dados["descricao"] or "").strip() or None
+        if "ativo" in dados:
+            cupom.ativo = bool(dados["ativo"])
+        if "usos_maximos" in dados:
+            cupom.usos_maximos = int(dados["usos_maximos"])
+        if "data_fim" in dados:
+            cupom.data_fim = (
+                datetime.fromisoformat(dados["data_fim"])
+                if dados["data_fim"]
+                else None
+            )
+
+        db.session.commit()
+        registrar_log("editar", "cupom", cid, cupom.codigo)
+        return jsonify(cupom.to_dict())
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
+@app.route("/api/cupons/<int:cid>", methods=["DELETE"])
+@api_admin_required
+def desativar_cupom(cid):
+    """Desativar cupom."""
+    try:
+        cupom = db.session.get(CupomDesconto, cid)
+        if not cupom:
+            return jsonify({"erro": "Cupom não encontrado"}), 404
+        cupom.ativo = False
+        db.session.commit()
+        registrar_log("desativar", "cupom", cid, cupom.codigo)
+        return jsonify({"mensagem": f"Cupom {cupom.codigo} desativado"})
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
+@app.route("/api/cupons/validar", methods=["POST"])
+@api_login_required
+def validar_cupom():
+    """Validar cupom no checkout."""
+    try:
+        dados = request.get_json(silent=True) or {}
+        codigo = (dados.get("codigo") or "").strip().upper()
+        if not codigo:
+            return jsonify({"erro": "Código obrigatório"}), 400
+
+        cupom = CupomDesconto.query.filter_by(codigo=codigo).first()
+        if not cupom:
+            return jsonify({"erro": "Cupom não encontrado"}), 404
+
+        if not cupom.valido:
+            return jsonify({"erro": "Cupom expirado ou esgotado"}), 400
+
+        valor_pedido = Decimal(str(dados.get("valor_pedido", 0)))
+        if (
+            cupom.valor_minimo_pedido
+            and valor_pedido < cupom.valor_minimo_pedido
+        ):
+            return (
+                jsonify(
+                    {
+                        "erro": (
+                            f"Pedido mínimo de"
+                            f" R${float(cupom.valor_minimo_pedido):.2f}"
+                        )
+                    }
+                ),
+                400,
+            )
+
+        # Calcular desconto
+        if cupom.tipo_desconto == "percentual":
+            desconto = valor_pedido * cupom.valor_desconto / Decimal("100")
+        else:
+            desconto = min(cupom.valor_desconto, valor_pedido)
+
+        return jsonify({
+            "valido": True,
+            "cupom": cupom.to_dict(),
+            "desconto_calculado": float(desconto),
+        })
+    except Exception as e:
+        return _erro_interno(e)
+
+
+# =============================================================================
+# ROTAS - PROMOÇÕES (preço promocional nos produtos)
+# =============================================================================
+
+
+@app.route("/api/produtos/<int:id_produto>/promocao", methods=["PUT"])
+@api_admin_required
+def definir_promocao(id_produto):
+    """Definir ou remover preço promocional de um produto."""
+    try:
+        produto = db.session.get(Produto, id_produto)
+        if not produto:
+            return jsonify({"erro": "Produto não encontrado"}), 404
+
+        dados = request.get_json(silent=True) or {}
+        preco_promo = dados.get("preco_promocional")
+
+        if preco_promo is None or preco_promo == "" or preco_promo is False:
+            produto.preco_promocional = None
+            db.session.commit()
+            registrar_log(
+                "remover_promocao", "produto", id_produto,
+                f"Promoção removida: {produto.nome_produto}",
+            )
+            return jsonify({
+                "mensagem": "Promoção removida",
+                "produto": produto.to_dict(),
+            })
+
+        preco_promo = Decimal(str(preco_promo))
+        if preco_promo <= 0:
+            return (
+                jsonify({"erro": "Preço promocional deve ser positivo"}),
+                400,
+            )
+        if preco_promo >= produto.preco:
+            return (
+                jsonify(
+                    {"erro": "Preço promocional deve ser menor que o preço regular"}
+                ),
+                400,
+            )
+
+        produto.preco_promocional = preco_promo
+        db.session.commit()
+        registrar_log(
+            "promocao", "produto", id_produto,
+            f"{produto.nome_produto}: R${float(produto.preco):.2f}"
+            f" → R${float(preco_promo):.2f}",
+        )
+        return jsonify({
+            "mensagem": "Preço promocional definido",
+            "produto": produto.to_dict(),
+        })
     except Exception as e:
         db.session.rollback()
         return _erro_interno(e)

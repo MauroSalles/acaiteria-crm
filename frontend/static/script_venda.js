@@ -6,6 +6,7 @@
 let itensVenda = [];
 let clienteSelecionado = null;
 let produtosDisponiveis = [];
+let cupomAplicado = null; // {codigo, tipo_desconto, valor_desconto, desconto_calculado}
 
 // Inicializar a página de vendas
 document.addEventListener('DOMContentLoaded', async () => {
@@ -37,6 +38,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('btn-adicionar').addEventListener('click', adicionarItem);
     document.getElementById('desconto-perc').addEventListener('change', recalcularTotais);
     document.getElementById('taxa').addEventListener('change', recalcularTotais);
+    document.getElementById('btn-aplicar-cupom').addEventListener('click', validarCupomVenda);
     document.getElementById('btn-finalizar').addEventListener('click', finalizarVenda);
     document.getElementById('btn-cancelar').addEventListener('click', cancelarVenda);
     document.getElementById('cliente-select').addEventListener('change', selecionarCliente);
@@ -243,22 +245,87 @@ function removerItem(index) {
     mostrarAlerta(`✅ ${itemRemovido.nome_produto} removido!`, 'sucesso');
 }
 
+// Validar e aplicar cupom de desconto
+async function validarCupomVenda() {
+    const codigoInput = document.getElementById('cupom-codigo');
+    const codigo = codigoInput.value.trim().toUpperCase();
+    const infoDiv = document.getElementById('cupom-info');
+
+    if (!codigo) {
+        mostrarAlerta('⚠️ Digite o código do cupom!', 'aviso');
+        return;
+    }
+
+    const subtotal = itensVenda.reduce((t, i) => t + i.subtotal, 0);
+    if (subtotal <= 0) {
+        mostrarAlerta('⚠️ Adicione itens à venda antes de aplicar o cupom!', 'aviso');
+        return;
+    }
+
+    try {
+        const resp = await requisicao('/api/cupons/validar', {
+            method: 'POST',
+            body: JSON.stringify({ codigo, valor_pedido: subtotal })
+        });
+
+        cupomAplicado = {
+            codigo: resp.codigo,
+            tipo_desconto: resp.tipo_desconto,
+            valor_desconto: resp.valor_desconto,
+            desconto_calculado: resp.desconto_calculado
+        };
+
+        infoDiv.style.display = 'block';
+        infoDiv.style.background = '#e8f5e9';
+        infoDiv.innerHTML = `✅ Cupom <strong>${resp.codigo}</strong> aplicado! Desconto: <strong>${formatarMoeda(resp.desconto_calculado)}</strong>`;
+        codigoInput.readOnly = true;
+        document.getElementById('btn-aplicar-cupom').textContent = '❌ Remover';
+        document.getElementById('btn-aplicar-cupom').onclick = removerCupom;
+
+        recalcularTotais();
+        mostrarAlerta(`🎟️ Cupom ${resp.codigo} aplicado!`, 'sucesso');
+    } catch (erro) {
+        cupomAplicado = null;
+        infoDiv.style.display = 'block';
+        infoDiv.style.background = '#ffebee';
+        infoDiv.innerHTML = `❌ ${erro.message || 'Cupom inválido'}`;
+    }
+}
+
+// Remover cupom aplicado
+function removerCupom() {
+    cupomAplicado = null;
+    document.getElementById('cupom-codigo').value = '';
+    document.getElementById('cupom-codigo').readOnly = false;
+    document.getElementById('cupom-info').style.display = 'none';
+    const btn = document.getElementById('btn-aplicar-cupom');
+    btn.textContent = 'Aplicar';
+    btn.onclick = validarCupomVenda;
+    recalcularTotais();
+    mostrarAlerta('Cupom removido.', 'info');
+}
+
 // Recalcular totais
 function recalcularTotais() {
     // Subtotal
     const subtotal = itensVenda.reduce((total, item) => total + item.subtotal, 0);
     document.getElementById('subtotal').textContent = formatarMoeda(subtotal);
     
-    // Desconto
+    // Desconto percentual
     const descontoPerc = parseFloat(document.getElementById('desconto-perc').value) || 0;
-    const descontoValor = subtotal * (descontoPerc / 100);
+    let descontoValor = subtotal * (descontoPerc / 100);
+
+    // Desconto cupom
+    if (cupomAplicado) {
+        descontoValor += cupomAplicado.desconto_calculado;
+    }
     document.getElementById('desconto-valor').textContent = formatarMoeda(descontoValor);
     
     // Taxa
     const taxa = parseFloat(document.getElementById('taxa').value) || 0;
     
     // Total final
-    const totalFinal = subtotal - descontoValor + taxa;
+    const totalFinal = Math.max(subtotal - descontoValor + taxa, 0);
     document.getElementById('total-final').textContent = `${formatarMoeda(totalFinal)}`;
 }
 
@@ -289,6 +356,7 @@ async function finalizarVenda() {
         observacoes: document.getElementById('observacoes').value || '',
         desconto_percentual: descontoPerc,
         taxa: taxa,
+        cupom_codigo: cupomAplicado ? cupomAplicado.codigo : null,
         itens: itensVenda.map(item => ({
             id_produto: item.id_produto,
             quantidade: item.quantidade
@@ -328,6 +396,13 @@ async function finalizarVenda() {
         document.getElementById('observacoes').value = '';
         document.getElementById('quantidade').value = '1';
         document.getElementById('produto-select').value = '';
+        cupomAplicado = null;
+        document.getElementById('cupom-codigo').value = '';
+        document.getElementById('cupom-codigo').readOnly = false;
+        document.getElementById('cupom-info').style.display = 'none';
+        const btnCupom = document.getElementById('btn-aplicar-cupom');
+        btnCupom.textContent = 'Aplicar';
+        btnCupom.onclick = validarCupomVenda;
         
         renderizarItens();
         recalcularTotais();

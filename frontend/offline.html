@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sem Conexão - Açaiteria CRM</title>
     <meta name="theme-color" content="#7B1FA2">
-    <style>
+    <style nonce="{{ csp_nonce }}">
         *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Segoe UI', system-ui, sans-serif;
@@ -54,7 +54,7 @@
             <li>💡 Páginas visitadas recentemente estão salvas no cache</li>
         </ul>
     </div>
-    <script>
+    <script nonce="{{ csp_nonce }}">
         window.addEventListener('online', () => location.reload());
     </script>
 </body>

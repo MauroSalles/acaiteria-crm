@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
@@ -24,6 +24,7 @@
                     <a href="#" onclick="navDropdown(this);return false">🛒 Vendas <span class="arrow">▾</span></a>
                     <ul class="dropdown">
                         <li><a href="/nova-venda" class="active">➕ Registrar Venda</a></li>
+                        <li><a href="/vendas">📋 Gerenciar Vendas</a></li>
                     </ul>
                 </li>
                 <li class="has-dropdown">
@@ -34,6 +35,7 @@
                     </ul>
                 </li>
                 <li><a href="/produtos">📦 Produtos</a></li>
+                <li><a href="/compras">📥 Compras</a></li>
                 <li class="has-dropdown">
                     <a href="#" onclick="navDropdown(this);return false">💰 Financeiro <span class="arrow">▾</span></a>
                     <ul class="dropdown">
@@ -149,6 +151,16 @@
                             </div>
                         </div>
 
+                        <!-- Cupom de Desconto -->
+                        <div class="form-group" style="margin-top:.5rem">
+                            <label for="cupom-codigo">🎟️ Cupom de Desconto:</label>
+                            <div style="display:flex;gap:.5rem">
+                                <input type="text" id="cupom-codigo" class="form-control" placeholder="CODIGO" style="text-transform:uppercase;flex:1">
+                                <button type="button" id="btn-aplicar-cupom" class="btn btn-info" style="white-space:nowrap">Aplicar</button>
+                            </div>
+                            <div id="cupom-info" style="display:none;margin-top:.3rem;padding:.3rem .6rem;background:#e8f5e9;border-radius:6px;font-size:.85rem"></div>
+                        </div>
+
                         <!-- Observações -->
                         <div class="form-group">
                             <label for="observacoes">Observações (opcional):</label>
@@ -182,7 +194,7 @@
         </footer>
     </div>
 
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
-    <script src="{{ url_for('static', filename='script_venda.js') }}"></script>
+    <script nonce="{{ csp_nonce }}" src="{{ url_for('static', filename='script.js') }}"></script>
+    <script nonce="{{ csp_nonce }}" src="{{ url_for('static', filename='script_venda.js') }}"></script>
 </body>
 </html>

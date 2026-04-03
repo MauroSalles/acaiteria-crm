@@ -145,6 +145,12 @@ function formatarDataHora(data) {
     return new Date(data).toLocaleString('pt-BR');
 }
 
+// Obter CSRF token do meta tag (gerado pelo Flask-WTF)
+function obterCSRFToken() {
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.getAttribute('content') : '';
+}
+
 // Função para fazer requisições fetch com tratamento de erro
 async function requisicao(url, opcoes = {}, timeoutMs = 15000) {
     const controller = new AbortController();
@@ -155,6 +161,7 @@ async function requisicao(url, opcoes = {}, timeoutMs = 15000) {
             signal: controller.signal,
             headers: {
                 'Content-Type': 'application/json',
+                'X-CSRFToken': obterCSRFToken(),
                 ...opcoes.headers
             },
             ...opcoes

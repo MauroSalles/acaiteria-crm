@@ -6,7 +6,7 @@
     <title>Login — Combina Açaí</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
     <meta name="theme-color" content="#7B1FA2">
-    <style>
+    <style nonce="{{ csp_nonce }}">
         body { background: linear-gradient(135deg, #F3E5F5 0%, #EDE7F6 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; font-family: 'Segoe UI', system-ui, sans-serif; }
         .auth-card { background: #fff; border-radius: 20px; box-shadow: 0 8px 32px rgba(123,31,162,0.12); padding: 2.5rem 2rem; max-width: 420px; width: 100%; text-align: center; }
         .auth-card .logo { font-size: 3.5rem; margin-bottom: 0.5rem; display: block; }
@@ -43,6 +43,7 @@
         {% endif %}
 
         <form method="POST" action="/cliente/login">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <label class="auth-label">📧 E-mail ou Telefone</label>
             <input type="text" name="identificador" class="auth-input" placeholder="seu@email.com ou (12) 99999-9999" required autocomplete="username">
 

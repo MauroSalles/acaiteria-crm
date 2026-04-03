@@ -156,6 +156,7 @@ class Produto(db.Model):
     volume = db.Column(db.String(20))  # "10L", "5L" — recipiente
     estoque_atual = db.Column(db.Integer, default=0)
     estoque_minimo = db.Column(db.Integer, default=0)
+    preco_promocional = db.Column(db.DECIMAL(10, 2), nullable=True)
     ativo = db.Column(db.Boolean, default=True, index=True)
     data_criacao = db.Column(db.DateTime, default=_utcnow)
     data_atualizacao = db.Column(
@@ -178,6 +179,11 @@ class Produto(db.Model):
             "volume": self.volume,
             "estoque_atual": self.estoque_atual,
             "estoque_minimo": self.estoque_minimo,
+            "preco_promocional": (
+                float(self.preco_promocional)
+                if self.preco_promocional
+                else None
+            ),
             "ativo": self.ativo,
         }
 
@@ -227,6 +233,9 @@ class Venda(db.Model):
     valor_total = db.Column(db.DECIMAL(10, 2), nullable=False)
     forma_pagamento = db.Column(db.String(50))
     status_pagamento = db.Column(db.String(50), default="Pendente")
+    status_pedido = db.Column(
+        db.String(30), default="Recebido"
+    )  # Recebido | Preparando | Pronto | Entregue | Cancelado
     observacoes = db.Column(db.Text)
     recibo_gerado = db.Column(db.Boolean, default=False)
     data_atualizacao = db.Column(
@@ -259,6 +268,7 @@ class Venda(db.Model):
             "valor_total": float(self.valor_total),
             "forma_pagamento": self.forma_pagamento,
             "status_pagamento": self.status_pagamento,
+            "status_pedido": self.status_pedido or "Recebido",
             "itens": [item.to_dict() for item in self.itens],
             "observacoes": self.observacoes,
         }
@@ -456,3 +466,183 @@ class MensagemTicket(db.Model):
                 self.data_envio.isoformat() if self.data_envio else None
             ),
         }
+
+
+# =============================================================================
+# FORNECEDOR & COMPRAS DE ESTOQUE
+# =============================================================================
+
+
+class Fornecedor(db.Model):
+    """Fornecedor de insumos/produtos da açaiteria."""
+
+    __tablename__ = "fornecedor"
+
+    id_fornecedor = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(200), nullable=False)
+    cnpj = db.Column(db.String(18), unique=True)
+    telefone = db.Column(db.String(20))
+    email = db.Column(db.String(150))
+    endereco = db.Column(db.Text)
+    observacoes = db.Column(db.Text)
+    ativo = db.Column(db.Boolean, default=True)
+    data_criacao = db.Column(db.DateTime, default=_utcnow)
+
+    compras = db.relationship(
+        "CompraEstoque", backref="fornecedor", lazy=True
+    )
+
+    def to_dict(self):
+        return {
+            "id_fornecedor": self.id_fornecedor,
+            "nome": self.nome,
+            "cnpj": self.cnpj,
+            "telefone": self.telefone,
+            "email": self.email,
+            "endereco": self.endereco,
+            "observacoes": self.observacoes,
+            "ativo": self.ativo,
+            "data_criacao": (
+                self.data_criacao.isoformat() if self.data_criacao else None
+            ),
+        }
+
+
+class CompraEstoque(db.Model):
+    """Registro de compra de estoque (reposição de insumos)."""
+
+    __tablename__ = "compra_estoque"
+
+    id_compra = db.Column(db.Integer, primary_key=True)
+    id_fornecedor = db.Column(
+        db.Integer, db.ForeignKey("fornecedor.id_fornecedor"), nullable=False,
+        index=True,
+    )
+    data_compra = db.Column(db.DateTime, default=_utcnow, index=True)
+    valor_total = db.Column(db.DECIMAL(10, 2), nullable=False, default=0)
+    nota_fiscal = db.Column(db.String(50))
+    status = db.Column(
+        db.String(30), default="Pendente"
+    )  # Pendente | Recebido | Cancelado
+    observacoes = db.Column(db.Text)
+    data_atualizacao = db.Column(
+        db.DateTime, default=_utcnow, onupdate=_utcnow
+    )
+
+    itens = db.relationship(
+        "ItemCompra", backref="compra", lazy=True,
+        cascade="all, delete-orphan",
+    )
+
+    def to_dict(self):
+        return {
+            "id_compra": self.id_compra,
+            "id_fornecedor": self.id_fornecedor,
+            "fornecedor_nome": (
+                self.fornecedor.nome if self.fornecedor else None
+            ),
+            "data_compra": (
+                self.data_compra.isoformat() if self.data_compra else None
+            ),
+            "valor_total": float(self.valor_total),
+            "nota_fiscal": self.nota_fiscal,
+            "status": self.status,
+            "observacoes": self.observacoes,
+            "itens": [i.to_dict() for i in self.itens],
+        }
+
+
+class ItemCompra(db.Model):
+    """Item individual de uma compra de estoque."""
+
+    __tablename__ = "item_compra"
+
+    id_item = db.Column(db.Integer, primary_key=True)
+    id_compra = db.Column(
+        db.Integer, db.ForeignKey("compra_estoque.id_compra"), nullable=False,
+        index=True,
+    )
+    id_produto = db.Column(
+        db.Integer, db.ForeignKey("produto.id_produto"), nullable=False,
+    )
+    quantidade = db.Column(db.Integer, nullable=False)
+    preco_unitario = db.Column(db.DECIMAL(10, 2), nullable=False)
+    subtotal = db.Column(db.DECIMAL(10, 2), nullable=False)
+
+    produto = db.relationship("Produto", lazy=True)
+
+    def to_dict(self):
+        return {
+            "id_item": self.id_item,
+            "id_compra": self.id_compra,
+            "id_produto": self.id_produto,
+            "produto_nome": (
+                self.produto.nome_produto if self.produto else None
+            ),
+            "quantidade": self.quantidade,
+            "preco_unitario": float(self.preco_unitario),
+            "subtotal": float(self.subtotal),
+        }
+
+
+# =============================================================================
+# CUPONS DE DESCONTO
+# =============================================================================
+
+
+class CupomDesconto(db.Model):
+    """Cupom de desconto para promoções e campanhas."""
+
+    __tablename__ = "cupom_desconto"
+
+    id_cupom = db.Column(db.Integer, primary_key=True)
+    codigo = db.Column(
+        db.String(30), unique=True, nullable=False, index=True
+    )
+    descricao = db.Column(db.String(200))
+    tipo_desconto = db.Column(
+        db.String(20), nullable=False, default="percentual"
+    )  # percentual | fixo
+    valor_desconto = db.Column(db.DECIMAL(10, 2), nullable=False)
+    valor_minimo_pedido = db.Column(db.DECIMAL(10, 2), default=0)
+    usos_maximos = db.Column(db.Integer, default=0)  # 0 = ilimitado
+    usos_realizados = db.Column(db.Integer, default=0)
+    ativo = db.Column(db.Boolean, default=True)
+    data_inicio = db.Column(db.DateTime, default=_utcnow)
+    data_fim = db.Column(db.DateTime, nullable=True)
+    data_criacao = db.Column(db.DateTime, default=_utcnow)
+
+    def to_dict(self):
+        return {
+            "id_cupom": self.id_cupom,
+            "codigo": self.codigo,
+            "descricao": self.descricao,
+            "tipo_desconto": self.tipo_desconto,
+            "valor_desconto": float(self.valor_desconto),
+            "valor_minimo_pedido": float(
+                self.valor_minimo_pedido or 0
+            ),
+            "usos_maximos": self.usos_maximos,
+            "usos_realizados": self.usos_realizados,
+            "ativo": self.ativo,
+            "data_inicio": (
+                self.data_inicio.isoformat() if self.data_inicio else None
+            ),
+            "data_fim": (
+                self.data_fim.isoformat() if self.data_fim else None
+            ),
+        }
+
+    @property
+    def valido(self):
+        """Verifica se o cupom está válido para uso."""
+        if not self.ativo:
+            return False
+        agora = _utcnow().replace(tzinfo=None)
+        if self.data_inicio and agora < self.data_inicio.replace(tzinfo=None):
+            return False
+        if self.data_fim and agora > self.data_fim.replace(tzinfo=None):
+            return False
+        if self.usos_maximos > 0 and self.usos_realizados >= self.usos_maximos:
+            return False
+        return True

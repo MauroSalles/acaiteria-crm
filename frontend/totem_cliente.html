@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
     <meta name="theme-color" content="#7B1FA2">
-    <style>
+    <style nonce="{{ csp_nonce }}">
         /* ===== TOTEM — Layout touch-friendly para tablet/balcão ===== */
         body {
             background: linear-gradient(135deg, #6C2EB9 0%, #4A1D80 50%, #2E1065 100%);
@@ -388,7 +388,7 @@
         </div>
     </div>
 
-    <script>
+    <script nonce="{{ csp_nonce }}">
     (function() {
         'use strict';
 

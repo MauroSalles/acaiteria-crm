@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
@@ -24,6 +24,7 @@
                     <a href="#" onclick="navDropdown(this);return false">🛒 Vendas <span class="arrow">▾</span></a>
                     <ul class="dropdown">
                         <li><a href="/nova-venda">➕ Registrar Venda</a></li>
+                        <li><a href="/vendas">📋 Gerenciar Vendas</a></li>
                     </ul>
                 </li>
                 <li class="has-dropdown active">
@@ -34,6 +35,7 @@
                     </ul>
                 </li>
                 <li><a href="/produtos">📦 Produtos</a></li>
+                <li><a href="/compras">📥 Compras</a></li>
                 <li class="has-dropdown">
                     <a href="#" onclick="navDropdown(this);return false">💰 Financeiro <span class="arrow">▾</span></a>
                     <ul class="dropdown">
@@ -131,8 +133,8 @@
         </footer>
     </div>
 
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
-    <script>
+    <script nonce="{{ csp_nonce }}" src="{{ url_for('static', filename='script.js') }}"></script>
+    <script nonce="{{ csp_nonce }}">
         let paginaAtual = 1;
 
         async function carregarClientes(pagina = 1) {

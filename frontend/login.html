@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
     <meta name="theme-color" content="#7B1FA2">
-    <style>
+    <style nonce="{{ csp_nonce }}">
         .login-container {
             display: flex;
             justify-content: center;
@@ -355,6 +355,7 @@
                         {% endif %}
 
                         <form method="POST" action="/login">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <div class="form-group">
                                 <label for="email" class="login-label">📧 Email:</label>
                                 <input 
@@ -522,7 +523,7 @@
         </footer>
     </div>
 
-    <script>
+    <script nonce="{{ csp_nonce }}">
     (function() {
         'use strict';
 

@@ -6,7 +6,7 @@
     <title>Meu Painel — Combina Açaí</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
     <meta name="theme-color" content="#7B1FA2">
-    <style>
+    <style nonce="{{ csp_nonce }}">
         body { background: #FAFAFA; font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; }
         .painel-nav {
             background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.08); padding: 0.8rem 1.5rem;

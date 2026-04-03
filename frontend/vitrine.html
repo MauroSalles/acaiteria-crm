@@ -8,7 +8,7 @@
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
     <meta name="theme-color" content="#7B1FA2">
     <meta name="description" content="Açaiteria Combina Açaí — Os melhores açaís, sorvetes e bowls de Lorena/SP. Programa de fidelidade, ofertas da semana e muito mais!">
-    <style>
+    <style nonce="{{ csp_nonce }}">
         *{margin:0;padding:0;box-sizing:border-box}
         body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#FAFAFA;color:#333}
         .hero{background:linear-gradient(135deg,#7B1FA2 0%,#9C27B0 50%,#CE93D8 100%);color:#fff;text-align:center;padding:3rem 1.5rem 2.5rem}
@@ -161,7 +161,7 @@
             .fab-cart{display:flex;align-items:center;justify-content:center}
         }
     </style>
-    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+    <script nonce="{{ csp_nonce }}" src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
 </head>
 <body>
 
@@ -296,7 +296,7 @@
         🛒<span class="fab-badge" id="fabBadge" style="display:none">0</span>
     </button>
 
-    <script>
+    <script nonce="{{ csp_nonce }}">
         /* ========== UTILITÁRIOS ========== */
         var isLoggedIn = {{ 'true' if session.get('cliente_id') else 'false' }};
         var emojisPorCategoria = {

@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compras & Estoque - Açaiteria CRM</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <meta name="theme-color" content="#7B1FA2">
+</head>
+<body>
+    <div class="container">
+        <!-- Navbar -->
+        <nav class="navbar">
+            <div class="navbar-brand">🍇 <strong>Combina Açaí</strong></div>
+            <div class="navbar-search">
+                <input type="text" id="globalSearch" placeholder="Buscar clientes, produtos…" autocomplete="off" aria-label="Busca global">
+                <div class="search-results" id="searchResults"></div>
+            </div>
+            <button class="navbar-toggle" onclick="document.getElementById('navMenu').classList.toggle('open')" aria-label="Menu">☰</button>
+            <ul class="navbar-menu" id="navMenu">
+                <li><a href="/">🏠 Início</a></li>
+                <li class="has-dropdown">
+                    <a href="#" onclick="navDropdown(this);return false">🛒 Vendas <span class="arrow">▾</span></a>
+                    <ul class="dropdown">
+                        <li><a href="/nova-venda">➕ Registrar Venda</a></li>
+                    </ul>
+                </li>
+                <li class="has-dropdown">
+                    <a href="#" onclick="navDropdown(this);return false">👥 Clientes <span class="arrow">▾</span></a>
+                    <ul class="dropdown">
+                        <li><a href="/cadastro-cliente">➕ Cadastrar Cliente</a></li>
+                        <li><a href="/clientes">📋 Lista de Clientes</a></li>
+                    </ul>
+                </li>
+                <li><a href="/produtos">📦 Produtos</a></li>
+                <li class="has-dropdown">
+                    <a href="#" onclick="navDropdown(this);return false">💰 Financeiro <span class="arrow">▾</span></a>
+                    <ul class="dropdown">
+                        <li><a href="/relatorios">📊 Relatórios</a></li>
+                        <li><a href="/fechamento">🔐 Fechamento de Caixa</a></li>
+                    </ul>
+                </li>
+                <li><a href="/compras" class="active">📥 Compras</a></li>
+                <li><a href="/suporte">🎧 Suporte</a></li>
+                <li><a href="/politica-privacidade">🔒 LGPD</a></li>
+                {% if papel == 'admin' %}
+                <li><a href="/usuarios">👤 Usuários</a></li>
+                <li><a href="/historico">📋 Histórico</a></li>
+                {% endif %}
+                <li class="nav-separator"></li>
+                <li class="nav-user-info">👤 {{ usuario_nome }}</li>
+                <li><button class="dark-toggle" id="darkToggle" aria-label="Alternar tema escuro">🌙</button></li>
+                <li><a href="/logout" class="nav-logout">⬅ Sair</a></li>
+            </ul>
+        </nav>
+
+        <main class="content">
+            <h1>📥 Compras & Reposição de Estoque</h1>
+            <p class="subtitle">Registre compras de fornecedores e mantenha o estoque atualizado</p>
+
+            <!-- Abas -->
+            <div style="display:flex;gap:.5rem;margin-bottom:1.5rem;flex-wrap:wrap">
+                <button class="btn btn-primary" id="tab-compras" onclick="trocarAba('compras')">📥 Compras</button>
+                <button class="btn btn-info" id="tab-fornecedores" onclick="trocarAba('fornecedores')">🏢 Fornecedores</button>
+                <button class="btn btn-info" id="tab-cupons" onclick="trocarAba('cupons')">🎟️ Cupons</button>
+            </div>
+
+            <!-- ========== ABA COMPRAS ========== -->
+            <div id="aba-compras">
+                <!-- Formulário nova compra -->
+                <div class="card">
+                    <h2 id="compraFormTitle">➕ Registrar Nova Compra</h2>
+                    <form id="form-compra">
+                        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem">
+                            <div class="form-group">
+                                <label for="compra-fornecedor">Fornecedor *</label>
+                                <select id="compra-fornecedor" required>
+                                    <option value="">-- Selecione --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="compra-nota">Nota Fiscal</label>
+                                <input type="text" id="compra-nota" placeholder="Nº da NF">
+                            </div>
+                            <div class="form-group">
+                                <label for="compra-status">Status</label>
+                                <select id="compra-status">
+                                    <option value="Pendente">📋 Pendente</option>
+                                    <option value="Recebido">✅ Recebido</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="compra-obs">Observações</label>
+                            <input type="text" id="compra-obs" placeholder="Observações da compra">
+                        </div>
+
+                        <!-- Itens da compra -->
+                        <h3 style="margin-top:1rem">📦 Itens da Compra</h3>
+                        <div style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:.5rem;align-items:end">
+                            <div class="form-group" style="margin:0">
+                                <label for="item-produto">Produto</label>
+                                <select id="item-produto"><option value="">-- Produto --</option></select>
+                            </div>
+                            <div class="form-group" style="margin:0">
+                                <label for="item-qtd">Qtd</label>
+                                <input type="number" id="item-qtd" min="1" value="1">
+                            </div>
+                            <div class="form-group" style="margin:0">
+                                <label for="item-preco">Preço Unit. (R$)</label>
+                                <input type="number" id="item-preco" step="0.01" min="0.01" placeholder="0.00">
+                            </div>
+                            <button type="button" class="btn btn-primary" style="padding:.5rem 1rem;margin-bottom:.2rem" onclick="adicionarItemCompra()">+ Add</button>
+                        </div>
+                        <div id="itens-compra-lista" style="margin-top:.8rem">
+                            <p style="color:#888;font-size:.9rem">Nenhum item adicionado</p>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1rem;padding-top:.8rem;border-top:2px solid #eee">
+                            <strong>Total: <span id="compra-total">R$ 0,00</span></strong>
+                            <button type="submit" class="btn btn-primary">💾 Registrar Compra</button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Lista de compras -->
+                <div class="card" style="margin-top:1.5rem">
+                    <div style="display:flex;gap:.8rem;align-items:center;flex-wrap:wrap;margin-bottom:1rem">
+                        <h2 style="margin:0">📋 Histórico de Compras</h2>
+                        <button class="btn btn-info" style="font-size:.8rem;padding:.4rem .8rem" onclick="carregarCompras()">🔄 Atualizar</button>
+                        <select id="filtro-status-compra" style="padding:.3rem .6rem;border-radius:6px;border:1px solid #ccc" onchange="carregarCompras()">
+                            <option value="">Todos</option>
+                            <option value="Pendente">Pendente</option>
+                            <option value="Recebido">Recebido</option>
+                            <option value="Cancelado">Cancelado</option>
+                        </select>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table" id="tabela-compras">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Fornecedor</th>
+                                    <th>Data</th>
+                                    <th>NF</th>
+                                    <th>Total</th>
+                                    <th>Status</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td colspan="7" class="text-center">⏳ Carregando...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========== ABA FORNECEDORES ========== -->
+            <div id="aba-fornecedores" style="display:none">
+                <div class="card">
+                    <h2 id="fornecedorFormTitle">➕ Cadastrar Fornecedor</h2>
+                    <form id="form-fornecedor">
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+                            <div class="form-group">
+                                <label for="forn-nome">Nome *</label>
+                                <input type="text" id="forn-nome" required placeholder="Razão social / Nome fantasia">
+                            </div>
+                            <div class="form-group">
+                                <label for="forn-cnpj">CNPJ</label>
+                                <input type="text" id="forn-cnpj" placeholder="00.000.000/0001-00">
+                            </div>
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+                            <div class="form-group">
+                                <label for="forn-telefone">Telefone</label>
+                                <input type="text" id="forn-telefone" placeholder="(00) 00000-0000">
+                            </div>
+                            <div class="form-group">
+                                <label for="forn-email">E-mail</label>
+                                <input type="email" id="forn-email" placeholder="contato@fornecedor.com">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="forn-endereco">Endereço</label>
+                            <input type="text" id="forn-endereco" placeholder="Rua, número, cidade - UF">
+                        </div>
+                        <div class="form-group">
+                            <label for="forn-obs">Observações</label>
+                            <input type="text" id="forn-obs" placeholder="Informações adicionais">
+                        </div>
+                        <div style="display:flex;gap:.5rem">
+                            <button type="submit" class="btn btn-primary" id="btnFornSubmit">Cadastrar Fornecedor</button>
+                            <button type="button" class="btn btn-info" id="btnFornCancelar" style="display:none" onclick="cancelarEdicaoForn()">✖ Cancelar</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="card" style="margin-top:1.5rem">
+                    <h2>🏢 Fornecedores Cadastrados</h2>
+                    <div class="table-responsive">
+                        <table class="table" id="tabela-fornecedores">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Nome</th>
+                                    <th>CNPJ</th>
+                                    <th>Telefone</th>
+                                    <th>E-mail</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td colspan="6" class="text-center">⏳ Carregando...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========== ABA CUPONS ========== -->
+            <div id="aba-cupons" style="display:none">
+                <div class="card">
+                    <h2 id="cupomFormTitle">🎟️ Criar Cupom de Desconto</h2>
+                    <form id="form-cupom">
+                        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem">
+                            <div class="form-group">
+                                <label for="cupom-codigo">Código *</label>
+                                <input type="text" id="cupom-codigo" required placeholder="VERAO10" style="text-transform:uppercase">
+                            </div>
+                            <div class="form-group">
+                                <label for="cupom-tipo">Tipo</label>
+                                <select id="cupom-tipo">
+                                    <option value="percentual">% Percentual</option>
+                                    <option value="fixo">R$ Fixo</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="cupom-valor">Valor *</label>
+                                <input type="number" id="cupom-valor" step="0.01" min="0.01" required placeholder="10">
+                            </div>
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem">
+                            <div class="form-group">
+                                <label for="cupom-minimo">Pedido Mínimo (R$)</label>
+                                <input type="number" id="cupom-minimo" step="0.01" min="0" value="0">
+                            </div>
+                            <div class="form-group">
+                                <label for="cupom-usos">Usos Máximos (0=ilimitado)</label>
+                                <input type="number" id="cupom-usos" min="0" value="0">
+                            </div>
+                            <div class="form-group">
+                                <label for="cupom-fim">Expira em</label>
+                                <input type="datetime-local" id="cupom-fim">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="cupom-descricao">Descrição</label>
+                            <input type="text" id="cupom-descricao" placeholder="Ex: Desconto de verão, promoção inauguração...">
+                        </div>
+                        <button type="submit" class="btn btn-primary">💾 Criar Cupom</button>
+                    </form>
+                </div>
+
+                <div class="card" style="margin-top:1.5rem">
+                    <h2>🎟️ Cupons Ativos</h2>
+                    <div class="table-responsive">
+                        <table class="table" id="tabela-cupons">
+                            <thead>
+                                <tr>
+                                    <th>Código</th>
+                                    <th>Tipo</th>
+                                    <th>Valor</th>
+                                    <th>Min. Pedido</th>
+                                    <th>Usos</th>
+                                    <th>Expira</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td colspan="7" class="text-center">⏳ Carregando...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+
+        <footer class="footer">
+            <p>&copy; 2026 - Projeto Integrador UNIVESP | Grupo 22 | Polo Lorena/SP</p>
+        </footer>
+    </div>
+
+    <script nonce="{{ csp_nonce }}" src="{{ url_for('static', filename='script.js') }}"></script>
+    <script nonce="{{ csp_nonce }}">
+        let editandoFornId = null;
+        let itensCompraTemp = [];
+        let produtosLista = [];
+        let fornecedoresLista = [];
+
+        document.addEventListener('DOMContentLoaded', () => {
+            carregarDadosIniciais();
+        });
+
+        async function carregarDadosIniciais() {
+            try {
+                await Promise.all([
+                    carregarFornecedores(),
+                    carregarProdutosSelect(),
+                    carregarCompras(),
+                    carregarCupons(),
+                ]);
+            } catch (e) {
+                mostrarAlerta('Erro ao carregar dados', 'erro');
+            }
+        }
+
+        /* ========== ABAS ========== */
+        function trocarAba(aba) {
+            ['compras', 'fornecedores', 'cupons'].forEach(a => {
+                document.getElementById('aba-' + a).style.display = a === aba ? 'block' : 'none';
+                document.getElementById('tab-' + a).className = a === aba ? 'btn btn-primary' : 'btn btn-info';
+            });
+        }
+
+        /* ========== FORNECEDORES ========== */
+        async function carregarFornecedores() {
+            try {
+                fornecedoresLista = await requisicao('/api/fornecedores');
+                // Preencher select da compra
+                const sel = document.getElementById('compra-fornecedor');
+                sel.innerHTML = '<option value="">-- Selecione --</option>';
+                fornecedoresLista.forEach(f => {
+                    sel.innerHTML += `<option value="${f.id_fornecedor}">${escapeHtml(f.nome)}</option>`;
+                });
+                // Preencher tabela
+                const tbody = document.querySelector('#tabela-fornecedores tbody');
+                if (!fornecedoresLista.length) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="text-center">Nenhum fornecedor cadastrado</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = fornecedoresLista.map(f => `
+                    <tr>
+                        <td>${f.id_fornecedor}</td>
+                        <td><strong>${escapeHtml(f.nome)}</strong></td>
+                        <td>${escapeHtml(f.cnpj || '-')}</td>
+                        <td>${escapeHtml(f.telefone || '-')}</td>
+                        <td>${escapeHtml(f.email || '-')}</td>
+                        <td style="white-space:nowrap">
+                            <button onclick="editarFornecedor(${f.id_fornecedor})" class="btn btn-info" style="font-size:.75rem;padding:.35rem .5rem">✏️</button>
+                            <button onclick="desativarFornecedor(${f.id_fornecedor}, '${escapeHtml(f.nome).replace(/'/g, "\\'")}')" class="btn-remover" style="font-size:.75rem">🗑️</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (e) {
+                mostrarAlerta('Erro ao carregar fornecedores: ' + e.message, 'erro');
+            }
+        }
+
+        document.getElementById('form-fornecedor').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const dados = {
+                nome: document.getElementById('forn-nome').value.trim(),
+                cnpj: document.getElementById('forn-cnpj').value.trim() || undefined,
+                telefone: document.getElementById('forn-telefone').value.trim() || undefined,
+                email: document.getElementById('forn-email').value.trim() || undefined,
+                endereco: document.getElementById('forn-endereco').value.trim() || undefined,
+                observacoes: document.getElementById('forn-obs').value.trim() || undefined,
+            };
+            if (!dados.nome) { mostrarAlerta('Nome obrigatório', 'erro'); return; }
+
+            try {
+                if (editandoFornId) {
+                    await requisicao(`/api/fornecedores/${editandoFornId}`, {
+                        method: 'PUT', body: JSON.stringify(dados)
+                    });
+                    mostrarAlerta('Fornecedor atualizado!', 'sucesso');
+                    cancelarEdicaoForn();
+                } else {
+                    await requisicao('/api/fornecedores', {
+                        method: 'POST', body: JSON.stringify(dados)
+                    });
+                    mostrarAlerta('Fornecedor cadastrado!', 'sucesso');
+                }
+                document.getElementById('form-fornecedor').reset();
+                carregarFornecedores();
+            } catch (erro) {
+                mostrarAlerta('Erro: ' + erro.message, 'erro');
+            }
+        });
+
+        function editarFornecedor(id) {
+            const f = fornecedoresLista.find(x => x.id_fornecedor === id);
+            if (!f) return;
+            editandoFornId = id;
+            document.getElementById('forn-nome').value = f.nome || '';
+            document.getElementById('forn-cnpj').value = f.cnpj || '';
+            document.getElementById('forn-telefone').value = f.telefone || '';
+            document.getElementById('forn-email').value = f.email || '';
+            document.getElementById('forn-endereco').value = f.endereco || '';
+            document.getElementById('forn-obs').value = f.observacoes || '';
+            document.getElementById('btnFornSubmit').textContent = '💾 Salvar Alterações';
+            document.getElementById('fornecedorFormTitle').textContent = `✏️ Editando: ${f.nome}`;
+            document.getElementById('btnFornCancelar').style.display = 'inline-block';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function cancelarEdicaoForn() {
+            editandoFornId = null;
+            document.getElementById('form-fornecedor').reset();
+            document.getElementById('btnFornSubmit').textContent = 'Cadastrar Fornecedor';
+            document.getElementById('fornecedorFormTitle').textContent = '➕ Cadastrar Fornecedor';
+            document.getElementById('btnFornCancelar').style.display = 'none';
+        }
+
+        async function desativarFornecedor(id, nome) {
+            if (!confirm(`Desativar fornecedor "${nome}"?`)) return;
+            try {
+                await requisicao(`/api/fornecedores/${id}`, { method: 'DELETE' });
+                mostrarAlerta('Fornecedor desativado', 'sucesso');
+                carregarFornecedores();
+            } catch (e) {
+                mostrarAlerta('Erro: ' + e.message, 'erro');
+            }
+        }
+
+        /* ========== PRODUTOS SELECT ========== */
+        async function carregarProdutosSelect() {
+            try {
+                produtosLista = await requisicao('/api/produtos');
+                const sel = document.getElementById('item-produto');
+                sel.innerHTML = '<option value="">-- Produto --</option>';
+                produtosLista.forEach(p => {
+                    sel.innerHTML += `<option value="${p.id_produto}">${escapeHtml(p.nome_produto)} (est: ${p.estoque_atual})</option>`;
+                });
+            } catch (e) { /* ignore */ }
+        }
+
+        /* ========== ITENS DA COMPRA ========== */
+        function adicionarItemCompra() {
+            const idProd = parseInt(document.getElementById('item-produto').value);
+            const qtd = parseInt(document.getElementById('item-qtd').value) || 0;
+            const preco = parseFloat(document.getElementById('item-preco').value) || 0;
+
+            if (!idProd) { mostrarAlerta('Selecione um produto', 'aviso'); return; }
+            if (qtd <= 0) { mostrarAlerta('Quantidade inválida', 'aviso'); return; }
+            if (preco <= 0) { mostrarAlerta('Preço unitário inválido', 'aviso'); return; }
+
+            const produto = produtosLista.find(p => p.id_produto === idProd);
+            if (!produto) return;
+
+            itensCompraTemp.push({
+                id_produto: idProd,
+                nome_produto: produto.nome_produto,
+                quantidade: qtd,
+                preco_unitario: preco,
+                subtotal: qtd * preco,
+            });
+
+            document.getElementById('item-produto').value = '';
+            document.getElementById('item-qtd').value = '1';
+            document.getElementById('item-preco').value = '';
+            renderItensCompra();
+        }
+
+        function removerItemCompra(idx) {
+            itensCompraTemp.splice(idx, 1);
+            renderItensCompra();
+        }
+
+        function renderItensCompra() {
+            const el = document.getElementById('itens-compra-lista');
+            if (!itensCompraTemp.length) {
+                el.innerHTML = '<p style="color:#888;font-size:.9rem">Nenhum item adicionado</p>';
+                document.getElementById('compra-total').textContent = 'R$ 0,00';
+                return;
+            }
+            let total = 0;
+            el.innerHTML = itensCompraTemp.map((item, i) => {
+                total += item.subtotal;
+                return `<div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem .6rem;background:#f8f8f8;border-radius:6px;margin-bottom:.3rem">
+                    <span><strong>${escapeHtml(item.nome_produto)}</strong> — ${item.quantidade}× R$ ${item.preco_unitario.toFixed(2)} = <strong>R$ ${item.subtotal.toFixed(2)}</strong></span>
+                    <button type="button" class="btn-remover" style="font-size:.75rem" onclick="removerItemCompra(${i})">❌</button>
+                </div>`;
+            }).join('');
+            document.getElementById('compra-total').textContent = formatarMoeda(total);
+        }
+
+        /* ========== REGISTRAR COMPRA ========== */
+        document.getElementById('form-compra').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!itensCompraTemp.length) {
+                mostrarAlerta('Adicione pelo menos um item', 'aviso');
+                return;
+            }
+            const fornId = document.getElementById('compra-fornecedor').value;
+            if (!fornId) { mostrarAlerta('Selecione um fornecedor', 'aviso'); return; }
+
+            const dados = {
+                id_fornecedor: parseInt(fornId),
+                nota_fiscal: document.getElementById('compra-nota').value.trim() || undefined,
+                status: document.getElementById('compra-status').value,
+                observacoes: document.getElementById('compra-obs').value.trim() || undefined,
+                itens: itensCompraTemp.map(i => ({
+                    id_produto: i.id_produto,
+                    quantidade: i.quantidade,
+                    preco_unitario: i.preco_unitario,
+                })),
+            };
+
+            try {
+                await requisicao('/api/compras', {
+                    method: 'POST', body: JSON.stringify(dados)
+                });
+                mostrarAlerta('Compra registrada com sucesso!', 'sucesso');
+                document.getElementById('form-compra').reset();
+                itensCompraTemp = [];
+                renderItensCompra();
+                carregarCompras();
+                carregarProdutosSelect();
+            } catch (erro) {
+                mostrarAlerta('Erro: ' + erro.message, 'erro');
+            }
+        });
+
+        /* ========== LISTAR COMPRAS ========== */
+        async function carregarCompras() {
+            const tbody = document.querySelector('#tabela-compras tbody');
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center">⏳ Carregando...</td></tr>';
+            try {
+                const status = document.getElementById('filtro-status-compra').value;
+                const params = status ? `?status=${status}` : '';
+                const res = await requisicao(`/api/compras${params}`);
+                const compras = res.compras || [];
+                if (!compras.length) {
+                    tbody.innerHTML = '<tr><td colspan="7" class="text-center">Nenhuma compra encontrada</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = compras.map(c => {
+                    const statusClass = c.status === 'Recebido' ? 'color:#2E7D32' : c.status === 'Cancelado' ? 'color:#c62828' : 'color:#E65100';
+                    const acoes = [];
+                    if (c.status === 'Pendente') {
+                        acoes.push(`<button onclick="receberCompra(${c.id_compra})" class="btn btn-primary" style="font-size:.7rem;padding:.25rem .5rem">✅ Receber</button>`);
+                    }
+                    if (c.status !== 'Cancelado') {
+                        acoes.push(`<button onclick="cancelarCompra(${c.id_compra})" class="btn-remover" style="font-size:.7rem">❌</button>`);
+                    }
+                    return `<tr>
+                        <td>${c.id_compra}</td>
+                        <td>${escapeHtml(c.fornecedor_nome || '-')}</td>
+                        <td>${formatarData(c.data_compra)}</td>
+                        <td>${escapeHtml(c.nota_fiscal || '-')}</td>
+                        <td><strong>${formatarMoeda(c.valor_total)}</strong></td>
+                        <td><span style="${statusClass};font-weight:600">${c.status}</span></td>
+                        <td style="white-space:nowrap">${acoes.join(' ')}</td>
+                    </tr>`;
+                }).join('');
+            } catch (e) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center">Erro ao carregar</td></tr>';
+            }
+        }
+
+        async function receberCompra(id) {
+            if (!confirm('Confirmar recebimento? O estoque será atualizado.')) return;
+            try {
+                await requisicao(`/api/compras/${id}/receber`, { method: 'POST' });
+                mostrarAlerta('Compra recebida — estoque atualizado!', 'sucesso');
+                carregarCompras();
+                carregarProdutosSelect();
+            } catch (e) {
+                mostrarAlerta('Erro: ' + e.message, 'erro');
+            }
+        }
+
+        async function cancelarCompra(id) {
+            if (!confirm('Cancelar esta compra?')) return;
+            try {
+                await requisicao(`/api/compras/${id}/cancelar`, { method: 'POST' });
+                mostrarAlerta('Compra cancelada', 'sucesso');
+                carregarCompras();
+                carregarProdutosSelect();
+            } catch (e) {
+                mostrarAlerta('Erro: ' + e.message, 'erro');
+            }
+        }
+
+        /* ========== CUPONS ========== */
+        async function carregarCupons() {
+            const tbody = document.querySelector('#tabela-cupons tbody');
+            try {
+                const cupons = await requisicao('/api/cupons?ativo_only=false');
+                if (!cupons.length) {
+                    tbody.innerHTML = '<tr><td colspan="7" class="text-center">Nenhum cupom cadastrado</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = cupons.map(c => {
+                    const tipoLabel = c.tipo_desconto === 'percentual' ? `${c.valor_desconto}%` : formatarMoeda(c.valor_desconto);
+                    const expirado = c.data_fim && new Date(c.data_fim) < new Date();
+                    const statusLabel = !c.ativo ? '<span style="color:#999">Inativo</span>'
+                        : expirado ? '<span style="color:#c62828">Expirado</span>'
+                        : '<span style="color:#2E7D32;font-weight:600">Ativo</span>';
+                    return `<tr${!c.ativo ? ' style="opacity:.5"' : ''}>
+                        <td><strong style="font-family:monospace;font-size:1rem">${escapeHtml(c.codigo)}</strong></td>
+                        <td>${c.tipo_desconto === 'percentual' ? '📊 %' : '💰 R$'}</td>
+                        <td><strong>${tipoLabel}</strong></td>
+                        <td>${c.valor_minimo_pedido > 0 ? formatarMoeda(c.valor_minimo_pedido) : '-'}</td>
+                        <td>${c.usos_realizados}${c.usos_maximos > 0 ? '/' + c.usos_maximos : '/∞'}</td>
+                        <td>${c.data_fim ? formatarData(c.data_fim) : '∞'} ${statusLabel}</td>
+                        <td>
+                            ${c.ativo ? `<button onclick="desativarCupom(${c.id_cupom}, '${escapeHtml(c.codigo)}')" class="btn-remover" style="font-size:.7rem">🗑️</button>` : ''}
+                        </td>
+                    </tr>`;
+                }).join('');
+            } catch (e) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center">Erro ao carregar</td></tr>';
+            }
+        }
+
+        document.getElementById('form-cupom').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const dados = {
+                codigo: document.getElementById('cupom-codigo').value.trim(),
+                tipo_desconto: document.getElementById('cupom-tipo').value,
+                valor_desconto: parseFloat(document.getElementById('cupom-valor').value),
+                valor_minimo_pedido: parseFloat(document.getElementById('cupom-minimo').value) || 0,
+                usos_maximos: parseInt(document.getElementById('cupom-usos').value) || 0,
+                descricao: document.getElementById('cupom-descricao').value.trim() || undefined,
+            };
+            const dataFim = document.getElementById('cupom-fim').value;
+            if (dataFim) dados.data_fim = dataFim;
+
+            if (!dados.codigo || !dados.valor_desconto) {
+                mostrarAlerta('Preencha código e valor', 'erro');
+                return;
+            }
+
+            try {
+                await requisicao('/api/cupons', {
+                    method: 'POST', body: JSON.stringify(dados)
+                });
+                mostrarAlerta('Cupom criado com sucesso!', 'sucesso');
+                document.getElementById('form-cupom').reset();
+                carregarCupons();
+            } catch (erro) {
+                mostrarAlerta('Erro: ' + erro.message, 'erro');
+            }
+        });
+
+        async function desativarCupom(id, codigo) {
+            if (!confirm(`Desativar cupom "${codigo}"?`)) return;
+            try {
+                await requisicao(`/api/cupons/${id}`, { method: 'DELETE' });
+                mostrarAlerta('Cupom desativado', 'sucesso');
+                carregarCupons();
+            } catch (e) {
+                mostrarAlerta('Erro: ' + e.message, 'erro');
+            }
+        }
+    </script>
+</body>
+</html>
