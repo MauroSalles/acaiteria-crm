@@ -50,6 +50,7 @@ from .models import (
     CompraEstoque,
     ItemCompra,
     CupomDesconto,
+    BadgeCliente,
 )
 
 # =============================================================================
@@ -1345,6 +1346,14 @@ def criar_venda():
 
         db.session.add(venda)
         db.session.commit()
+
+        # Verificar badges de gamificação
+        novos_badges = []
+        try:
+            novos_badges = _verificar_badges(dados["id_cliente"])
+        except Exception:
+            pass  # Badges são bônus, não devem bloquear venda
+
         registrar_log(
             "criar",
             "venda",
@@ -1355,6 +1364,7 @@ def criar_venda():
         resultado = venda.to_dict()
         resultado["pontos_ganhos"] = pontos_ganhos
         resultado["pontos_total"] = cliente.pontos_fidelidade or 0
+        resultado["novos_badges"] = [b.to_dict() for b in novos_badges]
         return jsonify(resultado), 201
     except Exception as e:
         db.session.rollback()
@@ -5296,6 +5306,576 @@ def ia_stats():
                     if total_fb > 0 else 0, 3
                 ),
             },
+        })
+    except Exception as e:
+        return _erro_interno(e)
+
+
+# =============================================================================
+# ROTAS - DASHBOARD KPI EM TEMPO REAL
+# =============================================================================
+
+
+@app.route("/api/dashboard/kpi", methods=["GET"])
+@api_login_required
+def dashboard_kpi():
+    """KPIs operacionais em tempo real para o dashboard."""
+    try:
+        agora = datetime.now(timezone.utc)
+        hoje = agora.date()
+        inicio_semana = hoje - timedelta(days=hoje.weekday())
+        inicio_mes = hoje.replace(day=1)
+
+        # Vendas de hoje
+        vendas_hoje = Venda.query.filter(
+            db.func.date(Venda.data_venda) == hoje
+        ).all()
+        fat_hoje = sum(float(v.valor_total) for v in vendas_hoje)
+        qtd_hoje = len(vendas_hoje)
+        ticket_medio_hoje = (
+            fat_hoje / qtd_hoje if qtd_hoje > 0 else 0
+        )
+
+        # Vendas da semana
+        vendas_semana = Venda.query.filter(
+            db.func.date(Venda.data_venda) >= inicio_semana
+        ).all()
+        fat_semana = sum(float(v.valor_total) for v in vendas_semana)
+
+        # Vendas do mês
+        vendas_mes = Venda.query.filter(
+            db.func.date(Venda.data_venda) >= inicio_mes
+        ).all()
+        fat_mes = sum(float(v.valor_total) for v in vendas_mes)
+
+        # Pedidos em andamento (não entregues nem cancelados)
+        pedidos_ativos = Venda.query.filter(
+            Venda.status_pedido.in_(["Recebido", "Preparando", "Pronto"])
+        ).count()
+
+        # Top 3 clientes do dia
+        top_clientes_dia = (
+            db.session.query(
+                Cliente.nome,
+                db.func.count(Venda.id_venda).label("qtd"),
+                db.func.sum(Venda.valor_total).label("total"),
+            )
+            .join(Venda)
+            .filter(db.func.date(Venda.data_venda) == hoje)
+            .group_by(Cliente.id_cliente, Cliente.nome)
+            .order_by(db.func.sum(Venda.valor_total).desc())
+            .limit(3)
+            .all()
+        )
+
+        # Top 3 produtos do dia
+        top_produtos_dia = (
+            db.session.query(
+                Produto.nome_produto,
+                db.func.sum(ItemVenda.quantidade).label("qtd"),
+            )
+            .join(ItemVenda)
+            .join(Venda)
+            .filter(db.func.date(Venda.data_venda) == hoje)
+            .group_by(Produto.id_produto, Produto.nome_produto)
+            .order_by(db.func.sum(ItemVenda.quantidade).desc())
+            .limit(3)
+            .all()
+        )
+
+        # Alertas de estoque crítico (abaixo do mínimo)
+        estoque_critico = Produto.query.filter(
+            Produto.ativo == True,  # noqa: E712
+            Produto.estoque_atual <= Produto.estoque_minimo,
+            (Produto.estoque_minimo > 0) | (Produto.estoque_atual > 0),
+        ).count()
+
+        return jsonify({
+            "hoje": {
+                "faturamento": round(fat_hoje, 2),
+                "vendas": qtd_hoje,
+                "ticket_medio": round(ticket_medio_hoje, 2),
+            },
+            "semana": {"faturamento": round(fat_semana, 2)},
+            "mes": {"faturamento": round(fat_mes, 2)},
+            "pedidos_ativos": pedidos_ativos,
+            "estoque_critico": estoque_critico,
+            "top_clientes_dia": [
+                {
+                    "nome": c.nome,
+                    "vendas": c.qtd,
+                    "total": float(c.total),
+                }
+                for c in top_clientes_dia
+            ],
+            "top_produtos_dia": [
+                {"produto": p.nome_produto, "quantidade": int(p.qtd)}
+                for p in top_produtos_dia
+            ],
+        })
+    except Exception as e:
+        return _erro_interno(e)
+
+
+# =============================================================================
+# ROTAS - RELATÓRIOS COM FILTROS AVANÇADOS
+# =============================================================================
+
+
+@app.route("/api/relatorios/vendas-filtradas", methods=["GET"])
+@api_login_required
+def relatorio_vendas_filtradas():
+    """Relatório de vendas com filtros avançados."""
+    try:
+        query = Venda.query
+
+        # Filtro por período
+        data_inicio = request.args.get("data_inicio")
+        data_fim = request.args.get("data_fim")
+        if data_inicio:
+            query = query.filter(
+                db.func.date(Venda.data_venda) >= data_inicio
+            )
+        if data_fim:
+            query = query.filter(
+                db.func.date(Venda.data_venda) <= data_fim
+            )
+
+        # Filtro por forma de pagamento
+        forma = request.args.get("forma_pagamento")
+        if forma:
+            query = query.filter(Venda.forma_pagamento == forma)
+
+        # Filtro por status do pedido
+        status = request.args.get("status_pedido")
+        if status:
+            query = query.filter(Venda.status_pedido == status)
+
+        # Filtro por status de pagamento
+        status_pag = request.args.get("status_pagamento")
+        if status_pag:
+            query = query.filter(Venda.status_pagamento == status_pag)
+
+        # Filtro por cliente
+        id_cliente = request.args.get("id_cliente", type=int)
+        if id_cliente:
+            query = query.filter(Venda.id_cliente == id_cliente)
+
+        # Filtro por produto
+        id_produto = request.args.get("id_produto", type=int)
+        if id_produto:
+            query = query.join(ItemVenda).filter(
+                ItemVenda.id_produto == id_produto
+            )
+
+        # Filtro por faixa de valor
+        valor_min = request.args.get("valor_min", type=float)
+        valor_max = request.args.get("valor_max", type=float)
+        if valor_min is not None:
+            query = query.filter(Venda.valor_total >= valor_min)
+        if valor_max is not None:
+            query = query.filter(Venda.valor_total <= valor_max)
+
+        # Paginação
+        pagina, por_pagina = get_pagination_params()
+        total = query.count()
+        vendas = (
+            query.order_by(Venda.data_venda.desc())
+            .offset((pagina - 1) * por_pagina)
+            .limit(por_pagina)
+            .all()
+        )
+
+        # Totalizadores
+        total_faturamento = float(
+            query.with_entities(
+                db.func.coalesce(db.func.sum(Venda.valor_total), 0)
+            ).scalar()
+        )
+        ticket_medio = (
+            total_faturamento / total if total > 0 else 0
+        )
+
+        # Resumo por forma de pagamento (dentro do filtro)
+        resumo_pagamento = (
+            query.with_entities(
+                Venda.forma_pagamento,
+                db.func.count(Venda.id_venda),
+                db.func.sum(Venda.valor_total),
+            )
+            .group_by(Venda.forma_pagamento)
+            .all()
+        )
+
+        return jsonify({
+            "vendas": [v.to_dict() for v in vendas],
+            "total": total,
+            "pagina": pagina,
+            "por_pagina": por_pagina,
+            "total_paginas": (total + por_pagina - 1) // por_pagina,
+            "totalizadores": {
+                "faturamento": round(total_faturamento, 2),
+                "ticket_medio": round(ticket_medio, 2),
+                "quantidade": total,
+            },
+            "por_forma_pagamento": [
+                {
+                    "forma": r[0] or "Indefinido",
+                    "quantidade": r[1],
+                    "total": float(r[2] or 0),
+                }
+                for r in resumo_pagamento
+            ],
+        })
+    except Exception as e:
+        return _erro_interno(e)
+
+
+# =============================================================================
+# ROTAS - GAMIFICAÇÃO (BADGES)
+# =============================================================================
+
+
+# Definição de badges disponíveis
+BADGES_DEFINICAO = {
+    "primeira_compra": {
+        "nome": "Primeira Compra",
+        "descricao": "Fez o primeiro pedido!",
+        "icone": "🎉",
+        "check": lambda c, v: v >= 1,
+    },
+    "fiel_10": {
+        "nome": "Cliente Fiel",
+        "descricao": "Completou 10 compras",
+        "icone": "🏆",
+        "check": lambda c, v: v >= 10,
+    },
+    "fiel_50": {
+        "nome": "Super Fiel",
+        "descricao": "Completou 50 compras!",
+        "icone": "💎",
+        "check": lambda c, v: v >= 50,
+    },
+    "gastador_100": {
+        "nome": "Gastador",
+        "descricao": "Gastou mais de R$100 no total",
+        "icone": "💰",
+        "check": lambda c, v: (
+            float(
+                db.session.query(
+                    db.func.coalesce(db.func.sum(Venda.valor_total), 0)
+                )
+                .filter(Venda.id_cliente == c)
+                .scalar()
+            )
+            >= 100
+        ),
+    },
+    "gastador_500": {
+        "nome": "VIP",
+        "descricao": "Gastou mais de R$500 — você é VIP!",
+        "icone": "👑",
+        "check": lambda c, v: (
+            float(
+                db.session.query(
+                    db.func.coalesce(db.func.sum(Venda.valor_total), 0)
+                )
+                .filter(Venda.id_cliente == c)
+                .scalar()
+            )
+            >= 500
+        ),
+    },
+    "pontos_100": {
+        "nome": "Colecionador",
+        "descricao": "Acumulou 100 pontos de fidelidade",
+        "icone": "🌟",
+        "check": lambda c, v: (
+            (
+                db.session.get(Cliente, c).pontos_fidelidade or 0
+            )
+            >= 100
+        ),
+    },
+}
+
+
+def _verificar_badges(id_cliente):
+    """Verifica e concede badges ao cliente."""
+    total_vendas = Venda.query.filter_by(
+        id_cliente=id_cliente
+    ).count()
+
+    badges_existentes = {
+        b.codigo
+        for b in BadgeCliente.query.filter_by(
+            id_cliente=id_cliente
+        ).all()
+    }
+
+    novos = []
+    for codigo, defn in BADGES_DEFINICAO.items():
+        if codigo not in badges_existentes:
+            if defn["check"](id_cliente, total_vendas):
+                badge = BadgeCliente(
+                    id_cliente=id_cliente,
+                    codigo=codigo,
+                    nome=defn["nome"],
+                    descricao=defn["descricao"],
+                    icone=defn["icone"],
+                )
+                db.session.add(badge)
+                novos.append(badge)
+
+    if novos:
+        db.session.commit()
+    return novos
+
+
+@app.route("/api/clientes/<int:id_cliente>/badges", methods=["GET"])
+@api_login_required
+def listar_badges(id_cliente):
+    """Listar badges conquistados por um cliente."""
+    try:
+        cliente = db.session.get(Cliente, id_cliente)
+        if not cliente or not cliente.ativo:
+            return jsonify({"erro": "Cliente não encontrado"}), 404
+
+        # Verificar novos badges
+        novos = _verificar_badges(id_cliente)
+
+        badges = BadgeCliente.query.filter_by(
+            id_cliente=id_cliente
+        ).order_by(BadgeCliente.data_conquista).all()
+
+        # Listar badges não conquistados
+        conquistados = {b.codigo for b in badges}
+        disponiveis = [
+            {
+                "codigo": cod,
+                "nome": d["nome"],
+                "descricao": d["descricao"],
+                "icone": d["icone"],
+                "conquistado": False,
+            }
+            for cod, d in BADGES_DEFINICAO.items()
+            if cod not in conquistados
+        ]
+
+        return jsonify({
+            "badges": [b.to_dict() for b in badges],
+            "novos": [b.to_dict() for b in novos],
+            "disponiveis": disponiveis,
+            "total_conquistados": len(badges),
+            "total_disponiveis": len(BADGES_DEFINICAO),
+        })
+    except Exception as e:
+        return _erro_interno(e)
+
+
+# =============================================================================
+# ROTAS - EXTRATO DO CLIENTE (HISTÓRICO DE PAGAMENTOS)
+# =============================================================================
+
+
+@app.route(
+    "/api/clientes/<int:id_cliente>/extrato", methods=["GET"]
+)
+@api_login_required
+def extrato_cliente(id_cliente):
+    """Extrato completo do cliente: compras, pontos, cupons."""
+    try:
+        cliente = db.session.get(Cliente, id_cliente)
+        if not cliente or not cliente.ativo:
+            return jsonify({"erro": "Cliente não encontrado"}), 404
+
+        # Histórico de vendas
+        vendas = (
+            Venda.query.filter_by(id_cliente=id_cliente)
+            .order_by(Venda.data_venda.desc())
+            .limit(50)
+            .all()
+        )
+
+        timeline = []
+        total_gasto = Decimal("0.00")
+        for v in vendas:
+            total_gasto += v.valor_total
+            timeline.append({
+                "tipo": "compra",
+                "data": v.data_venda.isoformat(),
+                "descricao": (
+                    f"Pedido #{v.id_venda} — "
+                    f"{len(v.itens)} iten(s)"
+                ),
+                "valor": float(v.valor_total),
+                "forma_pagamento": v.forma_pagamento,
+                "status": v.status_pagamento,
+                "status_pedido": v.status_pedido or "Recebido",
+                "itens": [
+                    {
+                        "produto": i.produto.nome_produto,
+                        "qtd": i.quantidade,
+                        "subtotal": float(i.subtotal),
+                    }
+                    for i in v.itens
+                ],
+            })
+
+        # Resumo
+        total_compras = len(vendas)
+        pontos = cliente.pontos_fidelidade or 0
+        desconto_disponivel = (pontos // 100) * 5
+
+        return jsonify({
+            "cliente": {
+                "id": cliente.id_cliente,
+                "nome": cliente.nome,
+                "pontos": pontos,
+                "desconto_disponivel": desconto_disponivel,
+                "desde": (
+                    cliente.data_cadastro.isoformat()
+                    if cliente.data_cadastro
+                    else None
+                ),
+            },
+            "resumo": {
+                "total_compras": total_compras,
+                "total_gasto": float(total_gasto),
+                "ticket_medio": (
+                    float(total_gasto / total_compras)
+                    if total_compras > 0
+                    else 0
+                ),
+            },
+            "timeline": timeline,
+        })
+    except Exception as e:
+        return _erro_interno(e)
+
+
+@app.route("/cliente/extrato")
+@cliente_login_required
+def cliente_extrato_page():
+    """Página de extrato do cliente logado."""
+    cliente = db.session.get(Cliente, session["cliente_id"])
+    if not cliente or not cliente.ativo:
+        session.clear()
+        return redirect("/cliente/login")
+    return render_template(
+        "cliente_extrato.html", cliente=cliente
+    )
+
+
+# =============================================================================
+# ROTAS - PREVISÃO DE ESTOQUE (ML)
+# =============================================================================
+
+
+@app.route("/api/estoque/previsao", methods=["GET"])
+@api_login_required
+def previsao_estoque():
+    """Previsão de consumo de estoque baseada em vendas recentes."""
+    try:
+        dias_analise = request.args.get("dias", 30, type=int)
+        dias_analise = min(max(dias_analise, 7), 365)
+        data_inicio = (
+            datetime.now(timezone.utc) - timedelta(days=dias_analise)
+        )
+
+        # Consumo médio por produto nos últimos N dias
+        # Subconsulta: total vendido por produto no período
+        sub = (
+            db.session.query(
+                ItemVenda.id_produto,
+                db.func.sum(ItemVenda.quantidade).label("total_vendido"),
+            )
+            .join(Venda, Venda.id_venda == ItemVenda.id_venda)
+            .filter(Venda.data_venda >= data_inicio)
+            .group_by(ItemVenda.id_produto)
+            .subquery()
+        )
+
+        consumo = (
+            db.session.query(
+                Produto.id_produto,
+                Produto.nome_produto,
+                Produto.categoria,
+                Produto.estoque_atual,
+                Produto.estoque_minimo,
+                db.func.coalesce(
+                    sub.c.total_vendido, 0
+                ).label("total_vendido"),
+            )
+            .outerjoin(
+                sub, sub.c.id_produto == Produto.id_produto
+            )
+            .filter(Produto.ativo == True)  # noqa: E712
+            .group_by(
+                Produto.id_produto, Produto.nome_produto,
+                Produto.categoria, Produto.estoque_atual,
+                Produto.estoque_minimo,
+                sub.c.total_vendido,
+            )
+            .all()
+        )
+
+        previsoes = []
+        for p in consumo:
+            vendido = int(p.total_vendido)
+            media_diaria = vendido / dias_analise if vendido > 0 else 0
+            estoque = p.estoque_atual or 0
+            dias_restantes = (
+                int(estoque / media_diaria)
+                if media_diaria > 0
+                else None
+            )
+            sugestao_compra = 0
+            if media_diaria > 0:
+                # Sugerir estoque para 14 dias
+                necessario_14d = int(media_diaria * 14)
+                if estoque < necessario_14d:
+                    sugestao_compra = necessario_14d - estoque
+
+            nivel = "ok"
+            if dias_restantes is not None:
+                if dias_restantes <= 3:
+                    nivel = "critico"
+                elif dias_restantes <= 7:
+                    nivel = "alerta"
+
+            previsoes.append({
+                "id_produto": p.id_produto,
+                "nome": p.nome_produto,
+                "categoria": p.categoria,
+                "estoque_atual": estoque,
+                "estoque_minimo": p.estoque_minimo or 0,
+                "vendido_periodo": vendido,
+                "media_diaria": round(media_diaria, 2),
+                "dias_restantes": dias_restantes,
+                "sugestao_compra": sugestao_compra,
+                "nivel": nivel,
+            })
+
+        # Ordenar: críticos primeiro
+        ordem_nivel = {"critico": 0, "alerta": 1, "ok": 2}
+        previsoes.sort(
+            key=lambda x: (
+                ordem_nivel.get(x["nivel"], 3),
+                x["dias_restantes"] or 9999,
+            )
+        )
+
+        return jsonify({
+            "dias_analise": dias_analise,
+            "total_produtos": len(previsoes),
+            "criticos": sum(
+                1 for p in previsoes if p["nivel"] == "critico"
+            ),
+            "alertas": sum(
+                1 for p in previsoes if p["nivel"] == "alerta"
+            ),
+            "previsoes": previsoes,
         })
     except Exception as e:
         return _erro_interno(e)

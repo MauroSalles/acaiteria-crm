@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meu Extrato — Combina Açaí</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
+    <meta name="theme-color" content="#7B1FA2">
+    <style nonce="{{ csp_nonce }}">
+        body { background: #FAFAFA; font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; }
+        .painel-nav {
+            background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.08); padding: 0.8rem 1.5rem;
+            display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100;
+        }
+        .painel-nav a { color: #7B1FA2; text-decoration: none; font-weight: 700; font-size: 1.1rem; }
+        .painel-nav .nav-right { display: flex; gap: 1rem; align-items: center; }
+        .painel-nav .nav-right a { font-size: 0.9rem; color: #666; font-weight: 600; padding: 0.4rem 0.8rem; border-radius: 8px; }
+        .painel-nav .nav-right a:hover { background: #F3E5F5; color: #7B1FA2; }
+        .painel-nav .btn-logout { color: #D32F2F !important; }
+
+        .painel { max-width: 800px; margin: 2rem auto; padding: 0 1.5rem; }
+
+        .extrato-header {
+            background: linear-gradient(135deg, #2E7D32 0%, #43A047 100%);
+            color: #fff; border-radius: 20px; padding: 2rem; margin-bottom: 1.5rem;
+            display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;
+        }
+        .extrato-header h1 { font-size: 1.5rem; margin-bottom: 0.3rem; }
+        .extrato-header p { opacity: 0.9; font-size: 0.95rem; }
+        .extrato-badge {
+            background: rgba(255,255,255,0.2); border-radius: 16px; padding: 1.2rem 2rem;
+            text-align: center; backdrop-filter: blur(10px);
+        }
+        .extrato-badge .badge-number { font-size: 2.5rem; font-weight: 800; display: block; }
+        .extrato-badge .badge-label { font-size: 0.85rem; opacity: 0.85; }
+
+        .resumo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+        .resumo-card {
+            background: #fff; border-radius: 16px; padding: 1.3rem; text-align: center;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+        }
+        .resumo-card .icon { font-size: 1.8rem; margin-bottom: 0.5rem; display: block; }
+        .resumo-card .value { font-size: 1.4rem; font-weight: 800; color: #7B1FA2; display: block; }
+        .resumo-card .label { font-size: 0.82rem; color: #999; }
+
+        .section-title { font-size: 1.3rem; color: #333; margin-bottom: 1rem; font-weight: 700; }
+
+        /* Badge achievements */
+        .badges-grid { display: flex; flex-wrap: wrap; gap: 0.8rem; margin-bottom: 2rem; }
+        .badge-item {
+            background: #fff; border-radius: 14px; padding: 1rem 1.2rem; text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05); min-width: 120px;
+        }
+        .badge-item.locked { opacity: 0.4; filter: grayscale(1); }
+        .badge-icon { font-size: 2rem; display: block; margin-bottom: 0.3rem; }
+        .badge-name { font-size: 0.85rem; font-weight: 700; color: #333; }
+        .badge-desc { font-size: 0.75rem; color: #999; }
+
+        /* Timeline */
+        .timeline { display: flex; flex-direction: column; gap: 0.8rem; }
+        .timeline-item {
+            background: #fff; border-radius: 14px; padding: 1.2rem 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05); border-left: 4px solid #7B1FA2;
+        }
+        .timeline-date { font-size: 0.82rem; color: #999; margin-bottom: 0.3rem; }
+        .timeline-desc { font-size: 0.95rem; color: #333; font-weight: 600; }
+        .timeline-itens { font-size: 0.85rem; color: #666; margin-top: 0.3rem; }
+        .timeline-valor { font-size: 1.1rem; font-weight: 700; color: #4CAF50; margin-top: 0.3rem; }
+        .timeline-meta { display: flex; gap: 1rem; font-size: 0.8rem; color: #999; margin-top: 0.3rem; }
+
+        .empty-state { text-align: center; padding: 3rem; color: #999; }
+        .empty-state .emoji { font-size: 3rem; margin-bottom: 0.5rem; display: block; }
+
+        @media (max-width: 600px) {
+            .extrato-header { flex-direction: column; text-align: center; }
+        }
+    </style>
+</head>
+<body>
+
+    <nav class="painel-nav">
+        <a href="/vitrine">🍇 Combina Açaí</a>
+        <div class="nav-right">
+            <a href="/cliente/painel">📊 Painel</a>
+            <a href="/vitrine">🏪 Vitrine</a>
+            <a href="/cliente/logout" class="btn-logout">Sair ↗</a>
+        </div>
+    </nav>
+
+    <div class="painel">
+        <div class="extrato-header">
+            <div>
+                <h1>📜 Extrato Completo</h1>
+                <p>{{ cliente.nome }} — histórico de compras, pontos e conquistas</p>
+            </div>
+            <div class="extrato-badge">
+                <span class="badge-number">{{ cliente.pontos_fidelidade or 0 }}</span>
+                <span class="badge-label">pontos</span>
+            </div>
+        </div>
+
+        <!-- Resumo -->
+        <div class="resumo-grid" id="resumo-grid">
+            <div class="resumo-card"><span class="icon">🛒</span><span class="value" id="ext-compras">--</span><span class="label">Compras</span></div>
+            <div class="resumo-card"><span class="icon">💰</span><span class="value" id="ext-gasto">--</span><span class="label">Total Gasto</span></div>
+            <div class="resumo-card"><span class="icon">🎯</span><span class="value" id="ext-ticket">--</span><span class="label">Ticket Médio</span></div>
+            <div class="resumo-card"><span class="icon">🎁</span><span class="value" id="ext-desconto">--</span><span class="label">Desconto Disponível</span></div>
+        </div>
+
+        <!-- Badges -->
+        <h2 class="section-title">🏅 Conquistas</h2>
+        <div class="badges-grid" id="badges-grid">
+            <p style="color:#999;">Carregando...</p>
+        </div>
+
+        <!-- Timeline de Compras -->
+        <h2 class="section-title">📋 Histórico Detalhado</h2>
+        <div class="timeline" id="timeline">
+            <p style="color:#999;">Carregando...</p>
+        </div>
+    </div>
+
+    <script nonce="{{ csp_nonce }}" src="{{ url_for('static', filename='script.js') }}"></script>
+    <script nonce="{{ csp_nonce }}">
+    const clienteId = {{ cliente.id_cliente }};
+
+    function escapeH(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+    // Carregar extrato
+    (async function() {
+        try {
+            const resp = await requisicao('/api/clientes/' + clienteId + '/extrato');
+            if (!resp.ok) return;
+            const d = await resp.json();
+
+            document.getElementById('ext-compras').textContent = d.resumo.total_compras;
+            document.getElementById('ext-gasto').textContent = 'R$ ' + d.resumo.total_gasto.toFixed(2);
+            document.getElementById('ext-ticket').textContent = 'R$ ' + d.resumo.ticket_medio.toFixed(2);
+            document.getElementById('ext-desconto').textContent = 'R$ ' + (d.cliente.desconto_disponivel || 0).toFixed(2);
+
+            // Timeline
+            const tl = document.getElementById('timeline');
+            if (d.timeline.length) {
+                tl.innerHTML = d.timeline.map(t => {
+                    const data = new Date(t.data).toLocaleDateString('pt-BR', {day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'});
+                    const itens = t.itens.map(i => i.qtd + 'x ' + escapeH(i.produto)).join(', ');
+                    return `
+                        <div class="timeline-item">
+                            <div class="timeline-date">${data}</div>
+                            <div class="timeline-desc">${escapeH(t.descricao)}</div>
+                            <div class="timeline-itens">${itens}</div>
+                            <div class="timeline-valor">R$ ${t.valor.toFixed(2)}</div>
+                            <div class="timeline-meta">
+                                <span>💳 ${escapeH(t.forma_pagamento || '-')}</span>
+                                <span>📦 ${escapeH(t.status_pedido)}</span>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } else {
+                tl.innerHTML = '<div class="empty-state"><span class="emoji">🛍️</span><p>Nenhuma compra registrada ainda.</p></div>';
+            }
+        } catch (e) {
+            console.warn('Extrato não carregado:', e);
+        }
+    })();
+
+    // Carregar badges
+    (async function() {
+        try {
+            const resp = await requisicao('/api/clientes/' + clienteId + '/badges');
+            if (!resp.ok) return;
+            const d = await resp.json();
+            const grid = document.getElementById('badges-grid');
+
+            const conquistados = d.badges.map(b => `
+                <div class="badge-item">
+                    <span class="badge-icon">${b.icone}</span>
+                    <div class="badge-name">${escapeH(b.nome)}</div>
+                    <div class="badge-desc">${escapeH(b.descricao)}</div>
+                </div>
+            `);
+            const disponiveis = d.disponiveis.map(b => `
+                <div class="badge-item locked">
+                    <span class="badge-icon">${b.icone}</span>
+                    <div class="badge-name">${escapeH(b.nome)}</div>
+                    <div class="badge-desc">${escapeH(b.descricao)}</div>
+                </div>
+            `);
+
+            grid.innerHTML = conquistados.join('') + disponiveis.join('');
+            if (!d.badges.length && !d.disponiveis.length) {
+                grid.innerHTML = '<p style="color:#999;">Nenhum badge disponível</p>';
+            }
+        } catch (e) {
+            console.warn('Badges não carregados:', e);
+        }
+    })();
+    </script>
+</body>
+</html>

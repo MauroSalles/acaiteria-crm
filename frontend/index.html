@@ -105,6 +105,74 @@
                 </div>
             </div>
 
+            <!-- KPI Tempo Real -->
+            <section id="kpi-realtime" class="card" style="display:none; border-left: 4px solid #2E7D32; margin: 1rem 0;">
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
+                    <h2>⚡ Operação em Tempo Real</h2>
+                    <button class="btn btn-sm" onclick="carregarKPIRealtime()" style="font-size:.85rem;padding:.3rem .8rem;">🔄 Atualizar</button>
+                </div>
+                <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .5rem; margin-top: .5rem;">
+                    <div class="card stats-card" style="padding:.7rem;">
+                        <div class="card-icon">💵</div>
+                        <div class="card-content">
+                            <h3 style="font-size:.85rem;">Faturamento Hoje</h3>
+                            <p class="stat-number" id="kpi-fat-hoje" style="font-size:1.3rem;">--</p>
+                        </div>
+                    </div>
+                    <div class="card stats-card" style="padding:.7rem;">
+                        <div class="card-icon">🧾</div>
+                        <div class="card-content">
+                            <h3 style="font-size:.85rem;">Vendas Hoje</h3>
+                            <p class="stat-number" id="kpi-vendas-hoje" style="font-size:1.3rem;">--</p>
+                        </div>
+                    </div>
+                    <div class="card stats-card" style="padding:.7rem;">
+                        <div class="card-icon">🎯</div>
+                        <div class="card-content">
+                            <h3 style="font-size:.85rem;">Ticket Médio Hoje</h3>
+                            <p class="stat-number" id="kpi-ticket-hoje" style="font-size:1.3rem;">--</p>
+                        </div>
+                    </div>
+                    <div class="card stats-card" style="padding:.7rem;">
+                        <div class="card-icon">📦</div>
+                        <div class="card-content">
+                            <h3 style="font-size:.85rem;">Pedidos Ativos</h3>
+                            <p class="stat-number" id="kpi-pedidos-ativos" style="font-size:1.3rem;">--</p>
+                        </div>
+                    </div>
+                    <div class="card stats-card" style="padding:.7rem;">
+                        <div class="card-icon">🚨</div>
+                        <div class="card-content">
+                            <h3 style="font-size:.85rem;">Estoque Crítico</h3>
+                            <p class="stat-number" id="kpi-estoque-critico" style="font-size:1.3rem;">--</p>
+                        </div>
+                    </div>
+                    <div class="card stats-card" style="padding:.7rem;">
+                        <div class="card-icon">📅</div>
+                        <div class="card-content">
+                            <h3 style="font-size:.85rem;">Faturamento Semana</h3>
+                            <p class="stat-number" id="kpi-fat-semana" style="font-size:1.3rem;">--</p>
+                        </div>
+                    </div>
+                </div>
+                <div id="kpi-top-clientes" style="margin-top:.7rem;font-size:.9rem;"></div>
+                <div id="kpi-top-produtos" style="margin-top:.3rem;font-size:.9rem;"></div>
+            </section>
+
+            <!-- Previsão de Estoque -->
+            <section id="previsao-estoque" class="card" style="display:none; border-left: 4px solid #FF6F00; margin: 1rem 0;">
+                <h2>📊 Previsão de Estoque (30 dias)</h2>
+                <table class="tabela-responsiva" style="width:100%;">
+                    <thead>
+                        <tr>
+                            <th>Produto</th><th>Estoque</th><th>Média/Dia</th>
+                            <th>Dias Restantes</th><th>Comprar</th><th>Nível</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-previsao-estoque"></tbody>
+                </table>
+            </section>
+
             <!-- Gráficos do Dashboard -->
             <section class="charts-section" role="region" aria-label="Gráficos do dashboard">
                 <div class="stats-grid" style="grid-template-columns: 1fr 1fr;">
@@ -431,6 +499,64 @@
             section.style.display = 'block';
         } catch (e) {
             console.warn('Cartão fidelidade não carregado:', e);
+        }
+    })();
+
+    // Carregar KPIs em tempo real
+    async function carregarKPIRealtime() {
+        try {
+            const resp = await requisicao('/api/dashboard/kpi');
+            if (!resp.ok) return;
+            const d = await resp.json();
+            const section = document.getElementById('kpi-realtime');
+            document.getElementById('kpi-fat-hoje').textContent = 'R$ ' + d.hoje.faturamento.toFixed(2);
+            document.getElementById('kpi-vendas-hoje').textContent = d.hoje.vendas;
+            document.getElementById('kpi-ticket-hoje').textContent = 'R$ ' + d.hoje.ticket_medio.toFixed(2);
+            document.getElementById('kpi-pedidos-ativos').textContent = d.pedidos_ativos;
+            document.getElementById('kpi-estoque-critico').textContent = d.estoque_critico;
+            document.getElementById('kpi-fat-semana').textContent = 'R$ ' + d.semana.faturamento.toFixed(2);
+            if (d.top_clientes_dia.length) {
+                document.getElementById('kpi-top-clientes').innerHTML =
+                    '🏅 <strong>Top clientes hoje:</strong> ' +
+                    d.top_clientes_dia.map(c => escapeHtml(c.nome) + ' (R$' + c.total.toFixed(2) + ')').join(', ');
+            }
+            if (d.top_produtos_dia.length) {
+                document.getElementById('kpi-top-produtos').innerHTML =
+                    '🔥 <strong>Top produtos hoje:</strong> ' +
+                    d.top_produtos_dia.map(p => escapeHtml(p.produto) + ' (' + p.quantidade + ')').join(', ');
+            }
+            section.style.display = 'block';
+        } catch (e) {
+            console.warn('KPI realtime não carregado:', e);
+        }
+    }
+    carregarKPIRealtime();
+
+    // Previsão de estoque
+    (async function carregarPrevisaoEstoque() {
+        try {
+            const resp = await requisicao('/api/estoque/previsao?dias=30');
+            if (!resp.ok) return;
+            const d = await resp.json();
+            const criticos = d.previsoes.filter(p => p.nivel !== 'ok');
+            if (!criticos.length) return;
+            const section = document.getElementById('previsao-estoque');
+            const tbody = document.getElementById('tbody-previsao-estoque');
+            const nivelCores = {critico: '#c62828', alerta: '#E65100'};
+            const nivelLabels = {critico: '🔴 Crítico', alerta: '🟡 Alerta'};
+            tbody.innerHTML = criticos.map(p => `
+                <tr style="background: ${p.nivel === 'critico' ? '#ffebee' : '#fff3e0'};">
+                    <td><strong>${escapeHtml(p.nome)}</strong></td>
+                    <td>${p.estoque_atual}</td>
+                    <td>${p.media_diaria}</td>
+                    <td style="color:${nivelCores[p.nivel]};font-weight:bold;">${p.dias_restantes ?? '∞'} dias</td>
+                    <td>${p.sugestao_compra > 0 ? '+' + p.sugestao_compra + ' un.' : '-'}</td>
+                    <td>${nivelLabels[p.nivel]}</td>
+                </tr>
+            `).join('');
+            section.style.display = 'block';
+        } catch (e) {
+            console.warn('Previsão de estoque não carregada:', e);
         }
     })();
     </script>

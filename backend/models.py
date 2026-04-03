@@ -646,3 +646,44 @@ class CupomDesconto(db.Model):
         if self.usos_maximos > 0 and self.usos_realizados >= self.usos_maximos:
             return False
         return True
+
+
+# =============================================================================
+# BADGES / GAMIFICAÇÃO
+# =============================================================================
+
+
+class BadgeCliente(db.Model):
+    """Badge conquistado por um cliente (gamificação)."""
+
+    __tablename__ = "badge_cliente"
+
+    id_badge = db.Column(db.Integer, primary_key=True)
+    id_cliente = db.Column(
+        db.Integer, db.ForeignKey("cliente.id_cliente"),
+        nullable=False, index=True,
+    )
+    codigo = db.Column(db.String(50), nullable=False)
+    nome = db.Column(db.String(100), nullable=False)
+    descricao = db.Column(db.String(200))
+    icone = db.Column(db.String(10), default="🏅")
+    data_conquista = db.Column(db.DateTime, default=_utcnow)
+
+    cliente = db.relationship(
+        "Cliente", backref=db.backref("badges", lazy=True)
+    )
+
+    def to_dict(self):
+        return {
+            "id_badge": self.id_badge,
+            "id_cliente": self.id_cliente,
+            "codigo": self.codigo,
+            "nome": self.nome,
+            "descricao": self.descricao,
+            "icone": self.icone,
+            "data_conquista": (
+                self.data_conquista.isoformat()
+                if self.data_conquista
+                else None
+            ),
+        }

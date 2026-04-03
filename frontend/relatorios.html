@@ -138,6 +138,71 @@
                 </div>
             </section>
 
+            <!-- Relatório Avançado com Filtros -->
+            <section>
+                <div class="card">
+                    <h2>🔍 Relatório Avançado com Filtros</h2>
+                    <div style="display:flex;flex-wrap:wrap;gap:.5rem;align-items:flex-end;margin-bottom:1rem;">
+                        <div>
+                            <label style="font-size:.85rem;font-weight:600;">Data Início</label>
+                            <input type="date" id="filtro-data-inicio" class="form-control" style="width:160px;">
+                        </div>
+                        <div>
+                            <label style="font-size:.85rem;font-weight:600;">Data Fim</label>
+                            <input type="date" id="filtro-data-fim" class="form-control" style="width:160px;">
+                        </div>
+                        <div>
+                            <label style="font-size:.85rem;font-weight:600;">Pagamento</label>
+                            <select id="filtro-pagamento" class="form-control" style="width:140px;">
+                                <option value="">Todos</option>
+                                <option value="Dinheiro">Dinheiro</option>
+                                <option value="PIX">PIX</option>
+                                <option value="Crédito">Crédito</option>
+                                <option value="Débito">Débito</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size:.85rem;font-weight:600;">Status Pedido</label>
+                            <select id="filtro-status" class="form-control" style="width:140px;">
+                                <option value="">Todos</option>
+                                <option value="Recebido">Recebido</option>
+                                <option value="Preparando">Preparando</option>
+                                <option value="Pronto">Pronto</option>
+                                <option value="Entregue">Entregue</option>
+                                <option value="Cancelado">Cancelado</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size:.85rem;font-weight:600;">Valor Mín</label>
+                            <input type="number" id="filtro-valor-min" class="form-control" placeholder="0" style="width:100px;" min="0" step="0.01">
+                        </div>
+                        <div>
+                            <label style="font-size:.85rem;font-weight:600;">Valor Máx</label>
+                            <input type="number" id="filtro-valor-max" class="form-control" placeholder="999" style="width:100px;" min="0" step="0.01">
+                        </div>
+                        <button class="btn btn-primary" onclick="buscarRelatorioFiltrado()">🔎 Filtrar</button>
+                        <button class="btn btn-secondary" onclick="limparFiltros()">✖ Limpar</button>
+                    </div>
+                    <!-- Totalizadores -->
+                    <div id="filtro-totais" style="display:none;" class="relatorio-grid"></div>
+                    <!-- Tabela de resultados -->
+                    <div class="table-responsive">
+                        <table class="table" id="tabela-filtrada" style="display:none;">
+                            <thead>
+                                <tr>
+                                    <th>#</th><th>Data</th><th>Cliente</th>
+                                    <th>Valor</th><th>Pagamento</th><th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <div id="filtro-paginacao" style="display:none;margin-top:.5rem;text-align:center;"></div>
+                    <!-- Resumo por pagamento -->
+                    <div id="filtro-resumo-pagamento" style="display:none;margin-top:1rem;"></div>
+                </div>
+            </section>
+
             <!-- Mensagem -->
             <div id="mensagem" class="alert" style="display: none; margin-top: 20px;"></div>
         </main>
@@ -301,6 +366,108 @@
             carregarClientesFrequentes();
             carregarProdutosRanking();
         });
+
+        // === Relatório Avançado com Filtros ===
+        let filtroPage = 1;
+
+        function buildFilterParams(pagina) {
+            const params = new URLSearchParams();
+            const di = document.getElementById('filtro-data-inicio').value;
+            const df = document.getElementById('filtro-data-fim').value;
+            const fp = document.getElementById('filtro-pagamento').value;
+            const st = document.getElementById('filtro-status').value;
+            const vmin = document.getElementById('filtro-valor-min').value;
+            const vmax = document.getElementById('filtro-valor-max').value;
+            if (di) params.set('data_inicio', di);
+            if (df) params.set('data_fim', df);
+            if (fp) params.set('forma_pagamento', fp);
+            if (st) params.set('status_pedido', st);
+            if (vmin) params.set('valor_min', vmin);
+            if (vmax) params.set('valor_max', vmax);
+            params.set('pagina', pagina);
+            params.set('por_pagina', '20');
+            return params.toString();
+        }
+
+        async function buscarRelatorioFiltrado(pagina) {
+            pagina = pagina || 1;
+            filtroPage = pagina;
+            try {
+                const qs = buildFilterParams(pagina);
+                const resp = await requisicao('/api/relatorios/vendas-filtradas?' + qs);
+                if (!resp.ok) { alert('Erro ao buscar relatório'); return; }
+                const d = await resp.json();
+
+                // Totalizadores
+                const totais = document.getElementById('filtro-totais');
+                totais.innerHTML = `
+                    <div class="stat-box"><span class="label">Vendas:</span><span class="value">${d.totalizadores.quantidade}</span></div>
+                    <div class="stat-box"><span class="label">Faturamento:</span><span class="value">R$ ${d.totalizadores.faturamento.toFixed(2)}</span></div>
+                    <div class="stat-box"><span class="label">Ticket Médio:</span><span class="value">R$ ${d.totalizadores.ticket_medio.toFixed(2)}</span></div>
+                `;
+                totais.style.display = '';
+
+                // Tabela
+                const tabela = document.getElementById('tabela-filtrada');
+                const tbody = tabela.querySelector('tbody');
+                if (!d.vendas.length) {
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center">Nenhum resultado</td></tr>';
+                } else {
+                    tbody.innerHTML = d.vendas.map(v => `
+                        <tr>
+                            <td>${v.id_venda}</td>
+                            <td>${new Date(v.data_venda).toLocaleDateString('pt-BR')}</td>
+                            <td>${escapeHtml(v.cliente_nome || '-')}</td>
+                            <td>R$ ${parseFloat(v.valor_total).toFixed(2)}</td>
+                            <td>${escapeHtml(v.forma_pagamento || '-')}</td>
+                            <td>${escapeHtml(v.status_pedido || '-')}</td>
+                        </tr>
+                    `).join('');
+                }
+                tabela.style.display = '';
+
+                // Paginação
+                const pagDiv = document.getElementById('filtro-paginacao');
+                if (d.total_paginas > 1) {
+                    let btns = '';
+                    for (let i = 1; i <= d.total_paginas; i++) {
+                        btns += `<button class="btn btn-sm ${i === pagina ? 'btn-primary' : 'btn-secondary'}" onclick="buscarRelatorioFiltrado(${i})" style="margin:0 2px;">${i}</button>`;
+                    }
+                    pagDiv.innerHTML = btns;
+                    pagDiv.style.display = '';
+                } else {
+                    pagDiv.style.display = 'none';
+                }
+
+                // Resumo por pagamento
+                const resumo = document.getElementById('filtro-resumo-pagamento');
+                if (d.por_forma_pagamento.length) {
+                    resumo.innerHTML = '<h3>💳 Por Forma de Pagamento</h3>' +
+                        d.por_forma_pagamento.map(p => `
+                            <div class="pagamento-item">
+                                <span>${escapeHtml(p.forma)}:</span>
+                                <span>${p.quantidade}x — R$ ${p.total.toFixed(2)}</span>
+                            </div>
+                        `).join('');
+                    resumo.style.display = '';
+                }
+            } catch (e) {
+                alert('Erro: ' + e.message);
+            }
+        }
+
+        function limparFiltros() {
+            document.getElementById('filtro-data-inicio').value = '';
+            document.getElementById('filtro-data-fim').value = '';
+            document.getElementById('filtro-pagamento').value = '';
+            document.getElementById('filtro-status').value = '';
+            document.getElementById('filtro-valor-min').value = '';
+            document.getElementById('filtro-valor-max').value = '';
+            document.getElementById('filtro-totais').style.display = 'none';
+            document.getElementById('tabela-filtrada').style.display = 'none';
+            document.getElementById('filtro-paginacao').style.display = 'none';
+            document.getElementById('filtro-resumo-pagamento').style.display = 'none';
+        }
     </script>
 </body>
 </html>
