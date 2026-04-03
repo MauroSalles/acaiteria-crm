@@ -77,7 +77,7 @@ app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=7)
 
 # Proteção de cookies de sessão
 app.config["SESSION_COOKIE_HTTPONLY"] = True
-app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_SAMESITE"] = "Strict"
 if os.environ.get("FLASK_ENV") == "production":
     app.config["SESSION_COOKIE_SECURE"] = True
 
@@ -122,6 +122,15 @@ if database_url.startswith("postgres://"):
 app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SQLALCHEMY_ECHO"] = os.environ.get("FLASK_ENV") == "development"
+
+# Connection pooling para PostgreSQL em produção
+if database_url.startswith("postgresql"):
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+        "pool_size": int(os.environ.get("DB_POOL_SIZE", "10")),
+        "max_overflow": int(os.environ.get("DB_MAX_OVERFLOW", "20")),
+        "pool_pre_ping": True,
+        "pool_recycle": 3600,
+    }
 
 # Inicializar banco de dados
 db.init_app(app)
@@ -211,6 +220,16 @@ def inject_user():
         "usuario_nome": session.get("usuario_nome", ""),
         "papel": session.get("papel", ""),
     }
+
+
+# ── Helper de paginação ──────────────────────────────────────────
+def get_pagination_params(default_per_page=50):
+    """Extrai e valida parâmetros de paginação da query string."""
+    pagina = max(1, request.args.get("pagina", 1, type=int))
+    por_pagina = max(
+        1, min(request.args.get("por_pagina", default_per_page, type=int), 100)
+    )
+    return pagina, por_pagina
 
 
 class ClienteCreateSchema(BaseModel):
@@ -534,9 +553,7 @@ def listar_clientes():
             )
 
         # Paginação
-        pagina = max(1, request.args.get("pagina", 1, type=int))
-        por_pagina = request.args.get("por_pagina", 50, type=int)
-        por_pagina = max(1, min(por_pagina, 100))  # entre 1 e 100
+        pagina, por_pagina = get_pagination_params()
 
         total = query.count()
         clientes = (
@@ -1034,8 +1051,7 @@ def deletar_produto(id_produto):
 def listar_logs():
     """Listar histórico de ações (admin)."""
     try:
-        pagina = max(1, request.args.get("pagina", 1, type=int))
-        por_pagina = max(1, min(request.args.get("por_pagina", 50, type=int), 100))
+        pagina, por_pagina = get_pagination_params()
         entidade = request.args.get("entidade")
         acao = request.args.get("acao")
 
@@ -1111,8 +1127,7 @@ def listar_vendas():
             query = query.filter(Venda.forma_pagamento.ilike(f"%{forma}%"))
 
         # Paginação
-        pagina = max(1, request.args.get("pagina", 1, type=int))
-        por_pagina = max(1, min(request.args.get("por_pagina", 50, type=int), 100))
+        pagina, por_pagina = get_pagination_params()
         total = query.count()
 
         vendas = (
@@ -3126,8 +3141,7 @@ class TicketCreateSchema(BaseModel):
 def listar_tickets():
     """Lista tickets: admin vê todos, operador vê os próprios"""
     try:
-        pagina = max(1, request.args.get("pagina", 1, type=int))
-        limite = max(1, min(request.args.get("limite", 20, type=int), 100))
+        pagina, por_pagina = get_pagination_params(default_per_page=20)
         status_filtro = request.args.get("status")
 
         query = TicketSuporte.query
@@ -3138,15 +3152,15 @@ def listar_tickets():
 
         query = query.order_by(TicketSuporte.data_atualizacao.desc())
         total = query.count()
-        tickets = query.offset((pagina - 1) * limite).limit(limite).all()
+        tickets = query.offset((pagina - 1) * por_pagina).limit(por_pagina).all()
 
         return jsonify(
             {
                 "dados": [t.to_dict() for t in tickets],
                 "total": total,
                 "pagina": pagina,
-                "limite": limite,
-                "total_paginas": (total + limite - 1) // limite,
+                "limite": por_pagina,
+                "total_paginas": (total + por_pagina - 1) // por_pagina,
             }
         )
     except Exception as e:

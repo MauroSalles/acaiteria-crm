@@ -9,8 +9,12 @@ let produtosDisponiveis = [];
 
 // Inicializar a página de vendas
 document.addEventListener('DOMContentLoaded', async () => {
-    await carregarClientes();
-    await carregarProdutos();
+    try {
+        await Promise.all([carregarClientes(), carregarProdutos()]);
+    } catch (erro) {
+        mostrarAlerta('Erro ao carregar dados. Recarregue a página.', 'erro');
+        return;
+    }
     
     // Restaurar carrinho salvo (caso usuário recarregou a página)
     const itensSalvos = obterLocal('vendaItens');

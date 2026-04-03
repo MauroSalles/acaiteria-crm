@@ -146,9 +146,13 @@ function formatarDataHora(data) {
 }
 
 // Função para fazer requisições fetch com tratamento de erro
-async function requisicao(url, opcoes = {}) {
+async function requisicao(url, opcoes = {}, timeoutMs = 15000) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
     try {
         const resposta = await fetch(url, {
+            signal: controller.signal,
             headers: {
                 'Content-Type': 'application/json',
                 ...opcoes.headers
@@ -163,36 +167,23 @@ async function requisicao(url, opcoes = {}) {
         }
 
         if (!resposta.ok) {
-            const erro = await resposta.json();
+            let erro = {};
+            try { erro = await resposta.json(); } catch { erro = {}; }
             throw new Error(erro.erro || `Erro HTTP: ${resposta.status}`);
         }
 
         return await resposta.json();
     } catch (erro) {
-        console.error('Erro na requisição:', erro);
+        if (erro.name === 'AbortError') {
+            throw new Error('Requisição expirou. Verifique sua conexão.');
+        }
         throw erro;
+    } finally {
+        clearTimeout(timeout);
     }
 }
 
-// Validar email
-function validarEmail(email) {
-    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return re.test(email);
-}
 
-// Validar telefone (formato brasileiro)
-function validarTelefone(telefone) {
-    const re = /^\(?[0-9]{2}\)?[0-9]{4,5}[0-9]{4}$/;
-    return re.test(telefone.replace(/\D/g, ''));
-}
-
-// Limpar formulário
-function limparFormulario(formularioId) {
-    const formulario = document.getElementById(formularioId);
-    if (formulario) {
-        formulario.reset();
-    }
-}
 
 // Verificar se navegador tem suporte a localStorage
 function temLocalStorage() {
@@ -309,38 +300,7 @@ function debounce(funcao, delay = 300) {
     };
 }
 
-// Throttle para funções que disparam frequentemente
-function throttle(funcao, delay = 300) {
-    let ultimaChamada = 0;
-    return function(...args) {
-        const agora = Date.now();
-        if (agora - ultimaChamada >= delay) {
-            ultimaChamada = agora;
-            funcao.apply(this, args);
-        }
-    };
-}
 
-// Mostrar loading
-function mostrarLoading(elemento) {
-    if (typeof elemento === 'string') {
-        elemento = document.getElementById(elemento);
-    }
-    if (elemento) {
-        elemento.innerHTML = '⏳ Carregando...';
-        elemento.style.opacity = '0.5';
-    }
-}
-
-// Esconder loading
-function esconderLoading(elemento) {
-    if (typeof elemento === 'string') {
-        elemento = document.getElementById(elemento);
-    }
-    if (elemento) {
-        elemento.style.opacity = '1';
-    }
-}
 
 // Event listener do documento pronto
 document.addEventListener('DOMContentLoaded', () => {
@@ -355,9 +315,10 @@ window.addEventListener('error', (evento) => {
     console.error('Erro global:', evento.error);
 });
 
-// Tratador para promessas não capturadas (apenas log)
+// Tratador para promessas não capturadas
 window.addEventListener('unhandledrejection', (evento) => {
     console.error('Promise rejeitada não tratada:', evento.reason);
+    mostrarAlerta('Erro inesperado. Tente recarregar a página.', 'erro');
 });
 
 // Confirmação antes de sair se houver dados não salvos

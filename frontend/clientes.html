@@ -97,24 +97,24 @@
             <div id="mensagem" class="alert" style="display: none; margin-top: 20px;"></div>
 
             <!-- Modal de Edição de Cliente -->
-            <div id="modal-editar" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
+            <div id="modal-editar" role="dialog" aria-modal="true" aria-labelledby="modal-editar-titulo" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
                 <div style="background:white; border-radius:16px; padding:2rem; max-width:500px; width:90%; margin:auto; position:relative; top:50%; transform:translateY(-50%); box-shadow:0 8px 32px rgba(0,0,0,0.2);">
-                    <h2 style="margin-top:0; color:#7B1FA2;">✏️ Editar Cliente</h2>
+                    <h2 id="modal-editar-titulo" style="margin-top:0; color:#7B1FA2;">✏️ Editar Cliente</h2>
                     <input type="hidden" id="edit-id">
                     <div class="form-group">
-                        <label>Nome *</label>
+                        <label for="edit-nome">Nome *</label>
                         <input type="text" id="edit-nome" class="form-control" required>
                     </div>
                     <div class="form-group">
-                        <label>Telefone</label>
+                        <label for="edit-telefone">Telefone</label>
                         <input type="text" id="edit-telefone" class="form-control" placeholder="(XX) XXXXX-XXXX">
                     </div>
                     <div class="form-group">
-                        <label>Email</label>
+                        <label for="edit-email">Email</label>
                         <input type="email" id="edit-email" class="form-control" placeholder="email@exemplo.com">
                     </div>
                     <div class="form-group">
-                        <label>Observações</label>
+                        <label for="edit-observacoes">Observações</label>
                         <textarea id="edit-observacoes" class="form-control" rows="3"></textarea>
                     </div>
                     <div id="edit-erro" style="color:#d32f2f; font-size:0.9rem; margin-bottom:0.5rem; display:none;"></div>
@@ -167,8 +167,8 @@
                         <td><span style="color: #7B1FA2; font-weight: bold;">🌟 ${c.pontos_fidelidade || 0}</span></td>
                         <td>${c.consentimento_lgpd ? '✅' : '⚠️'}</td>
                         <td style="white-space: nowrap;">
-                            <button class="btn btn-info btn-editar-cliente" data-id="${c.id_cliente}" style="font-size: 0.75rem; padding: 0.3rem 0.5rem;">✏️</button>
-                            <button onclick="deletarCliente(${c.id_cliente})" class="btn-remover" style="font-size: 0.8rem;">🗑️</button>
+                            <button class="btn btn-info btn-editar-cliente" data-id="${c.id_cliente}" aria-label="Editar cliente ${escapeHtml(c.nome)}" style="font-size: 0.75rem; padding: 0.3rem 0.5rem;">✏️</button>
+                            <button onclick="deletarCliente(${c.id_cliente})" class="btn-remover" aria-label="Excluir cliente ${escapeHtml(c.nome)}" style="font-size: 0.8rem;">🗑️</button>
                         </td>
                     </tr>
                 `).join('');
