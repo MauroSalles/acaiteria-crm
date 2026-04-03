@@ -9,8 +9,6 @@ let produtosDisponiveis = [];
 
 // Inicializar a página de vendas
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('📦 Script de Vendas carregado');
-    
     await carregarClientes();
     await carregarProdutos();
     

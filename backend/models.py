@@ -25,7 +25,7 @@ class Usuario(db.Model):
 
     id_usuario = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(150), nullable=False)
-    email = db.Column(db.String(150), unique=True, nullable=False)
+    email = db.Column(db.String(150), unique=True, nullable=False, index=True)
     senha_hash = db.Column(db.String(256), nullable=False)
     papel = db.Column(
         db.String(20), nullable=False, default="operador"
@@ -61,9 +61,9 @@ class Cliente(db.Model):
     __tablename__ = "cliente"
 
     id_cliente = db.Column(db.Integer, primary_key=True)
-    nome = db.Column(db.String(150), nullable=False)
+    nome = db.Column(db.String(150), nullable=False, index=True)
     telefone = db.Column(db.String(20))
-    email = db.Column(db.String(100))
+    email = db.Column(db.String(100), index=True)
     senha_hash = db.Column(db.String(256), nullable=True)
     data_cadastro = db.Column(db.DateTime, default=_utcnow)
     observacoes = db.Column(db.Text)
@@ -150,13 +150,13 @@ class Produto(db.Model):
 
     id_produto = db.Column(db.Integer, primary_key=True)
     nome_produto = db.Column(db.String(100), nullable=False)
-    categoria = db.Column(db.String(50))
+    categoria = db.Column(db.String(50), index=True)
     descricao = db.Column(db.Text)
     preco = db.Column(db.DECIMAL(10, 2), nullable=False)
     volume = db.Column(db.String(20))  # "10L", "5L" — recipiente
     estoque_atual = db.Column(db.Integer, default=0)
     estoque_minimo = db.Column(db.Integer, default=0)
-    ativo = db.Column(db.Boolean, default=True)
+    ativo = db.Column(db.Boolean, default=True, index=True)
     data_criacao = db.Column(db.DateTime, default=_utcnow)
     data_atualizacao = db.Column(
         db.DateTime, default=_utcnow, onupdate=_utcnow
@@ -220,9 +220,10 @@ class Venda(db.Model):
 
     id_venda = db.Column(db.Integer, primary_key=True)
     id_cliente = db.Column(
-        db.Integer, db.ForeignKey("cliente.id_cliente"), nullable=False
+        db.Integer, db.ForeignKey("cliente.id_cliente"), nullable=False,
+        index=True,
     )
-    data_venda = db.Column(db.DateTime, default=_utcnow)
+    data_venda = db.Column(db.DateTime, default=_utcnow, index=True)
     valor_total = db.Column(db.DECIMAL(10, 2), nullable=False)
     forma_pagamento = db.Column(db.String(50))
     status_pagamento = db.Column(db.String(50), default="Pendente")
@@ -270,10 +271,12 @@ class ItemVenda(db.Model):
 
     id_item = db.Column(db.Integer, primary_key=True)
     id_venda = db.Column(
-        db.Integer, db.ForeignKey("venda.id_venda"), nullable=False
+        db.Integer, db.ForeignKey("venda.id_venda"), nullable=False,
+        index=True,
     )
     id_produto = db.Column(
-        db.Integer, db.ForeignKey("produto.id_produto"), nullable=False
+        db.Integer, db.ForeignKey("produto.id_produto"), nullable=False,
+        index=True,
     )
     quantidade = db.Column(db.Integer, nullable=False)
     preco_unitario = db.Column(db.DECIMAL(10, 2), nullable=False)

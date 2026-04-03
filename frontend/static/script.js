@@ -344,8 +344,6 @@ function esconderLoading(elemento) {
 
 // Event listener do documento pronto
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('🍓 Açaiteria CRM - Script carregado com sucesso!');
-    
     // Adicionar classes de suporte ao navegador
     if (!temLocalStorage()) {
         console.warn('⚠️ LocalStorage não disponível');

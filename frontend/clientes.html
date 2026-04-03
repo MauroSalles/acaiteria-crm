@@ -167,11 +167,20 @@
                         <td><span style="color: #7B1FA2; font-weight: bold;">🌟 ${c.pontos_fidelidade || 0}</span></td>
                         <td>${c.consentimento_lgpd ? '✅' : '⚠️'}</td>
                         <td style="white-space: nowrap;">
-                            <button onclick='abrirEdicao(${JSON.stringify(c).replace(/'/g, "&#39;")})' class="btn btn-info" style="font-size: 0.75rem; padding: 0.3rem 0.5rem;">✏️</button>
+                            <button class="btn btn-info btn-editar-cliente" data-id="${c.id_cliente}" style="font-size: 0.75rem; padding: 0.3rem 0.5rem;">✏️</button>
                             <button onclick="deletarCliente(${c.id_cliente})" class="btn-remover" style="font-size: 0.8rem;">🗑️</button>
                         </td>
                     </tr>
                 `).join('');
+
+                // Event delegation para edição (seguro contra XSS)
+                document.querySelectorAll('.btn-editar-cliente').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const id = parseInt(this.getAttribute('data-id'));
+                        const cliente = clientes.find(c => c.id_cliente === id);
+                        if (cliente) abrirEdicao(cliente);
+                    });
+                });
 
                 // Info de paginação
                 if (dados.total_paginas > 1) {

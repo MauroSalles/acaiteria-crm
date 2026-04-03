@@ -534,9 +534,9 @@ def listar_clientes():
             )
 
         # Paginação
-        pagina = request.args.get("pagina", 1, type=int)
+        pagina = max(1, request.args.get("pagina", 1, type=int))
         por_pagina = request.args.get("por_pagina", 50, type=int)
-        por_pagina = min(por_pagina, 100)  # limite máximo
+        por_pagina = max(1, min(por_pagina, 100))  # entre 1 e 100
 
         total = query.count()
         clientes = (
@@ -1034,8 +1034,8 @@ def deletar_produto(id_produto):
 def listar_logs():
     """Listar histórico de ações (admin)."""
     try:
-        pagina = request.args.get("pagina", 1, type=int)
-        por_pagina = min(request.args.get("por_pagina", 50, type=int), 100)
+        pagina = max(1, request.args.get("pagina", 1, type=int))
+        por_pagina = max(1, min(request.args.get("por_pagina", 50, type=int), 100))
         entidade = request.args.get("entidade")
         acao = request.args.get("acao")
 
@@ -1111,8 +1111,8 @@ def listar_vendas():
             query = query.filter(Venda.forma_pagamento.ilike(f"%{forma}%"))
 
         # Paginação
-        pagina = request.args.get("pagina", 1, type=int)
-        por_pagina = min(request.args.get("por_pagina", 50, type=int), 100)
+        pagina = max(1, request.args.get("pagina", 1, type=int))
+        por_pagina = max(1, min(request.args.get("por_pagina", 50, type=int), 100))
         total = query.count()
 
         vendas = (
@@ -1179,7 +1179,13 @@ def criar_venda():
 
         # Adicionar itens
         for item_dados in dados["itens"]:
-            produto = db.session.get(Produto, item_dados["id_produto"])
+            # Lock pessimista para evitar race condition no estoque
+            produto = (
+                db.session.query(Produto)
+                .filter_by(id_produto=item_dados["id_produto"])
+                .with_for_update()
+                .first()
+            )
             if not produto:
                 return (
                     jsonify(
@@ -1243,6 +1249,12 @@ def criar_venda():
             venda.itens.append(item)
             valor_total += subtotal
 
+            # Descontar estoque atomicamente (row já está locked)
+            if controle_ativo:
+                produto.estoque_atual = max(
+                    0, produto.estoque_atual - quantidade
+                )
+
         # Aplicar desconto e taxa
         desconto_perc = Decimal(str(dados.get("desconto_percentual", 0)))
         taxa = Decimal(str(dados.get("taxa", 0)))
@@ -1259,16 +1271,6 @@ def criar_venda():
         )
         venda.pagamento = pagamento
         venda.status_pagamento = "Concluído"
-
-        # Descontar estoque dos produtos vendidos (somente se controlado)
-        for item in venda.itens:
-            prod = db.session.get(Produto, item.id_produto)
-            if prod and (
-                (prod.estoque_atual or 0) > 0 or (prod.estoque_minimo or 0) > 0
-            ):
-                prod.estoque_atual = max(
-                    0, prod.estoque_atual - item.quantidade
-                )
 
         # Acumular pontos de fidelidade (1 ponto por R$1 gasto)
         pontos_ganhos = int(valor_total)
@@ -1923,11 +1925,11 @@ def exportar_clientes_csv():
     """Exportar lista de clientes em CSV"""
 
     def sanitize_csv(value):
-        """Previne CSV formula injection (=, +, -, @, tab, CR)"""
+        """Previne CSV formula injection (=, +, -, @, |, %, tab, CR)"""
         if (
             isinstance(value, str)
             and value
-            and value[0] in ("=", "+", "-", "@", "\t", "\r")
+            and value[0] in ("=", "+", "-", "@", "|", "%", "\t", "\r")
         ):
             return "'" + value
         return value
@@ -3124,8 +3126,8 @@ class TicketCreateSchema(BaseModel):
 def listar_tickets():
     """Lista tickets: admin vê todos, operador vê os próprios"""
     try:
-        pagina = request.args.get("pagina", 1, type=int)
-        limite = min(request.args.get("limite", 20, type=int), 100)
+        pagina = max(1, request.args.get("pagina", 1, type=int))
+        limite = max(1, min(request.args.get("limite", 20, type=int), 100))
         status_filtro = request.args.get("status")
 
         query = TicketSuporte.query
