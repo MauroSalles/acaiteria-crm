@@ -133,7 +133,7 @@
                         </div>
                         <div class="form-group">
                             <label for="estoque_minimo">Estoque Mínimo</label>
-                            <input type="number" id="estoque_minimo" name="estoque_minimo" min="0" value="1">
+                            <input type="number" id="estoque_minimo" name="estoque_minimo" min="0" value="2">
                         </div>
                         <div class="form-group" style="display:flex;align-items:flex-end">
                             <button type="submit" class="btn btn-primary" style="width:100%" id="btnSubmit">Cadastrar Produto</button>
@@ -268,7 +268,7 @@
                 volume: document.getElementById('volume').value || undefined,
                 descricao: document.getElementById('descricao').value.trim() || undefined,
                 estoque_atual: parseInt(document.getElementById('estoque_atual').value) || 0,
-                estoque_minimo: parseInt(document.getElementById('estoque_minimo').value) || 1
+                estoque_minimo: parseInt(document.getElementById('estoque_minimo').value) || 2
             };
 
             if (!dados.nome_produto || !dados.preco) {
@@ -309,7 +309,7 @@
             document.getElementById('volume').value = p.volume || '';
             document.getElementById('descricao').value = p.descricao || '';
             document.getElementById('estoque_atual').value = p.estoque_atual || 0;
-            document.getElementById('estoque_minimo').value = p.estoque_minimo || 1;
+            document.getElementById('estoque_minimo').value = p.estoque_minimo || 2;
             document.getElementById('btnSubmit').textContent = '💾 Salvar Alterações';
             document.getElementById('formTitle').textContent = `✏️ Editando: ${p.nome_produto}`;
             document.getElementById('btnCancelarEdicao').style.display = 'inline-block';

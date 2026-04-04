@@ -170,6 +170,7 @@
         <a href="/vitrine" class="vitrine-nav-brand">🍇 Combina Açaí</a>
         <div class="vitrine-nav-links">
             <a href="#cardapio">Cardápio</a>
+            <a href="#complementos">Complementos</a>
             <a href="#fidelidade">Fidelidade</a>
             <a href="/politica-privacidade">LGPD</a>
             <button class="btn-cart" onclick="toggleCart()" title="Carrinho">
@@ -224,6 +225,20 @@
         </div>
         <div class="menu-grid" id="menuGrid">
             <div class="loading">Carregando produtos...</div>
+        </div>
+    </section>
+
+    <!-- Complementos / Toppings -->
+    <section class="section" id="complementos">
+        <div class="section-title">
+            <h2>🥣 Monte Seu Açaí</h2>
+            <p>Escolha os complementos para deixar seu açaí ainda mais gostoso!</p>
+        </div>
+        <div class="menu-filter" id="compFilter">
+            <button class="active" onclick="filtrarComp('', this)">Todos</button>
+        </div>
+        <div class="menu-grid" id="compGrid">
+            <div class="loading">Carregando complementos...</div>
         </div>
     </section>
 
@@ -701,8 +716,80 @@
             if(btn) adicionarAoCarrinho(+btn.getAttribute('data-add'));
         });
 
+        /* ========== COMPLEMENTOS ========== */
+        var todosComplementos = [];
+
+        function carregarComplementos(){
+            document.getElementById('compGrid').innerHTML =
+                '<p style="text-align:center;color:#7B1FA2;padding:2rem;">⏳ Carregando complementos...</p>';
+            fetch('/api/vitrine/complementos')
+            .then(function(resp){
+                if(!resp.ok) throw new Error('Resposta inválida');
+                return resp.json();
+            })
+            .then(function(data){
+                todosComplementos = data;
+                // Filtros de categoria
+                var cats = [];
+                for(var i=0;i<data.length;i++){
+                    var c = data[i].categoria || 'Geral';
+                    if(cats.indexOf(c)===-1) cats.push(c);
+                }
+                cats.sort();
+                var filterDiv = document.getElementById('compFilter');
+                for(var j=0;j<cats.length;j++){
+                    (function(cat){
+                        var btn = document.createElement('button');
+                        btn.textContent = cat;
+                        btn.addEventListener('click', function(){ filtrarComp(cat, btn); });
+                        filterDiv.appendChild(btn);
+                    })(cats[j]);
+                }
+                renderComplementos(data);
+            })
+            .catch(function(err){
+                console.error('Erro ao carregar complementos:', err);
+                document.getElementById('compGrid').innerHTML =
+                    '<p style="text-align:center;color:#D32F2F;padding:2rem;">⚠️ Não foi possível carregar os complementos.</p>';
+            });
+        }
+
+        function filtrarComp(cat, btnEl){
+            document.querySelectorAll('#compFilter button').forEach(function(b){b.classList.remove('active');});
+            if(btnEl) btnEl.classList.add('active');
+            var filtrados = cat ? todosComplementos.filter(function(c){return c.categoria===cat;}) : todosComplementos;
+            renderComplementos(filtrados);
+        }
+
+        var compEmojiMap = {
+            'Fruta':'🍓','Calda':'🍯','Farináceo':'🥣','Extra':'✨'
+        };
+
+        function renderComplementos(lista){
+            var grid = document.getElementById('compGrid');
+            if(!lista.length){
+                grid.innerHTML = '<p style="text-align:center;color:#999;padding:2rem;">Nenhum complemento encontrado.</p>';
+                return;
+            }
+            var html='';
+            for(var i=0;i<lista.length;i++){
+                var c=lista[i];
+                var emoji = compEmojiMap[c.categoria] || '🥄';
+                html += '<div class="product-card">' +
+                    '<span class="product-emoji">'+emoji+'</span>' +
+                    '<span class="product-category">'+escapeHtml(c.categoria || 'Geral')+'</span>' +
+                    '<span class="product-name">'+escapeHtml(c.nome)+'</span>' +
+                    '<div class="product-footer">' +
+                        '<span class="product-price">+ '+fmt(c.preco_adicional)+'</span>' +
+                    '</div>' +
+                '</div>';
+            }
+            grid.innerHTML = html;
+        }
+
         /* ========== INIT ========== */
         carregarProdutos();
+        carregarComplementos();
         atualizarBadge();
         renderCarrinho();
     </script>

@@ -157,3 +157,105 @@ class TestListarVendas:
     def test_obter_venda_inexistente_404(self, client):
         resp = client.get('/api/vendas/9999')
         assert resp.status_code == 404
+
+
+def _setup_complemento(client, nome='Granola', preco=2.50, categoria='Extra'):
+    """Cria um complemento e retorna id_complemento."""
+    rc = client.post('/api/complementos', json={
+        'nome': nome,
+        'preco_adicional': preco,
+        'categoria': categoria,
+        'unidade_medida': 'porção',
+    })
+    assert rc.status_code == 201, (
+        f'Falha ao criar complemento: {rc.status_code} {rc.data}'
+    )
+    return rc.get_json()['id_complemento']
+
+
+class TestVendaComComplementos:
+    """Testes de vendas com complementos/toppings."""
+
+    def test_venda_com_complementos(self, client):
+        cid, pid = _setup_cliente_e_produto(client, consentimento=True)
+        comp1 = _setup_complemento(client, 'Granola', 2.50)
+        comp2 = _setup_complemento(client, 'Leite Condensado', 3.00)
+        resp = client.post('/api/vendas', json={
+            'id_cliente': cid,
+            'forma_pagamento': 'Dinheiro',
+            'itens': [{
+                'id_produto': pid,
+                'quantidade': 1,
+                'complementos': [comp1, comp2],
+            }],
+        })
+        assert resp.status_code == 201
+        data = resp.get_json()
+        # 18.90 + 2.50 + 3.00 = 24.40
+        assert data['valor_total'] == 24.40
+        assert len(data['itens'][0]['complementos']) == 2
+
+    def test_venda_sem_complementos_continua_funcionando(self, client):
+        cid, pid = _setup_cliente_e_produto(client, consentimento=True)
+        resp = client.post('/api/vendas', json={
+            'id_cliente': cid,
+            'forma_pagamento': 'Dinheiro',
+            'itens': [{'id_produto': pid, 'quantidade': 1}],
+        })
+        assert resp.status_code == 201
+        data = resp.get_json()
+        assert data['valor_total'] == 18.90
+        assert data['itens'][0]['complementos'] == []
+
+    def test_venda_complemento_multiplicado_por_quantidade(self, client):
+        cid, pid = _setup_cliente_e_produto(client, consentimento=True)
+        comp = _setup_complemento(client, 'Nutella', 5.00)
+        resp = client.post('/api/vendas', json={
+            'id_cliente': cid,
+            'forma_pagamento': 'Dinheiro',
+            'itens': [{
+                'id_produto': pid,
+                'quantidade': 3,
+                'complementos': [comp],
+            }],
+        })
+        assert resp.status_code == 201
+        data = resp.get_json()
+        # (18.90 + 5.00) * 3 = 71.70
+        assert data['valor_total'] == 71.70
+
+    def test_complemento_inativo_ignorado(self, client):
+        cid, pid = _setup_cliente_e_produto(client, consentimento=True)
+        comp = _setup_complemento(client, 'Amendoim', 1.50)
+        # Desativar complemento
+        client.delete(f'/api/complementos/{comp}')
+        resp = client.post('/api/vendas', json={
+            'id_cliente': cid,
+            'forma_pagamento': 'Dinheiro',
+            'itens': [{
+                'id_produto': pid,
+                'quantidade': 1,
+                'complementos': [comp],
+            }],
+        })
+        assert resp.status_code == 201
+        data = resp.get_json()
+        # Complemento inativo ignorado: preço = só do produto
+        assert data['valor_total'] == 18.90
+        assert len(data['itens'][0]['complementos']) == 0
+
+    def test_complemento_inexistente_ignorado(self, client):
+        cid, pid = _setup_cliente_e_produto(client, consentimento=True)
+        resp = client.post('/api/vendas', json={
+            'id_cliente': cid,
+            'forma_pagamento': 'Dinheiro',
+            'itens': [{
+                'id_produto': pid,
+                'quantidade': 1,
+                'complementos': [9999],
+            }],
+        })
+        assert resp.status_code == 201
+        data = resp.get_json()
+        assert data['valor_total'] == 18.90
+        assert data['itens'][0]['complementos'] == []

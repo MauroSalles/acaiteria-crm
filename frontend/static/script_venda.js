@@ -6,12 +6,19 @@
 let itensVenda = [];
 let clienteSelecionado = null;
 let produtosDisponiveis = [];
+let complementosDisponiveis = [];
+let complementosSelecionados = [];
+let filtroCompAtual = '';
 let cupomAplicado = null; // {codigo, tipo_desconto, valor_desconto, desconto_calculado}
 
 // Inicializar a página de vendas
 document.addEventListener('DOMContentLoaded', async () => {
     try {
-        await Promise.all([carregarClientes(), carregarProdutos()]);
+        await Promise.all([
+            carregarClientes(),
+            carregarProdutos(),
+            carregarComplementos(),
+        ]);
     } catch (erro) {
         mostrarAlerta('Erro ao carregar dados. Recarregue a página.', 'erro');
         return;
@@ -42,6 +49,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('btn-finalizar').addEventListener('click', finalizarVenda);
     document.getElementById('btn-cancelar').addEventListener('click', cancelarVenda);
     document.getElementById('cliente-select').addEventListener('change', selecionarCliente);
+    document.getElementById('produto-select').addEventListener('change', onProdutoSelecionado);
     document.getElementById('produto-select').addEventListener('keypress', (e) => {
         if (e.key === 'Enter') adicionarItem();
     });
@@ -83,7 +91,7 @@ async function carregarClientes() {
     }
 }
 
-// Carregar produtos disponíveis
+// Carregar produtos disponíveis (agrupados por categoria)
 async function carregarProdutos() {
     try {
         const produtos = await requisicao('/api/produtos');
@@ -92,12 +100,32 @@ async function carregarProdutos() {
         // Limpar opções
         select.innerHTML = '<option value="">-- Selecione um produto --</option>';
         
-        // Adicionar produtos
-        produtos.forEach(produto => {
-            const option = document.createElement('option');
-            option.value = produto.id_produto;
-            option.textContent = `${produto.nome_produto} (R$ ${produto.preco.toFixed(2)})`;
-            select.appendChild(option);
+        // Agrupar por categoria
+        const grupos = {};
+        produtos.forEach(p => {
+            const cat = p.categoria || 'Outros';
+            if (!grupos[cat]) grupos[cat] = [];
+            grupos[cat].push(p);
+        });
+
+        const icones = {'Açaí': '🍇', 'Sorvete': '🍦', 'Complemento': '🥣', 'Bebida': '🥤'};
+        const ordemCat = ['Açaí', 'Sorvete', 'Complemento', 'Bebida'];
+        const cats = Object.keys(grupos).sort((a, b) => {
+            const ia = ordemCat.indexOf(a), ib = ordemCat.indexOf(b);
+            return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+        });
+
+        cats.forEach(cat => {
+            const optgroup = document.createElement('optgroup');
+            optgroup.label = `${icones[cat] || '📦'} ${cat}`;
+            grupos[cat].forEach(produto => {
+                const opt = document.createElement('option');
+                opt.value = produto.id_produto;
+                const vol = produto.volume ? ` ${produto.volume}` : '';
+                opt.textContent = `${produto.nome_produto}${vol} — R$ ${produto.preco.toFixed(2)}`;
+                optgroup.appendChild(opt);
+            });
+            select.appendChild(optgroup);
         });
         
         // Salvar globalmente
@@ -106,6 +134,104 @@ async function carregarProdutos() {
         console.error('Erro ao carregar produtos:', erro);
         mostrarAlerta('❌ Erro ao carregar produtos', 'erro');
     }
+}
+
+// Carregar complementos/toppings disponíveis
+async function carregarComplementos() {
+    try {
+        complementosDisponiveis = await requisicao('/api/complementos');
+        renderComplementosGrid();
+    } catch (erro) {
+        console.error('Erro ao carregar complementos:', erro);
+    }
+}
+
+// Exibir/ocultar painel de complementos conforme produto selecionado
+function onProdutoSelecionado() {
+    const idProduto = document.getElementById('produto-select').value;
+    const section = document.getElementById('complementos-section');
+    if (!idProduto) {
+        section.style.display = 'none';
+        return;
+    }
+    const produto = produtosDisponiveis.find(p => p.id_produto === parseInt(idProduto));
+    if (produto && ['Açaí', 'Sorvete'].includes(produto.categoria)) {
+        section.style.display = 'block';
+        complementosSelecionados = [];
+        renderComplementosGrid();
+        atualizarInfoCompSelecionados();
+    } else {
+        section.style.display = 'none';
+        complementosSelecionados = [];
+    }
+}
+
+// Filtrar complementos por categoria
+function filtrarComplementos(cat) {
+    filtroCompAtual = cat;
+    document.querySelectorAll('#filtrosCompCategoria button').forEach(b => {
+        b.className = b.getAttribute('data-filtro') === cat
+            ? 'btn btn-primary' : 'btn btn-info';
+        b.style.fontSize = '.75rem';
+        b.style.padding = '.2rem .6rem';
+    });
+    renderComplementosGrid();
+}
+
+// Renderizar grid de complementos
+function renderComplementosGrid() {
+    const grid = document.getElementById('complementos-grid');
+    if (!grid) return;
+    let lista = complementosDisponiveis.filter(c => c.ativo !== false);
+    if (filtroCompAtual) {
+        lista = lista.filter(c => c.categoria === filtroCompAtual);
+    }
+    if (!lista.length) {
+        grid.innerHTML = '<p style="grid-column:1/-1;text-align:center;color:#888;font-size:.85rem">Nenhum complemento encontrado</p>';
+        return;
+    }
+    const iconesCat = {'Fruta': '🍓', 'Calda': '🍫', 'Farináceo': '🥜', 'Extra': '⭐'};
+    grid.innerHTML = lista.map(c => {
+        const sel = complementosSelecionados.includes(c.id_complemento);
+        return `<label style="display:flex;align-items:center;gap:.4rem;padding:.4rem .6rem;border-radius:8px;cursor:pointer;font-size:.85rem;border:2px solid ${sel ? '#7B1FA2' : '#e0e0e0'};background:${sel ? '#f3e5f5' : '#fff'};transition:all .15s"
+            onclick="toggleComplemento(${c.id_complemento})">
+            <input type="checkbox" ${sel ? 'checked' : ''} style="pointer-events:none;accent-color:#7B1FA2">
+            <span>${iconesCat[c.categoria] || '🥣'} ${escapeHtml(c.nome)}</span>
+            ${c.preco_adicional > 0 ? `<span style="margin-left:auto;color:#7B1FA2;font-weight:600;font-size:.8rem">+R$${c.preco_adicional.toFixed(2)}</span>` : ''}
+        </label>`;
+    }).join('');
+}
+
+// Alternar seleção de complemento
+function toggleComplemento(id) {
+    const idx = complementosSelecionados.indexOf(id);
+    if (idx >= 0) {
+        complementosSelecionados.splice(idx, 1);
+    } else {
+        complementosSelecionados.push(id);
+    }
+    renderComplementosGrid();
+    atualizarInfoCompSelecionados();
+}
+
+// Atualizar texto de complementos selecionados
+function atualizarInfoCompSelecionados() {
+    const el = document.getElementById('complementos-selecionados');
+    if (!el) return;
+    if (!complementosSelecionados.length) {
+        el.textContent = '';
+        return;
+    }
+    const nomes = complementosSelecionados.map(id => {
+        const c = complementosDisponiveis.find(x => x.id_complemento === id);
+        return c ? c.nome : '';
+    }).filter(Boolean);
+    const totalComp = complementosSelecionados.reduce((t, id) => {
+        const c = complementosDisponiveis.find(x => x.id_complemento === id);
+        return t + (c ? (c.preco_adicional || 0) : 0);
+    }, 0);
+    el.innerHTML = `🥣 <strong>${nomes.length}</strong> selecionado(s): ${nomes.join(', ')}` +
+        (totalComp > 0 ? ` — <strong>+${formatarMoeda(totalComp)}</strong>/un` : '');
 }
 
 // Selecionar cliente
@@ -176,28 +302,32 @@ function adicionarItem() {
         mostrarAlerta('❌ Produto não encontrado!', 'erro');
         return;
     }
+
+    // Calcular preço de complementos selecionados
+    const compsItem = complementosSelecionados.map(id => {
+        const c = complementosDisponiveis.find(x => x.id_complemento === id);
+        return c ? { id_complemento: c.id_complemento, nome: c.nome, preco: c.preco_adicional || 0 } : null;
+    }).filter(Boolean);
+    const precoComps = compsItem.reduce((t, c) => t + c.preco, 0);
+    const precoUnitarioTotal = parseFloat(produto.preco) + precoComps;
     
-    // Verificar se produto já está na lista
-    const itemExistente = itensVenda.find(i => i.id_produto === parseInt(idProduto));
-    
-    if (itemExistente) {
-        // Aumentar quantidade
-        itemExistente.quantidade += quantidade;
-        itemExistente.subtotal = itemExistente.quantidade * itemExistente.preco_unitario;
-    } else {
-        // Adicionar novo item
-        itensVenda.push({
-            id_produto: parseInt(idProduto),
-            nome_produto: produto.nome_produto,
-            quantidade: quantidade,
-            preco_unitario: parseFloat(produto.preco),
-            subtotal: quantidade * parseFloat(produto.preco)
-        });
-    }
+    // Sempre adicionar como novo item (complementos diferentes = item diferente)
+    itensVenda.push({
+        id_produto: parseInt(idProduto),
+        nome_produto: produto.nome_produto,
+        volume: produto.volume || '',
+        quantidade: quantidade,
+        preco_unitario: parseFloat(produto.preco),
+        complementos: compsItem,
+        preco_complementos: precoComps,
+        subtotal: quantidade * precoUnitarioTotal,
+    });
     
     // Resetar formulário
     document.getElementById('produto-select').value = '';
     document.getElementById('quantidade').value = '1';
+    complementosSelecionados = [];
+    document.getElementById('complementos-section').style.display = 'none';
     selectProduto.focus();
     
     // Atualizar interface
@@ -205,7 +335,8 @@ function adicionarItem() {
     recalcularTotais();
     salvarLocal('vendaItens', itensVenda);
     
-    mostrarAlerta(`✅ ${produto.nome_produto} adicionado!`, 'sucesso');
+    const compMsg = compsItem.length ? ` + ${compsItem.length} complemento(s)` : '';
+    mostrarAlerta(`✅ ${produto.nome_produto}${compMsg} adicionado!`, 'sucesso');
 }
 
 // Renderizar items na lista
@@ -217,20 +348,26 @@ function renderizarItens() {
         return;
     }
     
-    lista.innerHTML = itensVenda.map((item, index) => `
-        <div class="item-venda">
+    lista.innerHTML = itensVenda.map((item, index) => {
+        const comps = (item.complementos || []);
+        const compsHtml = comps.length
+            ? `<div style="font-size:.8rem;color:#7B1FA2;margin-top:.15rem">🥣 ${comps.map(c => c.nome).join(', ')}${item.preco_complementos > 0 ? ` (+${formatarMoeda(item.preco_complementos)}/un)` : ''}</div>`
+            : '';
+        const vol = item.volume ? ` <span style="font-size:.75rem;background:#e8e0f0;border-radius:4px;padding:0 .3rem">${escapeHtml(item.volume)}</span>` : '';
+        return `<div class="item-venda">
             <div>
-                <div class="item-nome">${escapeHtml(item.nome_produto)}</div>
+                <div class="item-nome">${escapeHtml(item.nome_produto)}${vol}</div>
+                ${compsHtml}
                 <div class="item-valor">
-                    Qtd: ${item.quantidade} × R$ ${item.preco_unitario.toFixed(2)} = 
+                    Qtd: ${item.quantidade} × R$ ${(item.preco_unitario + (item.preco_complementos || 0)).toFixed(2)} = 
                     <strong>${formatarMoeda(item.subtotal)}</strong>
                 </div>
             </div>
             <button type="button" class="btn-remover" onclick="removerItem(${index})">
                 ❌ Remover
             </button>
-        </div>
-    `).join('');
+        </div>`;
+    }).join('');
 }
 
 // Remover item da venda
@@ -359,7 +496,8 @@ async function finalizarVenda() {
         cupom_codigo: cupomAplicado ? cupomAplicado.codigo : null,
         itens: itensVenda.map(item => ({
             id_produto: item.id_produto,
-            quantidade: item.quantidade
+            quantidade: item.quantidade,
+            complementos: (item.complementos || []).map(c => c.id_complemento),
         }))
     };
     
@@ -400,6 +538,8 @@ async function finalizarVenda() {
         document.getElementById('cupom-codigo').value = '';
         document.getElementById('cupom-codigo').readOnly = false;
         document.getElementById('cupom-info').style.display = 'none';
+        complementosSelecionados = [];
+        document.getElementById('complementos-section').style.display = 'none';
         const btnCupom = document.getElementById('btn-aplicar-cupom');
         btnCupom.textContent = 'Aplicar';
         btnCupom.onclick = validarCupomVenda;
@@ -454,10 +594,13 @@ function exibirRecibo(venda) {
         ────────────────────────────────
         
         Itens:
-        ${venda.itens.map(item => `
-        ${item.produto_nome}
-        Qtd: ${item.quantidade} × R$ ${item.preco_unitario.toFixed(2)} = R$ ${item.subtotal.toFixed(2)}
-        `).join('')}
+        ${venda.itens.map(item => {
+            const comps = (item.complementos || []);
+            const compTxt = comps.length
+                ? `\n          🥣 ${comps.map(c => c.nome).join(', ')}`
+                : '';
+            return `\n        ${item.produto_nome}${compTxt}\n        Qtd: ${item.quantidade} × R$ ${item.preco_unitario.toFixed(2)} = R$ ${item.subtotal.toFixed(2)}`;
+        }).join('')}
         
         ────────────────────────────────
         Total: R$ ${(venda.valor_total).toFixed(2)}

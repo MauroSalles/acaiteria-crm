@@ -292,6 +292,12 @@ class ItemVenda(db.Model):
     preco_unitario = db.Column(db.DECIMAL(10, 2), nullable=False)
     subtotal = db.Column(db.DECIMAL(10, 2), nullable=False)
 
+    # Relacionamento com complementos do item
+    complementos = db.relationship(
+        "ItemVendaComplemento", backref="item_venda",
+        lazy=True, cascade="all, delete-orphan",
+    )
+
     def __repr__(self):
         return f"<ItemVenda {self.id_item}>"
 
@@ -306,6 +312,42 @@ class ItemVenda(db.Model):
             "quantidade": self.quantidade,
             "preco_unitario": float(self.preco_unitario),
             "subtotal": float(self.subtotal),
+            "complementos": [c.to_dict() for c in self.complementos],
+        }
+
+
+class ItemVendaComplemento(db.Model):
+    """Complemento/topping associado a um item de venda."""
+
+    __tablename__ = "item_venda_complemento"
+
+    id = db.Column(db.Integer, primary_key=True)
+    id_item = db.Column(
+        db.Integer, db.ForeignKey("item_venda.id_item"),
+        nullable=False, index=True,
+    )
+    id_complemento = db.Column(
+        db.Integer, db.ForeignKey("complemento.id_complemento"),
+        nullable=False, index=True,
+    )
+    preco_unitario = db.Column(db.DECIMAL(10, 2), default=0)
+
+    complemento = db.relationship("Complemento", lazy=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "id_complemento": self.id_complemento,
+            "nome": (
+                self.complemento.nome if self.complemento else None
+            ),
+            "categoria": (
+                self.complemento.categoria
+                if self.complemento else None
+            ),
+            "preco_unitario": float(
+                self.preco_unitario or 0
+            ),
         }
 
 

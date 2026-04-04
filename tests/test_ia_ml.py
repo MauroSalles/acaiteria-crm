@@ -560,11 +560,11 @@ class TestSeedProdutos:
             db.session.commit()
             _seed_produtos()
             total = Produto.query.count()
-            assert total == 36  # 10 açaís + 26 sorvetes
+            assert total == 39  # 15 açaís + 24 sorvetes
             acais = Produto.query.filter_by(categoria="Açaí").count()
-            assert acais == 10
+            assert acais == 15
             sorvetes = Produto.query.filter_by(categoria="Sorvete").count()
-            assert sorvetes == 26
+            assert sorvetes == 24
 
     def test_seed_substitui_dados_teste(self, app):
         with app.app_context():
@@ -579,7 +579,7 @@ class TestSeedProdutos:
             db.session.commit()
             assert Produto.query.count() == 1
             _seed_produtos()  # deve substituir
-            assert Produto.query.count() == 36
+            assert Produto.query.count() == 39
 
     def test_seed_nao_duplica_catalogo_real(self, app):
         with app.app_context():
@@ -588,9 +588,9 @@ class TestSeedProdutos:
             Produto.query.delete()
             db.session.commit()
             _seed_produtos()
-            assert Produto.query.count() == 36
+            assert Produto.query.count() == 39
             _seed_produtos()  # não deve duplicar
-            assert Produto.query.count() == 36
+            assert Produto.query.count() == 39
 
     def test_seed_estoque_minimo_tradicional(self, app):
         with app.app_context():
@@ -601,5 +601,5 @@ class TestSeedProdutos:
             trad = Produto.query.filter_by(
                 nome_produto="Açaí Tradicional").first()
             assert trad is not None
-            assert trad.estoque_minimo == 10
+            assert trad.estoque_minimo == 3
             assert trad.volume == "10L"

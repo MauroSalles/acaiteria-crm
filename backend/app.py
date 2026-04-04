@@ -41,6 +41,7 @@ from .models import (
     Complemento,
     Venda,
     ItemVenda,
+    ItemVendaComplemento,
     Pagamento,
     ConsentimentoHistorico,
     LogAcao,
@@ -299,6 +300,7 @@ class ProdutoCreateSchema(BaseModel):
 class VendaItemSchema(BaseModel):
     id_produto: int
     quantidade: int
+    complementos: list[int] = []
 
 
 class VendaCreateSchema(BaseModel):
@@ -1311,6 +1313,24 @@ def criar_venda():
                 preco_unitario=preco_unitario,
                 subtotal=subtotal,
             )
+
+            # Processar complementos/toppings do item
+            ids_complementos = item_dados.get("complementos") or []
+            for id_comp in ids_complementos:
+                comp = db.session.get(Complemento, id_comp)
+                if comp and comp.ativo:
+                    preco_comp = Decimal(
+                        str(comp.preco_adicional or 0)
+                    )
+                    item.complementos.append(
+                        ItemVendaComplemento(
+                            id_complemento=id_comp,
+                            preco_unitario=preco_comp,
+                        )
+                    )
+                    subtotal += preco_comp * quantidade
+                    item.subtotal = subtotal
+
             venda.itens.append(item)
             valor_total += subtotal
 
@@ -5924,6 +5944,8 @@ def _seed_produtos():
 
     Se a tabela tiver dados antigos de teste (< 10 produtos),
     remove-os e insere o catálogo real completo.
+    Estoque: unidade = balde (5L ou 10L).
+    Estoque mínimo indica a quantidade mínima de baldes para operação.
     """
     total = Produto.query.count()
     if total >= 10:
@@ -5935,82 +5957,133 @@ def _seed_produtos():
         db.session.commit()
         logger.info("Removidos %d produtos de teste antigos", total)
 
+    # ── Açaís (baldes de 10L e 5L) ──────────────────────────
+    # (nome, volume, preço/kg-copo, descrição, estoque_atual, estoque_mínimo)
     _acais = [
+        # Sabores clássicos
         ("Açaí Tradicional", "10L", 15.90,
-         "Açaí puro 100% natural do Pará", 10, 10),
+         "Açaí puro 100% natural do Pará — o original",
+         8, 3),
         ("Açaí Grego", "10L", 17.90,
-         "Açaí cremoso estilo grego", 6, 6),
+         "Açaí extra-cremoso estilo grego, textura aveludada",
+         6, 3),
+        ("Açaí Black (Premium)", "10L", 19.90,
+         "Açaí premium extra-concentrado, mais escuro e encorpado",
+         4, 2),
+        ("Açaí Zero Açúcar", "10L", 18.90,
+         "Açaí sem adição de açúcar — ideal para dietas",
+         4, 2),
+        # Sabores frutados
         ("Açaí com Morango", "10L", 17.90,
-         "Açaí com pedaços de morango natural", 1, 1),
-        ("Açaí Black", "10L", 19.90,
-         "Açaí premium extra-concentrado", 1, 1),
-        ("Açaí Zero", "10L", 18.90,
-         "Açaí sem adição de açúcar", 1, 1),
-        ("Açaí Trufado", "10L", 19.90,
-         "Açaí com sabor trufa de chocolate", 1, 1),
-        ("Açaí Ninho", "10L", 18.90,
-         "Açaí com leite ninho cremoso", 1, 1),
-        ("Açaí Paçoca", "10L", 18.90,
-         "Açaí com paçoca triturada", 1, 1),
+         "Açaí com pedaços de morango natural",
+         5, 2),
+        ("Açaí com Banana", "5L", 16.90,
+         "Açaí cremoso com banana natural",
+         5, 2),
         ("Açaí Cupuaçu", "5L", 17.90,
-         "Açaí com cupuaçu da Amazônia", 1, 1),
-        ("Açaí Banana", "5L", 16.90,
-         "Açaí com banana natural", 1, 1),
+         "Açaí com cupuaçu da Amazônia — sabor regional",
+         4, 2),
+        ("Açaí com Manga", "5L", 17.90,
+         "Açaí tropical com manga madura",
+         3, 2),
+        ("Açaí com Maracujá", "5L", 17.90,
+         "Açaí com toque cítrico de maracujá",
+         3, 2),
+        # Sabores especiais / gourmet
+        ("Açaí Trufado", "10L", 19.90,
+         "Açaí com sabor trufa de chocolate belga",
+         3, 2),
+        ("Açaí Ninho", "10L", 18.90,
+         "Açaí com leite ninho cremoso — favorito das crianças",
+         5, 2),
+        ("Açaí Paçoca", "10L", 18.90,
+         "Açaí com paçoca triturada artesanal",
+         3, 2),
+        ("Açaí Nutella®", "5L", 20.90,
+         "Açaí com creme de avelã estilo Nutella",
+         3, 2),
+        ("Açaí Doce de Leite", "5L", 18.90,
+         "Açaí com doce de leite artesanal mineiro",
+         3, 2),
+        ("Açaí Coco", "5L", 17.90,
+         "Açaí com leite de coco e coco ralado",
+         3, 2),
     ]
 
+    # ── Sorvetes (baldes de 10L e 5L) ──────────────────────
     _sorvetes = [
         ("Menta com Chocolate", "10L", 12.90,
-         "Refrescante menta com lascas de chocolate", 1, 1),
+         "Refrescante menta com lascas de chocolate",
+         4, 2),
         ("Chocolate Belga", "10L", 14.90,
-         "Chocolate belga premium importado", 1, 1),
+         "Chocolate belga premium importado",
+         5, 2),
         ("Pistache", "10L", 15.90,
-         "Pistache artesanal cremoso", 1, 1),
-        ("Côco", "10L", 12.90,
-         "Côco natural ralado", 1, 1),
+         "Pistache artesanal cremoso",
+         3, 2),
+        ("Coco", "10L", 12.90,
+         "Coco natural ralado cremoso",
+         4, 2),
         ("Cappuccino", "10L", 13.90,
-         "Sabor cappuccino com toque de canela", 1, 1),
+         "Sabor cappuccino com toque de canela",
+         3, 2),
         ("Doce de Leite", "10L", 12.90,
-         "Doce de leite artesanal mineiro", 1, 1),
+         "Doce de leite artesanal mineiro",
+         5, 2),
         ("Grego Maracujá", "10L", 14.90,
-         "Sorvete grego com calda de maracujá", 1, 1),
+         "Sorvete grego com calda de maracujá",
+         3, 2),
         ("Grego Cereja", "10L", 14.90,
-         "Sorvete grego com cerejas", 1, 1),
+         "Sorvete grego com cerejas",
+         3, 2),
         ("Unicórnio", "10L", 13.90,
-         "Mix colorido de sabores frutados", 1, 1),
+         "Mix colorido de sabores frutados",
+         3, 2),
         ("Pitaya", "10L", 14.90,
-         "Pitaya rosa natural e refrescante", 1, 1),
-        ("Limão", "10L", 11.90,
-         "Limão siciliano refrescante", 1, 1),
+         "Pitaya rosa natural e refrescante",
+         3, 2),
+        ("Limão Siciliano", "10L", 11.90,
+         "Limão siciliano refrescante — sorbet",
+         3, 2),
         ("Morango", "10L", 12.90,
-         "Morango com pedaços de fruta", 1, 1),
+         "Morango com pedaços de fruta",
+         5, 2),
         ("Flocos", "10L", 12.90,
-         "Creme com flocos de chocolate", 1, 1),
+         "Creme com flocos crocantes de chocolate",
+         4, 2),
         ("Manga", "5L", 12.90,
-         "Manga madura tropical", 1, 1),
+         "Manga madura tropical",
+         3, 2),
         ("Abacaxi", "5L", 11.90,
-         "Abacaxi refrescante", 1, 1),
+         "Abacaxi refrescante natural",
+         3, 2),
         ("Banana Caramelizada", "5L", 12.90,
-         "Banana com calda de caramelo", 1, 1),
+         "Banana com calda de caramelo artesanal",
+         3, 2),
         ("Paçoca", "5L", 12.90,
-         "Paçoca cremosa artesanal", 1, 1),
+         "Paçoca cremosa artesanal",
+         3, 2),
         ("Chocolate Branco", "5L", 12.90,
-         "Chocolate branco aveludado", 1, 1),
+         "Chocolate branco aveludado premium",
+         3, 2),
         ("Baunilha", "5L", 11.90,
-         "Baunilha clássica de Madagascar", 1, 1),
-        ("Laranja", "5L", 11.90,
-         "Laranja cítrica natural", 1, 1),
+         "Baunilha clássica de Madagascar",
+         4, 2),
         ("Café", "5L", 12.90,
-         "Café expresso intenso", 1, 1),
+         "Café expresso intenso",
+         3, 2),
         ("Goiaba", "5L", 11.90,
-         "Goiaba vermelha cascuda", 1, 1),
-        ("Mamão", "5L", 11.90,
-         "Mamão papaia cremoso", 1, 1),
-        ("Algodão Doce", "5L", 12.90,
-         "Sabor algodão doce divertido", 1, 1),
+         "Goiaba vermelha cascuda",
+         3, 2),
         ("Creme de Cupuaçu", "5L", 13.90,
-         "Cupuaçu amazônico cremoso", 1, 1),
+         "Cupuaçu amazônico cremoso",
+         3, 2),
         ("Milho Verde", "5L", 12.90,
-         "Milho verde no estilo junino", 1, 1),
+         "Milho verde cremoso estilo junino",
+         3, 2),
+        ("Algodão Doce", "5L", 12.90,
+         "Sabor algodão doce colorido e divertido",
+         3, 2),
     ]
 
     for nome, vol, preco, desc, est_at, est_min in _acais:
@@ -6032,6 +6105,64 @@ def _seed_produtos():
                 len(_acais), len(_sorvetes))
 
 
+def _seed_complementos():
+    """Semeia complementos/toppings reais de açaiteria."""
+    total = Complemento.query.count()
+    if total >= 5:
+        return
+
+    if total > 0:
+        Complemento.query.delete()
+        db.session.commit()
+
+    _complementos = [
+        # Frutas
+        ("Morango", "Fruta", "porção", 3.00),
+        ("Banana", "Fruta", "porção", 2.00),
+        ("Manga", "Fruta", "porção", 3.00),
+        ("Kiwi", "Fruta", "porção", 4.00),
+        ("Uva", "Fruta", "porção", 3.50),
+        ("Abacaxi", "Fruta", "porção", 2.50),
+        ("Blueberry", "Fruta", "porção", 5.00),
+        # Caldas
+        ("Leite Condensado", "Calda", "porção", 2.00),
+        ("Calda de Morango", "Calda", "porção", 2.00),
+        ("Calda de Chocolate", "Calda", "porção", 2.00),
+        ("Calda de Caramelo", "Calda", "porção", 2.50),
+        ("Mel", "Calda", "porção", 3.00),
+        ("Creme de Avelã", "Calda", "porção", 4.00),
+        # Farináceos / Crocantes
+        ("Granola", "Farináceo", "porção", 2.00),
+        ("Paçoca Triturada", "Farináceo", "porção", 2.50),
+        ("Farinha Láctea", "Farináceo", "porção", 2.00),
+        ("Aveia", "Farináceo", "porção", 1.50),
+        ("Sucrilhos", "Farináceo", "porção", 2.00),
+        ("Granulado de Chocolate", "Farináceo", "porção", 2.00),
+        ("Coco Ralado", "Farináceo", "porção", 2.00),
+        # Extras
+        ("Leite Ninho", "Extra", "porção", 3.00),
+        ("Confete / M&M's", "Extra", "porção", 4.00),
+        ("Bis Triturado", "Extra", "porção", 3.50),
+        ("Castanha de Caju", "Extra", "porção", 4.00),
+        ("Amendoim Torrado", "Extra", "porção", 2.50),
+        ("Chantilly", "Extra", "porção", 2.50),
+        ("Jujuba", "Extra", "porção", 2.00),
+        ("Tapioca", "Extra", "porção", 2.50),
+    ]
+
+    for nome, cat, unid, preco in _complementos:
+        db.session.add(Complemento(
+            nome=nome,
+            categoria=cat,
+            unidade_medida=unid,
+            preco_adicional=Decimal(str(preco)),
+            ativo=True,
+        ))
+
+    db.session.commit()
+    logger.info("Complementos semeados: %d toppings", len(_complementos))
+
+
 # =============================================================================
 # CRIAR TABELAS E SEED
 # (usado pelo gunicorn na nuvem — tabelas já criadas acima)
@@ -6040,6 +6171,7 @@ def _seed_produtos():
 with app.app_context():
     _seed_admin()
     _seed_produtos()
+    _seed_complementos()
 
 
 if __name__ == "__main__":
