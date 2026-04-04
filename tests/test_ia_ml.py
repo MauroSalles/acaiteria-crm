@@ -569,7 +569,8 @@ class TestSeedProdutos:
     def test_seed_substitui_dados_teste(self, app):
         with app.app_context():
             from backend.app import _seed_produtos
-            # Se tem poucos produtos (< 10), seed remove e recria
+            # Se tem produto antigo sem o catálogo real, seed adiciona
+            # sem deletar (preserva FKs de vendas existentes)
             Produto.query.delete()
             db.session.commit()
             db.session.add(Produto(
@@ -578,8 +579,11 @@ class TestSeedProdutos:
             ))
             db.session.commit()
             assert Produto.query.count() == 1
-            _seed_produtos()  # deve substituir
-            assert Produto.query.count() == 39
+            _seed_produtos()  # adiciona catálogo real
+            # 1 existente (Teste) + 39 novos = 40
+            assert Produto.query.count() == 40
+            acais = Produto.query.filter_by(categoria="Açaí").count()
+            assert acais == 15
 
     def test_seed_nao_duplica_catalogo_real(self, app):
         with app.app_context():

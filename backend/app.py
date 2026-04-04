@@ -5942,20 +5942,16 @@ def _seed_admin():
 def _seed_produtos():
     """Semeia catálogo real Combina Açaí.
 
-    Se a tabela tiver dados antigos de teste (< 10 produtos),
-    remove-os e insere o catálogo real completo.
-    Estoque: unidade = balde (5L ou 10L).
-    Estoque mínimo indica a quantidade mínima de baldes para operação.
+    Estratégia: se a tabela não possui o catálogo completo (marcador =
+    pelo menos 1 produto com volume='10L' e categoria='Açaí'), ADICIONA
+    os produtos que estão faltando sem deletar os existentes (evita FK
+    constraint com vendas já realizadas).
     """
-    total = Produto.query.count()
-    if total >= 10:
+    marcador = Produto.query.filter_by(
+        categoria="Açaí", volume="10L"
+    ).first()
+    if marcador:
         return  # catálogo real já presente
-
-    # Limpar produtos de teste antigos
-    if total > 0:
-        Produto.query.delete()
-        db.session.commit()
-        logger.info("Removidos %d produtos de teste antigos", total)
 
     # ── Açaís (baldes de 10L e 5L) ──────────────────────────
     # (nome, volume, preço/kg-copo, descrição, estoque_atual, estoque_mínimo)
@@ -6086,35 +6082,57 @@ def _seed_produtos():
          3, 2),
     ]
 
+    # Corrigir produtos antigos: "Sobremesa" → "Sorvete"
+    Produto.query.filter(
+        Produto.categoria.ilike("Sobremesa")
+    ).update({"categoria": "Sorvete"}, synchronize_session=False)
+
+    # Inserir apenas produtos que ainda não existem (por nome)
+    nomes_existentes = {
+        p.nome_produto
+        for p in Produto.query.with_entities(Produto.nome_produto).all()
+    }
+    novos = 0
+
     for nome, vol, preco, desc, est_at, est_min in _acais:
-        db.session.add(Produto(
-            nome_produto=nome, categoria="Açaí", volume=vol,
-            preco=Decimal(str(preco)), descricao=desc,
-            estoque_atual=est_at, estoque_minimo=est_min,
-        ))
+        if nome not in nomes_existentes:
+            db.session.add(Produto(
+                nome_produto=nome, categoria="Açaí", volume=vol,
+                preco=Decimal(str(preco)), descricao=desc,
+                estoque_atual=est_at, estoque_minimo=est_min,
+            ))
+            novos += 1
 
     for nome, vol, preco, desc, est_at, est_min in _sorvetes:
-        db.session.add(Produto(
-            nome_produto=nome, categoria="Sorvete", volume=vol,
-            preco=Decimal(str(preco)), descricao=desc,
-            estoque_atual=est_at, estoque_minimo=est_min,
-        ))
+        if nome not in nomes_existentes:
+            db.session.add(Produto(
+                nome_produto=nome, categoria="Sorvete", volume=vol,
+                preco=Decimal(str(preco)), descricao=desc,
+                estoque_atual=est_at, estoque_minimo=est_min,
+            ))
+            novos += 1
+
+    # Atualizar produtos existentes sem volume para incluir vol/estmin
+    for nome, vol, preco, desc, est_at, est_min in _acais + _sorvetes:
+        if nome in nomes_existentes:
+            Produto.query.filter_by(nome_produto=nome).update({
+                "volume": vol,
+                "estoque_minimo": est_min,
+            }, synchronize_session=False)
 
     db.session.commit()
-    logger.info("Catálogo semeado: %d açaís + %d sorvetes",
-                len(_acais), len(_sorvetes))
+    if novos:
+        logger.info("Catálogo semeado: %d novos produtos adicionados", novos)
+    else:
+        logger.info("Catálogo verificado: nenhum produto novo necessário")
 
 
 def _seed_complementos():
-    """Semeia complementos/toppings reais de açaiteria."""
-    total = Complemento.query.count()
-    if total >= 5:
-        return
+    """Semeia complementos/toppings reais de açaiteria.
 
-    if total > 0:
-        Complemento.query.delete()
-        db.session.commit()
-
+    Adiciona apenas os que não existem (por nome). Nunca deleta
+    para não quebrar FKs de vendas realizadas.
+    """
     _complementos = [
         # Frutas
         ("Morango", "Fruta", "porção", 3.00),
@@ -6150,17 +6168,28 @@ def _seed_complementos():
         ("Tapioca", "Extra", "porção", 2.50),
     ]
 
+    nomes_existentes = {
+        c.nome
+        for c in Complemento.query.with_entities(Complemento.nome).all()
+    }
+    novos = 0
+
     for nome, cat, unid, preco in _complementos:
-        db.session.add(Complemento(
-            nome=nome,
-            categoria=cat,
-            unidade_medida=unid,
-            preco_adicional=Decimal(str(preco)),
-            ativo=True,
-        ))
+        if nome not in nomes_existentes:
+            db.session.add(Complemento(
+                nome=nome,
+                categoria=cat,
+                unidade_medida=unid,
+                preco_adicional=Decimal(str(preco)),
+                ativo=True,
+            ))
+            novos += 1
 
     db.session.commit()
-    logger.info("Complementos semeados: %d toppings", len(_complementos))
+    if novos:
+        logger.info("Complementos semeados: %d novos toppings", novos)
+    else:
+        logger.info("Complementos verificados: nenhum novo necessário")
 
 
 # =============================================================================
