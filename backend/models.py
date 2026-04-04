@@ -62,7 +62,7 @@ class Cliente(db.Model):
 
     id_cliente = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(150), nullable=False, index=True)
-    telefone = db.Column(db.String(20))
+    telefone = db.Column(db.String(20), index=True)
     email = db.Column(db.String(100), index=True)
     senha_hash = db.Column(db.String(256), nullable=True)
     data_cadastro = db.Column(db.DateTime, default=_utcnow)
@@ -149,7 +149,7 @@ class Produto(db.Model):
     __tablename__ = "produto"
 
     id_produto = db.Column(db.Integer, primary_key=True)
-    nome_produto = db.Column(db.String(100), nullable=False)
+    nome_produto = db.Column(db.String(100), nullable=False, index=True)
     categoria = db.Column(db.String(50), index=True)
     descricao = db.Column(db.Text)
     preco = db.Column(db.DECIMAL(10, 2), nullable=False)
@@ -393,7 +393,9 @@ class LogAcao(db.Model):
 
     id_log = db.Column(db.Integer, primary_key=True)
     id_usuario = db.Column(
-        db.Integer, db.ForeignKey("usuario.id_usuario"), nullable=True
+        db.Integer, db.ForeignKey(
+            "usuario.id_usuario", ondelete="SET NULL"
+        ), nullable=True
     )
     acao = db.Column(
         db.String(50), nullable=False

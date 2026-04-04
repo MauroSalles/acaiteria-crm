@@ -306,14 +306,14 @@ class TestPixQRCode:
         assert r.status_code == 400
 
     def test_pix_qrcode_sem_auth(self, unauthenticated_client):
-        """PIX endpoint deve ser público (sem autenticação)."""
+        """PIX endpoint requer autenticação."""
         r = unauthenticated_client.get("/api/pix/qrcode?valor=10")
-        assert r.status_code == 200
+        assert r.status_code == 401
 
     def test_pix_qrcode_chave_presente(self, client):
         r = client.get("/api/pix/qrcode?valor=15")
         data = r.get_json()
-        assert "@" in data["chave"]  # É email
+        assert data["chave"]  # chave configurada via env
 
 
 # ── Checkout LGPD ────────────────────────────────────────────────────

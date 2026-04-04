@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.abspath(
 
 # Definir DATABASE_URL ANTES de importar o app, para que o app use memória
 os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
+os.environ.setdefault('PIX_CHAVE', 'teste@pix.com')
 
 from backend.app import app as flask_app, limiter  # noqa: E402
 from backend.models import db as _db, Usuario  # noqa: E402

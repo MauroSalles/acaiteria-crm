@@ -32,6 +32,7 @@ import re as _re
 import secrets
 import unicodedata
 from pydantic import BaseModel, EmailStr, ValidationError, field_validator
+from sqlalchemy.orm import joinedload
 
 from .models import (
     db,
@@ -76,9 +77,11 @@ app = Flask(
 
 # Chave secreta para sessões (obrigatória em produção)
 _secret = os.environ.get("SECRET_KEY", "")
-if not _secret and os.environ.get("FLASK_ENV") == "production":
-    raise RuntimeError("SECRET_KEY obrigatória em produção!")
-app.config["SECRET_KEY"] = _secret or "dev-secret-key-change-in-production"
+if not _secret:
+    if os.environ.get("FLASK_ENV") == "production":
+        raise RuntimeError("SECRET_KEY obrigatória em produção!")
+    _secret = secrets.token_urlsafe(32)
+app.config["SECRET_KEY"] = _secret
 
 # Sessão permanente — dura 7 dias
 # (evita logout inesperado entre reinicializações)
@@ -178,12 +181,18 @@ with app.app_context():
         ("venda", "status_pedido", "VARCHAR(30) DEFAULT 'Recebido'"),
         ("produto", "preco_promocional", "DECIMAL(10,2)"),
     ]
+    # Colunas vindas de dict interno – nunca de input externo
+    _sql_map = {
+        (t, c): tipo for t, c, tipo in _migracoes
+    }
     with db.engine.connect() as conn:
-        for tabela, coluna, tipo in _migracoes:
+        for (tabela, coluna), tipo in _sql_map.items():
             try:
-                conn.execute(
-                    db.text(f"ALTER TABLE {tabela} ADD COLUMN {coluna} {tipo}")
-                )
+                conn.execute(db.text(
+                    "ALTER TABLE {} ADD COLUMN {} {}".format(
+                        tabela, coluna, tipo
+                    )
+                ))
                 conn.commit()
             except Exception:
                 conn.rollback()
@@ -263,7 +272,7 @@ def inject_user():
 # ── Helper de paginação ──────────────────────────────────────────
 def get_pagination_params(default_per_page=50):
     """Extrai e valida parâmetros de paginação da query string."""
-    pagina = max(1, request.args.get("pagina", 1, type=int))
+    pagina = max(1, min(request.args.get("pagina", 1, type=int), 10000))
     por_pagina = max(
         1, min(request.args.get("por_pagina", default_per_page, type=int), 100)
     )
@@ -1178,6 +1187,14 @@ def listar_vendas():
         if forma:
             query = query.filter(Venda.forma_pagamento.ilike(f"%{forma}%"))
 
+        # Eager-load: evita N+1 ao serializar
+        query = query.options(
+            joinedload(Venda.cliente),
+            joinedload(Venda.itens).joinedload(ItemVenda.produto),
+            joinedload(Venda.itens).joinedload(ItemVenda.complementos)
+            .joinedload(ItemVendaComplemento.complemento),
+        )
+
         # Paginação
         pagina, por_pagina = get_pagination_params()
         total = query.count()
@@ -1846,7 +1863,10 @@ def relatorio_por_data():
                 400,
             )
 
-        vendas_dia = Venda.query.filter(
+        vendas_dia = Venda.query.options(
+            joinedload(Venda.cliente),
+            joinedload(Venda.itens).joinedload(ItemVenda.produto),
+        ).filter(
             db.func.date(Venda.data_venda) == data_filtro
         ).all()
 
@@ -4810,10 +4830,8 @@ def ia_resposta():
 # PIX — Geração de QR Code (BRCode EMV padrão BACEN)
 # =============================================================================
 
-# Chave PIX da loja (email Nubank)
-_PIX_CHAVE = os.environ.get(
-    "PIX_CHAVE", "Maurosalles2006@gmail.com"
-)
+# Chave PIX da loja (obrigatória via env)
+_PIX_CHAVE = os.environ.get("PIX_CHAVE", "")
 _PIX_NOME = os.environ.get("PIX_NOME", "Combina Acai")
 _PIX_CIDADE = os.environ.get("PIX_CIDADE", "Lorena")
 
@@ -4875,9 +4893,12 @@ def _gerar_pix_payload(valor, txid="***"):
 
 @app.route("/api/pix/qrcode")
 @limiter.limit("30 per minute")
+@api_login_required
 def pix_qrcode():
     """Gera payload PIX BRCode para QR Code."""
     try:
+        if not _PIX_CHAVE:
+            return jsonify({"erro": "Chave PIX não configurada"}), 503
         valor = request.args.get("valor", 0, type=float)
         txid = request.args.get("txid", "AcaiCRM")
         # Sanitizar txid (apenas alfanuméricos)
@@ -4903,7 +4924,7 @@ def pix_qrcode():
 
 def _construir_matriz_compras():
     """Constrói matriz cliente×produto a partir do histórico de vendas."""
-    vendas = Venda.query.all()
+    vendas = Venda.query.options(joinedload(Venda.itens)).all()
     # {id_cliente: {id_produto: quantidade_total}}
     matriz = {}
     for v in vendas:
@@ -5020,32 +5041,41 @@ def ia_recomendacoes(id_cliente):
 def _calcular_rfm():
     """Calcula scores RFM (Recency, Frequency, Monetary) por cliente."""
     agora = datetime.now(timezone.utc)
-    clientes = Cliente.query.filter_by(ativo=True).all()
+
+    # Consulta agregada: evita N+1 (1 query em vez de N)
+    stats = (
+        db.session.query(
+            Venda.id_cliente,
+            db.func.max(Venda.data_venda).label("ultima"),
+            db.func.count(Venda.id_venda).label("frequency"),
+            db.func.sum(Venda.valor_total).label("monetary"),
+        )
+        .group_by(Venda.id_cliente)
+        .all()
+    )
+    stats_map = {
+        s.id_cliente: s for s in stats
+    }
+
+    clientes = Cliente.query.filter(
+        Cliente.ativo.is_(True),
+        Cliente.id_cliente.in_(stats_map.keys()),
+    ).all()
+
     rfm_data = []
-
     for c in clientes:
-        vendas = Venda.query.filter_by(id_cliente=c.id_cliente).all()
-        if not vendas:
-            continue
-
-        # Recency: dias desde última compra
-        ultima = max(v.data_venda for v in vendas)
+        s = stats_map[c.id_cliente]
+        ultima = s.ultima
         if ultima.tzinfo is None:
             ultima = ultima.replace(tzinfo=timezone.utc)
         recency = (agora - ultima).days
-
-        # Frequency: total de compras
-        frequency = len(vendas)
-
-        # Monetary: valor total gasto
-        monetary = sum(float(v.valor_total) for v in vendas)
 
         rfm_data.append({
             "id_cliente": c.id_cliente,
             "nome": c.nome,
             "recency": recency,
-            "frequency": frequency,
-            "monetary": round(monetary, 2),
+            "frequency": s.frequency,
+            "monetary": round(float(s.monetary), 2),
             "pontos": c.pontos_fidelidade or 0,
         })
 
@@ -5500,7 +5530,11 @@ def relatorio_vendas_filtradas():
         pagina, por_pagina = get_pagination_params()
         total = query.count()
         vendas = (
-            query.order_by(Venda.data_venda.desc())
+            query.options(
+                joinedload(Venda.cliente),
+                joinedload(Venda.itens).joinedload(ItemVenda.produto),
+            )
+            .order_by(Venda.data_venda.desc())
             .offset((pagina - 1) * por_pagina)
             .limit(por_pagina)
             .all()
@@ -5933,7 +5967,14 @@ def _seed_admin():
             email=os.environ.get("ADMIN_EMAIL", "admin@acaiteria.com"),
             papel="admin",
         )
-        admin.set_senha(os.environ.get("ADMIN_SENHA", "admin123"))
+        _admin_senha = os.environ.get("ADMIN_SENHA", "")
+        if not _admin_senha:
+            _admin_senha = secrets.token_urlsafe(16)
+            logger.warning(
+                "ADMIN_SENHA não definida; gerada aleatória: %s",
+                _admin_senha,
+            )
+        admin.set_senha(_admin_senha)
         db.session.add(admin)
         db.session.commit()
         logger.info("Admin padrão criado: %s", admin.email)
