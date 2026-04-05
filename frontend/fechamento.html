@@ -133,12 +133,13 @@
 
             try {
                 const res = await fetch(`/api/relatorios/por-data?data=${data}`);
-                const dados = await res.json();
 
                 if (!res.ok) {
-                    mostrarAlerta(dados.erro || 'Erro ao carregar', 'erro');
+                    const errData = await res.json().catch(() => ({}));
+                    mostrarAlerta(errData.erro || 'Erro ao carregar', 'erro');
                     return;
                 }
+                const dados = await res.json();
 
                 const resumo = document.getElementById('resumo-dia');
                 resumo.innerHTML = `

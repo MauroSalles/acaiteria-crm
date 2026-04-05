@@ -1,6 +1,5 @@
-const CACHE_NAME = 'acai-crm-v3';
+const CACHE_NAME = 'acai-crm-v4';
 const STATIC_ASSETS = [
-  '/',
   '/static/estilos.css',
   '/static/script.js',
   '/static/manifest.json',
@@ -37,8 +36,10 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        // Cachear respostas bem-sucedidas
-        if (response.ok) {
+        // Só cachear respostas bem-sucedidas que não sejam redirects
+        // e que não sejam a página de login (evita cachear login como '/')
+        if (response.ok && !response.redirected
+            && !event.request.url.includes('/login')) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
         }

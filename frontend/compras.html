@@ -328,6 +328,7 @@
         async function carregarFornecedores() {
             try {
                 fornecedoresLista = await requisicao('/api/fornecedores');
+                if (!Array.isArray(fornecedoresLista)) fornecedoresLista = [];
                 // Preencher select da compra
                 const sel = document.getElementById('compra-fornecedor');
                 sel.innerHTML = '<option value="">-- Selecione --</option>';
@@ -429,6 +430,7 @@
         async function carregarProdutosSelect() {
             try {
                 produtosLista = await requisicao('/api/produtos');
+                if (!Array.isArray(produtosLista)) produtosLista = [];
                 const sel = document.getElementById('item-produto');
                 sel.innerHTML = '<option value="">-- Produto --</option>';
                 produtosLista.forEach(p => {

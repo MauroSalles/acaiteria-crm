@@ -152,7 +152,7 @@
                 const dados = await resposta.json();
                 const tbody = document.querySelector('#tabela-clientes tbody');
 
-                const clientes = dados.clientes;
+                const clientes = dados.clientes || [];
                 paginaAtual = dados.pagina;
 
                 if (clientes.length === 0) {

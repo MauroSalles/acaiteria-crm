@@ -142,7 +142,7 @@
         try {
             const data = await requisicao(`/api/logs?${params}`);
 
-            if (!data.logs.length) {
+            if (!data.logs || !data.logs.length) {
                 tbody.innerHTML = '<tr><td colspan="6" class="text-center">Nenhum registro encontrado</td></tr>';
                 document.getElementById('paginacao-logs').innerHTML = '';
                 return;

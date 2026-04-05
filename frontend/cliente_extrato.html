@@ -131,14 +131,18 @@
         try {
             const d = await requisicao('/api/clientes/' + clienteId + '/extrato');
 
-            document.getElementById('ext-compras').textContent = d.resumo.total_compras;
-            document.getElementById('ext-gasto').textContent = 'R$ ' + d.resumo.total_gasto.toFixed(2);
-            document.getElementById('ext-ticket').textContent = 'R$ ' + d.resumo.ticket_medio.toFixed(2);
-            document.getElementById('ext-desconto').textContent = 'R$ ' + (d.cliente.desconto_disponivel || 0).toFixed(2);
+            if (d.resumo) {
+                document.getElementById('ext-compras').textContent = d.resumo.total_compras;
+                document.getElementById('ext-gasto').textContent = 'R$ ' + d.resumo.total_gasto.toFixed(2);
+                document.getElementById('ext-ticket').textContent = 'R$ ' + d.resumo.ticket_medio.toFixed(2);
+            }
+            if (d.cliente) {
+                document.getElementById('ext-desconto').textContent = 'R$ ' + (d.cliente.desconto_disponivel || 0).toFixed(2);
+            }
 
             // Timeline
             const tl = document.getElementById('timeline');
-            if (d.timeline.length) {
+            if (d.timeline && d.timeline.length) {
                 tl.innerHTML = d.timeline.map(t => {
                     const data = new Date(t.data).toLocaleDateString('pt-BR', {day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'});
                     const itens = t.itens.map(i => i.qtd + 'x ' + escapeH(i.produto)).join(', ');

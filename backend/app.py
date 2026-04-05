@@ -152,15 +152,23 @@ database_url = os.environ.get("DATABASE_URL", _default_db)
 if database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql://", 1)
 
+# Validar que DATABASE_URL está definida em produção (evitar SQLite efêmero)
+if os.environ.get("FLASK_ENV") == "production" and not os.environ.get("DATABASE_URL"):
+    raise RuntimeError(
+        "DATABASE_URL obrigatória em produção! "
+        "Configure no dashboard Render ou render.yaml."
+    )
+
 app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SQLALCHEMY_ECHO"] = os.environ.get("FLASK_ENV") == "development"
 
 # Connection pooling para PostgreSQL em produção
+# Render free tier: ~30 conexões máx; com 2 workers, usar pool conservador
 if database_url.startswith("postgresql"):
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-        "pool_size": int(os.environ.get("DB_POOL_SIZE", "10")),
-        "max_overflow": int(os.environ.get("DB_MAX_OVERFLOW", "20")),
+        "pool_size": int(os.environ.get("DB_POOL_SIZE", "3")),
+        "max_overflow": int(os.environ.get("DB_MAX_OVERFLOW", "5")),
         "pool_pre_ping": True,
         "pool_recycle": 3600,
     }
@@ -233,15 +241,17 @@ def adicionar_headers_seguranca(response):
     response.headers["Permissions-Policy"] = (
         "geolocation=(), camera=(), microphone=()"
     )
+    nonce = g.get('csp_nonce', '')
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        f"script-src 'self' 'nonce-{g.get('csp_nonce', '')}' "
+        "script-src 'self' 'unsafe-inline' "
         "https://cdn.jsdelivr.net; "
-        f"style-src 'self' 'nonce-{g.get('csp_nonce', '')}' "
+        "style-src 'self' 'unsafe-inline' "
         "https://fonts.googleapis.com; "
         "font-src 'self' https://fonts.gstatic.com; "
         "img-src 'self' data:; "
         "connect-src 'self'; "
+        "worker-src 'self'; "
         "frame-ancestors 'none'"
     )
     if os.environ.get("FLASK_ENV") == "production":

@@ -682,11 +682,16 @@ class CupomDesconto(db.Model):
         """Verifica se o cupom está válido para uso."""
         if not self.ativo:
             return False
-        agora = _utcnow().replace(tzinfo=None)
-        if self.data_inicio and agora < self.data_inicio.replace(tzinfo=None):
-            return False
-        if self.data_fim and agora > self.data_fim.replace(tzinfo=None):
-            return False
+        agora = _utcnow()
+        # Normalizar para comparação: se campo não tem tz, adicionar UTC
+        if self.data_inicio:
+            di = self.data_inicio if self.data_inicio.tzinfo else self.data_inicio.replace(tzinfo=timezone.utc)
+            if agora < di:
+                return False
+        if self.data_fim:
+            df = self.data_fim if self.data_fim.tzinfo else self.data_fim.replace(tzinfo=timezone.utc)
+            if agora > df:
+                return False
         if self.usos_maximos > 0 and self.usos_realizados >= self.usos_maximos:
             return False
         return True
