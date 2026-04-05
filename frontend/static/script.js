@@ -285,8 +285,14 @@ function exportarCSV(dados, nomeArquivo = 'exportacao.csv') {
     dados.forEach(linha => {
         const valores = cabecalhos.map(cabecalho => {
             let valor = linha[cabecalho];
+            if (valor == null) return '';
+            valor = String(valor);
+            // Sanitizar formula injection (=, +, -, @, \t, \r)
+            if (/^[=+\-@\t\r]/.test(valor)) {
+                valor = "'" + valor;
+            }
             // Escape para valores com vírgula ou aspas
-            if (typeof valor === 'string' && (valor.includes(',') || valor.includes('"') || valor.includes('\n'))) {
+            if (valor.includes(',') || valor.includes('"') || valor.includes('\n')) {
                 valor = `"${valor.replace(/"/g, '""')}"`;
             }
             return valor;
