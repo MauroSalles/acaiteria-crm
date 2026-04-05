@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sobre o Projeto - Açaiteria CRM</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
+    <meta name="theme-color" content="#7B1FA2">
+    <style nonce="{{ csp_nonce }}">
+        .sobre-hero {
+            text-align: center;
+            padding: 2rem 1rem;
+            background: linear-gradient(135deg, var(--acai-dark), var(--acai));
+            color: #fff;
+            border-radius: var(--raio);
+            margin-bottom: 2rem;
+        }
+        .sobre-hero h1 { font-size: 2rem; margin-bottom: .5rem; }
+        .sobre-hero p { opacity: .9; font-size: 1.1rem; }
+
+        .sobre-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .sobre-card {
+            background: var(--branco);
+            border-radius: var(--raio);
+            padding: 1.5rem;
+            box-shadow: var(--sombra-sm);
+            border: 1px solid var(--cinza-200);
+        }
+        .sobre-card h2 {
+            font-size: 1.2rem;
+            margin-bottom: 1rem;
+            color: var(--acai);
+            border-bottom: 2px solid var(--cinza-200);
+            padding-bottom: .5rem;
+        }
+        .sobre-card ul { list-style: none; padding: 0; }
+        .sobre-card li { padding: .4rem 0; border-bottom: 1px solid var(--cinza-100); }
+        .sobre-card li:last-child { border-bottom: none; }
+
+        .tech-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .5rem;
+        }
+        .tech-badge {
+            display: inline-block;
+            padding: .3rem .8rem;
+            border-radius: 20px;
+            font-size: .85rem;
+            font-weight: 600;
+        }
+        .tech-badge.backend { background: var(--azul-light); color: #0d47a1; }
+        .tech-badge.frontend { background: var(--verde-light); color: #1b5e20; }
+        .tech-badge.infra { background: var(--amarelo-bg); color: #e65100; }
+
+        .objetivo-lista li::before { content: "✅ "; }
+        .funcionalidade-lista li::before { content: "🔹 "; }
+
+        .univesp-box {
+            text-align: center;
+            padding: 2rem;
+            background: var(--cinza-50);
+            border-radius: var(--raio);
+            border: 2px solid var(--acai-light);
+            margin-bottom: 2rem;
+        }
+        .univesp-box h2 { color: var(--acai); font-size: 1.5rem; margin-bottom: .5rem; }
+        .univesp-box p { color: var(--cinza-600); }
+        .univesp-box .destaque { font-size: 1.1rem; color: var(--cinza-800); margin-top: 1rem; }
+
+        .metricas-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 1rem;
+            margin: 1.5rem 0;
+        }
+        .metrica-item {
+            text-align: center;
+            padding: 1rem;
+            background: var(--branco);
+            border-radius: var(--raio-sm);
+            box-shadow: var(--sombra-sm);
+        }
+        .metrica-item .numero {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--acai);
+        }
+        .metrica-item .rotulo {
+            font-size: .8rem;
+            color: var(--cinza-600);
+            margin-top: .3rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Navbar -->
+        <nav class="navbar">
+            <div class="navbar-brand">🍇 <strong>Combina Açaí</strong></div>
+            <button class="navbar-toggle" onclick="document.getElementById('navMenu').classList.toggle('open')" aria-label="Menu">☰</button>
+            <ul class="navbar-menu" id="navMenu">
+                <li><a href="/">🏠 Início</a></li>
+                <li><a href="/sobre" class="active">ℹ️ Sobre</a></li>
+                <li><a href="/politica-privacidade">🔒 LGPD</a></li>
+                <li class="nav-separator"></li>
+                <li><button class="dark-toggle" id="darkToggle" aria-label="Alternar tema escuro">🌙</button></li>
+                {% if session.get('usuario_id') %}
+                <li><a href="/logout" class="nav-logout">⬅ Sair</a></li>
+                {% else %}
+                <li><a href="/login">🔑 Login</a></li>
+                {% endif %}
+            </ul>
+        </nav>
+
+        <main class="content">
+            <!-- Hero -->
+            <div class="sobre-hero">
+                <h1>🍇 Açaiteria CRM — Combina Açaí</h1>
+                <p>Sistema de Gestão de Relacionamento com o Cliente</p>
+            </div>
+
+            <!-- UNIVESP Box -->
+            <div class="univesp-box">
+                <h2>🎓 Projeto Integrador — UNIVESP</h2>
+                <p><strong>Universidade Virtual do Estado de São Paulo</strong></p>
+                <p>Eixo Computação · Grupo 22 · Polo Lorena/SP</p>
+                <p class="destaque">
+                    Desenvolvimento de um software com framework web que utilize
+                    noções de banco de dados, acessível pela internet, para resolver
+                    um problema real da comunidade.
+                </p>
+            </div>
+
+            <!-- Métricas do Projeto -->
+            <div class="metricas-grid" id="metricas-projeto">
+                <div class="metrica-item">
+                    <div class="numero" id="m-endpoints">50+</div>
+                    <div class="rotulo">Endpoints API</div>
+                </div>
+                <div class="metrica-item">
+                    <div class="numero" id="m-testes">320+</div>
+                    <div class="rotulo">Testes Automatizados</div>
+                </div>
+                <div class="metrica-item">
+                    <div class="numero" id="m-paginas">20+</div>
+                    <div class="rotulo">Páginas HTML</div>
+                </div>
+                <div class="metrica-item">
+                    <div class="numero" id="m-modelos">18</div>
+                    <div class="rotulo">Modelos de Dados</div>
+                </div>
+            </div>
+
+            <!-- Grid de informações -->
+            <div class="sobre-grid">
+                <!-- Objetivos -->
+                <div class="sobre-card">
+                    <h2>🎯 Objetivos do Projeto</h2>
+                    <ul class="objetivo-lista">
+                        <li>Automatizar o cadastro e gestão de clientes</li>
+                        <li>Controlar vendas, estoque e faturamento</li>
+                        <li>Gerar relatórios e indicadores (KPIs)</li>
+                        <li>Implementar programa de fidelidade com pontos</li>
+                        <li>Garantir conformidade com a LGPD</li>
+                        <li>Oferecer interface acessível via dispositivo móvel</li>
+                        <li>Disponibilizar vitrine pública para clientes</li>
+                    </ul>
+                </div>
+
+                <!-- Funcionalidades -->
+                <div class="sobre-card">
+                    <h2>⚡ Funcionalidades Principais</h2>
+                    <ul class="funcionalidade-lista">
+                        <li>Dashboard com gráficos e KPIs em tempo real</li>
+                        <li>Registro de vendas com complementos e cupons</li>
+                        <li>Gestão de clientes com programa de fidelidade</li>
+                        <li>Controle de produtos, estoque e fornecedores</li>
+                        <li>Fechamento de caixa diário</li>
+                        <li>Relatórios em PDF e exportação CSV</li>
+                        <li>Sistema de suporte com tickets</li>
+                        <li>Vitrine pública com carrinho e Pix QR Code</li>
+                        <li>Modo escuro (dark mode)</li>
+                        <li>PWA — Instalável como aplicativo</li>
+                    </ul>
+                </div>
+
+                <!-- Tecnologias -->
+                <div class="sobre-card">
+                    <h2>🛠️ Tecnologias Utilizadas</h2>
+                    <div class="tech-badges">
+                        <span class="tech-badge backend">Python 3.13</span>
+                        <span class="tech-badge backend">Flask 2.3</span>
+                        <span class="tech-badge backend">SQLAlchemy</span>
+                        <span class="tech-badge backend">Flask-RESTX</span>
+                        <span class="tech-badge backend">Pydantic</span>
+                        <span class="tech-badge backend">Gunicorn</span>
+                        <span class="tech-badge frontend">HTML5</span>
+                        <span class="tech-badge frontend">CSS3</span>
+                        <span class="tech-badge frontend">JavaScript ES6+</span>
+                        <span class="tech-badge frontend">Chart.js</span>
+                        <span class="tech-badge frontend">Service Worker</span>
+                        <span class="tech-badge infra">PostgreSQL</span>
+                        <span class="tech-badge infra">Docker</span>
+                        <span class="tech-badge infra">Render.com</span>
+                        <span class="tech-badge infra">GitHub Actions CI</span>
+                    </div>
+                </div>
+
+                <!-- Arquitetura -->
+                <div class="sobre-card">
+                    <h2>🏗️ Arquitetura</h2>
+                    <ul>
+                        <li><strong>Backend:</strong> API RESTful com Flask + flask-restx (Swagger)</li>
+                        <li><strong>Frontend:</strong> HTML/CSS/JS puro (sem framework SPA)</li>
+                        <li><strong>Banco de Dados:</strong> PostgreSQL (produção) / SQLite (testes)</li>
+                        <li><strong>Deploy:</strong> Docker no Render.com (PaaS)</li>
+                        <li><strong>CI/CD:</strong> GitHub Actions — Lint + Testes automáticos</li>
+                        <li><strong>Segurança:</strong> CSP, CSRF, Rate Limiting, LGPD</li>
+                        <li><strong>PWA:</strong> Service Worker para funcionamento offline</li>
+                    </ul>
+                </div>
+
+                <!-- Segurança & LGPD -->
+                <div class="sobre-card">
+                    <h2>🔒 Segurança & LGPD</h2>
+                    <ul>
+                        <li><strong>Autenticação:</strong> Login com senha hash (Werkzeug)</li>
+                        <li><strong>CSRF:</strong> Proteção contra Cross-Site Request Forgery</li>
+                        <li><strong>CSP:</strong> Content Security Policy em todas as respostas</li>
+                        <li><strong>Rate Limiting:</strong> Proteção contra abuso de requisições</li>
+                        <li><strong>LGPD:</strong> Consentimento explícito, direito ao esquecimento, exportação de dados</li>
+                        <li><strong>HTTPS:</strong> HSTS em produção com certificado TLS</li>
+                    </ul>
+                </div>
+
+                <!-- O que é um PI -->
+                <div class="sobre-card">
+                    <h2>📚 O que é o Projeto Integrador?</h2>
+                    <p style="color:var(--cinza-800);line-height:1.7">
+                        O Projeto Integrador (PI) é uma disciplina prática da
+                        <strong>UNIVESP</strong> que desafia os alunos a desenvolverem
+                        uma solução tecnológica real para um problema identificado
+                        na comunidade local. O projeto integra conhecimentos de
+                        diversas disciplinas do curso, promovendo a aplicação
+                        prática da teoria em um contexto de desenvolvimento
+                        colaborativo de software.
+                    </p>
+                </div>
+            </div>
+        </main>
+
+        <footer class="footer">
+            <p>© 2026 — Projeto Integrador UNIVESP | Grupo 22 | Polo Lorena/SP</p>
+            <p>Eixo Computação · Universidade Virtual do Estado de São Paulo</p>
+        </footer>
+    </div>
+
+    <script nonce="{{ csp_nonce }}" src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

@@ -248,6 +248,7 @@ async function selecionarCliente() {
     // Encontrar cliente na lista
     const select = document.getElementById('cliente-select');
     const option = select.options[select.selectedIndex];
+    if (!option) return;
     
     clienteSelecionado = {
         id_cliente: parseInt(idCliente),

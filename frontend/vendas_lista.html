@@ -73,7 +73,7 @@
                 <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-bottom:1rem">
                     <h2 style="margin:0">📋 Vendas</h2>
                     <button class="btn btn-info" style="font-size:.8rem;padding:.4rem .8rem" onclick="carregarVendas()">🔄</button>
-                    <select id="filtro-status-pedido" style="padding:.3rem .6rem;border-radius:6px;border:1px solid #ccc" onchange="carregarVendas()">
+                    <select id="filtro-status-pedido" style="padding:.3rem .6rem;border-radius:6px;border:1px solid var(--cinza-400)" onchange="carregarVendas()">
                         <option value="">Todos status</option>
                         <option value="Recebido">📋 Recebido</option>
                         <option value="Preparando">👨‍🍳 Preparando</option>
@@ -81,7 +81,7 @@
                         <option value="Entregue">🏁 Entregue</option>
                         <option value="Cancelado">❌ Cancelado</option>
                     </select>
-                    <input type="date" id="filtro-data" style="padding:.3rem .6rem;border-radius:6px;border:1px solid #ccc" onchange="carregarVendas()">
+                    <input type="date" id="filtro-data" style="padding:.3rem .6rem;border-radius:6px;border:1px solid var(--cinza-400)" onchange="carregarVendas()">
                     <span id="totalVendas" class="text-muted" style="font-size:.85rem;margin-left:auto"></span>
                 </div>
 
@@ -127,7 +127,7 @@
                     </div>
                     <div class="form-group">
                         <label>Observações</label>
-                        <textarea id="edit-obs" rows="3" style="width:100%;padding:.5rem;border:1px solid #ccc;border-radius:6px"></textarea>
+                        <textarea id="edit-obs" rows="3" style="width:100%;padding:.5rem;border:1px solid var(--cinza-400);border-radius:6px"></textarea>
                     </div>
                     <div id="edit-itens-lista" class="bg-modal-items" style="margin:.8rem 0;padding:.5rem;border-radius:8px;font-size:.85rem"></div>
                     <div style="display:flex;gap:.5rem;justify-content:flex-end">
@@ -140,7 +140,8 @@
         </main>
 
         <footer class="footer">
-            <p>&copy; 2026 - Projeto Integrador UNIVESP | Grupo 22 | Polo Lorena/SP</p>
+            <p>&copy; 2026 — Projeto Integrador UNIVESP | Grupo 22 | Polo Lorena/SP</p>
+            <p>Eixo Computação · <a href="/sobre" style="color:inherit;text-decoration:underline">Sobre o Projeto</a></p>
         </footer>
     </div>
 
@@ -280,7 +281,7 @@
 
             // Mostrar itens
             const itensHtml = (v.itens || []).map(i =>
-                `<div style="padding:.2rem 0;border-bottom:1px solid #eee">${i.quantidade}× <strong>${escapeHtml(i.produto_nome || '?')}</strong> — ${formatarMoeda(i.subtotal)}</div>`
+                `<div style="padding:.2rem 0;border-bottom:1px solid var(--cinza-200)">${i.quantidade}× <strong>${escapeHtml(i.produto_nome || '?')}</strong> — ${formatarMoeda(i.subtotal)}</div>`
             ).join('');
             document.getElementById('edit-itens-lista').innerHTML =
                 `<strong>Itens da venda:</strong>${itensHtml}<div style="margin-top:.5rem;font-weight:700">Total: ${formatarMoeda(v.valor_total)}</div>`;

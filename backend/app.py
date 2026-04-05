@@ -2415,6 +2415,12 @@ def pagina_fechamento():
     return render_template("fechamento.html")
 
 
+@app.route("/sobre")
+def sobre_projeto():
+    """Página sobre o Projeto Integrador UNIVESP."""
+    return render_template("sobre.html")
+
+
 @app.route("/politica-privacidade")
 def politica_privacidade():
     """Página com política de privacidade LGPD"""

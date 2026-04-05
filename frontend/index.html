@@ -47,6 +47,7 @@
                 </li>
                 <li><a href="/suporte">🎧 Suporte</a></li>
                 <li><a href="/politica-privacidade">🔒 LGPD</a></li>
+                <li><a href="/sobre">ℹ️ Sobre</a></li>
                 {% if papel == 'admin' %}
                 <li><a href="/usuarios">👤 Usuários</a></li>
                 <li><a href="/historico">📋 Histórico</a></li>
@@ -109,7 +110,11 @@
             <section id="kpi-realtime" class="card" style="display:none; border-left: 4px solid #2E7D32; margin: 1rem 0;">
                 <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
                     <h2>⚡ Operação em Tempo Real</h2>
-                    <button class="btn btn-sm" onclick="carregarKPIRealtime()" style="font-size:.85rem;padding:.3rem .8rem;">🔄 Atualizar</button>
+                    <div style="display:flex;align-items:center;gap:.8rem;">
+                        <span id="kpi-ultima-atualizacao" style="font-size:.75rem;color:var(--cinza-600)"></span>
+                        <span id="kpi-auto-status" style="font-size:.7rem;padding:.2rem .5rem;border-radius:10px;background:var(--verde-light);color:#1b5e20">● Auto 60s</span>
+                        <button class="btn btn-sm" onclick="carregarKPIRealtime()" style="font-size:.85rem;padding:.3rem .8rem;">🔄 Atualizar</button>
+                    </div>
                 </div>
                 <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .5rem; margin-top: .5rem;">
                     <div class="card stats-card" style="padding:.7rem;">
@@ -302,32 +307,21 @@
 
             <!-- Informações do Projeto -->
             <section class="project-info">
-                <div class="card">
+                <div class="card" style="text-align:center;">
                     <h2>ℹ️ Sobre o Projeto</h2>
-                    <p><strong>Título:</strong> CRM Simples – Sistema Web de Gestão de Clientes e Vendas para Açaiteria</p>
-                    <p><strong>Instituição:</strong> Universidade Virtual do Estado de São Paulo (UNIVESP)</p>
-                    <p><strong>Disciplina:</strong> PJI110 – Projeto Integrador em Computação I</p>
-                    <p><strong>Polo:</strong> Lorena – SP</p>
-                    <p><strong>Grupo:</strong> 22 (7 integrantes)</p>
-                    <p><strong>Tutoria:</strong> Sra. Valdeth S. De Souza</p>
-                    
-                    <h3 style="margin-top: 20px;">🎯 Objetivos do Sistema</h3>
-                    <ul>
-                        <li>Centralizar registro de vendas e cadastro de clientes</li>
-                        <li>Habilitar gestão de relacionamento com clientes (CRM)</li>
-                        <li>Permitir análise de recorrência de clientes</li>
-                        <li>Facilitar campanhas segmentadas de marketing</li>
-                        <li>Integrar fechamento de caixa diário</li>
-                        <li>Assegurar conformidade com LGPD</li>
-                    </ul>
+                    <p><strong>CRM Simples — Açaiteria Combina Açaí</strong></p>
+                    <p>Projeto Integrador UNIVESP · Eixo Computação · Grupo 22 · Polo Lorena/SP</p>
+                    <a href="/sobre" class="btn btn-primary" style="margin-top:1rem;display:inline-block;">
+                        📖 Ver Detalhes Completos do Projeto
+                    </a>
                 </div>
             </section>
         </main>
 
         <!-- Footer -->
         <footer class="footer">
-            <p>© 2026 - Projeto Integrador UNIVESP | Grupo 22 | Polo Lorena/SP</p>
-            <p>Desenvolvido com ❤️ por uma equipe de estudantes de Computação</p>
+            <p>© 2026 — Projeto Integrador UNIVESP | Grupo 22 | Polo Lorena/SP</p>
+            <p>Eixo Computação · <a href="/sobre" style="color:inherit;text-decoration:underline">Sobre o Projeto</a></p>
         </footer>
     </div>
 
@@ -516,11 +510,15 @@
                     d.top_produtos_dia.map(p => escapeHtml(p.produto) + ' (' + p.quantidade + ')').join(', ');
             }
             section.style.display = 'block';
+            const tsEl = document.getElementById('kpi-ultima-atualizacao');
+            if (tsEl) tsEl.textContent = '🕐 ' + new Date().toLocaleTimeString('pt-BR');
         } catch (e) {
             console.warn('KPI realtime não carregado:', e);
         }
     }
     carregarKPIRealtime();
+    // Auto-refresh KPIs a cada 60 segundos
+    setInterval(carregarKPIRealtime, 60000);
 
     // Previsão de estoque
     (async function carregarPrevisaoEstoque() {
