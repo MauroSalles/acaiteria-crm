@@ -549,6 +549,10 @@
                     return;
                 }
                 var pixPayload = data.payload;
+                if(!pixPayload){
+                    container.innerHTML = '<p style="color:red;text-align:center">❌ Erro ao gerar código PIX</p>';
+                    return;
+                }
                 container.innerHTML =
                     '<div class="pix-qr-section">' +
                         '<h3>📱 Escaneie o QR Code para pagar via Pix</h3>' +
@@ -651,8 +655,8 @@
                 return Promise.all([resps[0].json(), resps[1].json()]);
             })
             .then(function(results){
-                todosProdutos = results[0];
-                var categorias = results[1];
+                todosProdutos = Array.isArray(results[0]) ? results[0] : [];
+                var categorias = Array.isArray(results[1]) ? results[1] : [];
 
                 // Preencher mapa de produtos para lookup rápido
                 produtoMap = {};

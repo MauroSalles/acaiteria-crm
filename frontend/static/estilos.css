@@ -71,7 +71,11 @@ html { scroll-behavior: smooth; }
 [data-theme="dark"] .table td      { border-color: var(--cinza-300); }
 [data-theme="dark"] .form-control, [data-theme="dark"] select { background: var(--cinza-100); color: var(--cinza-800); border-color: var(--cinza-300); }
 [data-theme="dark"] .search-results { background: #252525; border-color: var(--cinza-300); }
+[data-theme="dark"] .search-results-group a { color: var(--cinza-800); }
+[data-theme="dark"] .search-results-group a .sr-detail { color: var(--cinza-400); }
+[data-theme="dark"] .search-results-group h4 { color: var(--cinza-400); }
 [data-theme="dark"] .search-results-group a:hover { background: var(--cinza-200); }
+[data-theme="dark"] textarea { background: var(--cinza-100); color: var(--cinza-800); border-color: var(--cinza-300); }
 [data-theme="dark"] .modal-box { background: #252525; }
 [data-theme="dark"] .footer { background: linear-gradient(135deg, #1a0a2e, #2d1052); }
 [data-theme="dark"] .footer a { color: #ce93d8; }

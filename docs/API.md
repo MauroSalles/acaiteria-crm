@@ -271,6 +271,171 @@ Retorna detalhes de uma venda específica.
 
 ---
 
+### ✏️ Editar Venda
+
+**PUT** `/api/vendas/:id_venda`
+
+Edita forma de pagamento, observações ou status de pagamento de uma venda existente. Requer admin.
+
+**Body (todos opcionais):**
+```json
+{
+  "forma_pagamento": "Débito",
+  "observacoes": "Entrega na mesa 5",
+  "status_pagamento": "Concluído"
+}
+```
+
+| Campo              | Valores aceitos                        |
+|--------------------|----------------------------------------|
+| `forma_pagamento`  | Dinheiro, Débito, Crédito, PIX         |
+| `status_pagamento` | Pendente, Concluído, Cancelado         |
+
+**Resposta (200):** Objeto da venda atualizada.
+
+**Erros:**
+| Código | Motivo                          |
+|--------|---------------------------------|
+| 404    | Venda não encontrada            |
+| 400    | Venda cancelada / status inválido |
+
+---
+
+### ❌ Cancelar (Estornar) Venda
+
+**POST** `/api/vendas/:id_venda/cancelar`
+
+Cancela uma venda: restaura estoque, remove pontos de fidelidade, marca pagamento como estornado. Requer admin.
+
+**Body:**
+```json
+{
+  "motivo": "Cliente desistiu — pedido errado"
+}
+```
+
+| Campo   | Regra                       |
+|---------|-----------------------------|
+| `motivo`| Obrigatório, mínimo 3 chars |
+
+**Resposta (200):**
+```json
+{
+  "mensagem": "Venda #11 cancelada com sucesso",
+  "estoque_restaurado": true,
+  "pontos_removidos": 58,
+  "venda": { ... }
+}
+```
+
+**Erros:**
+| Código | Motivo                        |
+|--------|-------------------------------|
+| 404    | Venda não encontrada          |
+| 400    | Já cancelada / motivo ausente |
+
+---
+
+### 🔄 Atualizar Status do Pedido
+
+**PUT** `/api/vendas/:id_venda/status-pedido`
+
+Atualiza o status do pedido seguindo workflow sequencial (não pode retroceder, exceto para Cancelado).
+
+**Body:**
+```json
+{
+  "status_pedido": "Preparando"
+}
+```
+
+**Workflow válido:** `Recebido → Preparando → Pronto → Entregue` (ou `Cancelado` a qualquer momento)
+
+**Resposta (200):**
+```json
+{
+  "mensagem": "Status atualizado",
+  "status_anterior": "Recebido",
+  "status_novo": "Preparando",
+  "venda": { ... }
+}
+```
+
+**Erros:**
+| Código | Motivo                          |
+|--------|---------------------------------|
+| 404    | Venda não encontrada            |
+| 400    | Status inválido / retrocesso    |
+
+---
+
+## 🏅 Gamificação
+
+### 🎖️ Badges do Cliente
+
+**GET** `/api/clientes/:id_cliente/badges`
+
+Lista badges conquistados e disponíveis de um cliente.
+
+**Resposta (200):**
+```json
+{
+  "badges": [
+    {
+      "codigo": "primeiro_acai",
+      "nome": "Primeiro Açaí",
+      "descricao": "Realizou a primeira compra",
+      "icone": "🍨",
+      "data_conquista": "2026-03-10T14:30:00"
+    }
+  ],
+  "novos": [],
+  "disponiveis": [
+    {
+      "codigo": "fidelidade_ouro",
+      "nome": "Fidelidade Ouro",
+      "descricao": "Acumulou 500 pontos",
+      "icone": "🥇",
+      "conquistado": false
+    }
+  ],
+  "total_conquistados": 1,
+  "total_disponiveis": 8
+}
+```
+
+---
+
+## 📊 Dashboard
+
+### 📈 KPIs em Tempo Real
+
+**GET** `/api/dashboard/kpi`
+
+Retorna métricas operacionais para o dashboard.
+
+**Resposta (200):**
+```json
+{
+  "hoje": {
+    "faturamento": 450.50,
+    "total_vendas": 8,
+    "ticket_medio": 56.31
+  },
+  "semana": { "faturamento": 2100.00 },
+  "mes": { "faturamento": 8500.00 },
+  "pedidos_ativos": 3,
+  "top_clientes_dia": [
+    { "nome": "Gabriel da Silva", "qtd": 2, "total": 120.00 }
+  ],
+  "top_produtos_dia": [
+    { "nome": "Açaí com Granola", "qtd": 5 }
+  ]
+}
+```
+
+---
+
 ## 📊 Relatórios
 
 ### 📅 Vendas do Dia Atual
@@ -454,4 +619,4 @@ curl -X POST http://localhost:5000/api/clientes \
 
 ---
 
-**Última atualização:** 10 de março de 2026
+**Última atualização:** 5 de abril de 2026

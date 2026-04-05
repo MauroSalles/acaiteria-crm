@@ -103,24 +103,24 @@ Pontos a validar:
 
 #### Curto Prazo (Fácil)
 - [ ] Adicionar logo da açaiteria
-- [ ] Mudar cores primárias
+- [x] ~~Mudar cores primárias~~ (tema + dark mode implementados)
 - [ ] Adicionar fotos de produtos
 - [ ] Melhorar textos de alerta
 - [ ] Adicionar mais emojis
 
-#### Médio Prazo (Moderado)
-- [ ] Adicionar autenticação (login)
-- [ ] Gráficos de vendas (Chart.js)
-- [ ] Persistência em MySQL
-- [ ] Programa de fidelização
+#### Médio Prazo (Moderado) — ✅ Concluído
+- [x] ~~Adicionar autenticação (login)~~ — Login + roles (admin/operador) implementados
+- [x] ~~Gráficos de vendas (Chart.js)~~ — Dashboard com gráficos interativos
+- [x] ~~Persistência em MySQL~~ — PostgreSQL (Render) em produção
+- [x] ~~Programa de fidelização~~ — Pontos + badges de gamificação
 - [ ] Envio de email para cliente
 
 #### Longo Prazo (Complexo)
 - [ ] App mobile (React Native)
 - [ ] Integração com MEI/nota fiscal
-- [ ] Pagamento online (Stripe/PayPal)
+- [x] ~~Pagamento online (Stripe/PayPal)~~ — PIX QR Code na vitrine
 - [ ] WhatsApp bot para promoções
-- [ ] Dashboard avançado
+- [x] ~~Dashboard avançado~~ — KPIs em tempo real, auto-refresh
 
 ---
 
