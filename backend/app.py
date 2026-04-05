@@ -241,7 +241,6 @@ def adicionar_headers_seguranca(response):
     response.headers["Permissions-Policy"] = (
         "geolocation=(), camera=(), microphone=()"
     )
-    nonce = g.get('csp_nonce', '')
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
         "script-src 'self' 'unsafe-inline' "
