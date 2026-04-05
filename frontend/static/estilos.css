@@ -74,6 +74,63 @@ html { scroll-behavior: smooth; }
 [data-theme="dark"] .search-results-group a:hover { background: var(--cinza-200); }
 [data-theme="dark"] .modal-box { background: #252525; }
 
+/* Utility classes for themed inline colors (dark mode safe) */
+.text-error     { color: #d32f2f; }
+.text-danger    { color: #c62828; }
+.text-success   { color: #2E7D32; }
+.text-muted     { color: #888; }
+.text-muted-light { color: #999; }
+.text-link-muted  { color: #666; }
+.text-acai      { color: #7B1FA2; }
+.text-alert-title { color: #D32F2F; }
+.bg-warning-row   { background: #FFF3E0; }
+.bg-critical-row  { background: #ffebee; }
+.bg-total-row     { background: #f0f0f0; font-weight: bold; }
+.bg-white-card    { background: white; }
+
+[data-theme="dark"] .text-error,
+[data-theme="dark"] .text-danger    { color: #ef9a9a; }
+[data-theme="dark"] .text-success   { color: #a5d6a7; }
+[data-theme="dark"] .text-muted     { color: #aaa; }
+[data-theme="dark"] .text-muted-light { color: #bbb; }
+[data-theme="dark"] .text-link-muted  { color: #bbb; }
+[data-theme="dark"] .text-acai      { color: #ce93d8; }
+[data-theme="dark"] .text-alert-title { color: #ef9a9a; }
+[data-theme="dark"] .bg-warning-row   { background: #332b00; }
+[data-theme="dark"] .bg-critical-row  { background: #321b1b; }
+[data-theme="dark"] .bg-total-row     { background: var(--cinza-200); }
+[data-theme="dark"] .bg-white-card    { background: var(--cinza-100); }
+
+/* Status colors (vendas) */
+.text-status-recebido   { color: #E65100; }
+.text-status-preparando { color: #F57C00; }
+.text-status-pronto     { color: #2E7D32; }
+.text-status-entregue   { color: #7B1FA2; }
+.text-status-cancelado  { color: #c62828; }
+[data-theme="dark"] .text-status-recebido   { color: #ffab40; }
+[data-theme="dark"] .text-status-preparando { color: #ffcc80; }
+[data-theme="dark"] .text-status-pronto     { color: #a5d6a7; }
+[data-theme="dark"] .text-status-entregue   { color: #ce93d8; }
+[data-theme="dark"] .text-status-cancelado  { color: #ef9a9a; }
+
+/* Modal overlay */
+.bg-modal-items { background: #f8f8f8; }
+[data-theme="dark"] .bg-modal-items { background: var(--cinza-200); }
+
+/* Complemento (venda) */
+.comp-label { display:flex;align-items:center;gap:.4rem;padding:.4rem .6rem;border-radius:8px;cursor:pointer;font-size:.85rem;border:2px solid #e0e0e0;background:#fff;transition:all .15s; }
+.comp-label.selected { border-color:#7B1FA2;background:#f3e5f5; }
+.comp-price { margin-left:auto;color:#7B1FA2;font-weight:600;font-size:.8rem; }
+.comp-info { font-size:.8rem;color:#7B1FA2;margin-top:.15rem; }
+.vol-badge { font-size:.75rem;background:#e8e0f0;border-radius:4px;padding:0 .3rem; }
+.cupom-info { margin-top:0.5rem;padding:0.5rem;background:#f3e5f5;border-radius:8px;font-size:0.9rem; }
+[data-theme="dark"] .comp-label { border-color:#555;background:var(--cinza-100); }
+[data-theme="dark"] .comp-label.selected { border-color:#ce93d8;background:#2d1f3d; }
+[data-theme="dark"] .comp-price { color:#ce93d8; }
+[data-theme="dark"] .comp-info { color:#ce93d8; }
+[data-theme="dark"] .vol-badge { background:#3d2f4d; }
+[data-theme="dark"] .cupom-info { background:#2d1f3d; }
+
 /* Dark toggle button */
 .dark-toggle {
     background: none;

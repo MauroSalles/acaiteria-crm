@@ -179,7 +179,11 @@ async function requisicao(url, opcoes = {}, timeoutMs = 15000) {
             throw new Error(erro.erro || `Erro HTTP: ${resposta.status}`);
         }
 
-        return await resposta.json();
+        try {
+            return await resposta.json();
+        } catch {
+            throw new Error('Resposta inválida do servidor (não é JSON)');
+        }
     } catch (erro) {
         if (erro.name === 'AbortError') {
             throw new Error('Requisição expirou. Verifique sua conexão.');

@@ -87,7 +87,7 @@ git push -u origin main
 
 - [ ] Dashboard carrega com estatísticas
 - [ ] `https://sua-url.onrender.com/api/clientes` retorna JSON
-- [ ] `https://sua-url.onrender.com/api/health` retorna `{"status": "ok"}`
+- [ ] `https://sua-url.onrender.com/health` retorna `{"status": "ok"}`
 - [ ] Cadastrar um novo cliente (com consentimento LGPD)
 - [ ] Registrar uma venda
 - [ ] Relatório do dia: `/api/relatorios/dia-atual`

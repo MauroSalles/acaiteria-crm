@@ -187,17 +187,17 @@ function renderComplementosGrid() {
         lista = lista.filter(c => c.categoria === filtroCompAtual);
     }
     if (!lista.length) {
-        grid.innerHTML = '<p style="grid-column:1/-1;text-align:center;color:#888;font-size:.85rem">Nenhum complemento encontrado</p>';
+        grid.innerHTML = '<p class="text-muted" style="grid-column:1/-1;text-align:center;font-size:.85rem">Nenhum complemento encontrado</p>';
         return;
     }
     const iconesCat = {'Fruta': '🍓', 'Calda': '🍫', 'Farináceo': '🥜', 'Extra': '⭐'};
     grid.innerHTML = lista.map(c => {
         const sel = complementosSelecionados.includes(c.id_complemento);
-        return `<label style="display:flex;align-items:center;gap:.4rem;padding:.4rem .6rem;border-radius:8px;cursor:pointer;font-size:.85rem;border:2px solid ${sel ? '#7B1FA2' : '#e0e0e0'};background:${sel ? '#f3e5f5' : '#fff'};transition:all .15s"
+        return `<label class="comp-label${sel ? ' selected' : ''}"
             onclick="toggleComplemento(${c.id_complemento})">
             <input type="checkbox" ${sel ? 'checked' : ''} style="pointer-events:none;accent-color:#7B1FA2">
             <span>${iconesCat[c.categoria] || '🥣'} ${escapeHtml(c.nome)}</span>
-            ${c.preco_adicional > 0 ? `<span style="margin-left:auto;color:#7B1FA2;font-weight:600;font-size:.8rem">+R$${c.preco_adicional.toFixed(2)}</span>` : ''}
+            ${c.preco_adicional > 0 ? `<span class="comp-price">+R$${c.preco_adicional.toFixed(2)}</span>` : ''}
         </label>`;
     }).join('');
 }
@@ -264,7 +264,7 @@ async function selecionarCliente() {
         if (!infoEl) {
             infoEl = document.createElement('div');
             infoEl.id = 'cliente-pontos-info';
-            infoEl.style.cssText = 'margin-top:0.5rem;padding:0.5rem;background:#f3e5f5;border-radius:8px;font-size:0.9rem;';
+            infoEl.className = 'cupom-info';
             select.parentElement.appendChild(infoEl);
         }
         infoEl.style.display = 'block';
@@ -351,9 +351,9 @@ function renderizarItens() {
     lista.innerHTML = itensVenda.map((item, index) => {
         const comps = (item.complementos || []);
         const compsHtml = comps.length
-            ? `<div style="font-size:.8rem;color:#7B1FA2;margin-top:.15rem">🥣 ${comps.map(c => c.nome).join(', ')}${item.preco_complementos > 0 ? ` (+${formatarMoeda(item.preco_complementos)}/un)` : ''}</div>`
+            ? `<div class="comp-info">🥣 ${comps.map(c => c.nome).join(', ')}${item.preco_complementos > 0 ? ` (+${formatarMoeda(item.preco_complementos)}/un)` : ''}</div>`
             : '';
-        const vol = item.volume ? ` <span style="font-size:.75rem;background:#e8e0f0;border-radius:4px;padding:0 .3rem">${escapeHtml(item.volume)}</span>` : '';
+        const vol = item.volume ? ` <span class="vol-badge">${escapeHtml(item.volume)}</span>` : '';
         return `<div class="item-venda">
             <div>
                 <div class="item-nome">${escapeHtml(item.nome_produto)}${vol}</div>

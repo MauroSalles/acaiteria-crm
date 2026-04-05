@@ -140,9 +140,7 @@
         if (acao) params.set('acao', acao);
 
         try {
-            const resp = await requisicao(`/api/logs?${params}`);
-            if (!resp.ok) throw new Error('Erro ao carregar logs');
-            const data = await resp.json();
+            const data = await requisicao(`/api/logs?${params}`);
 
             if (!data.logs.length) {
                 tbody.innerHTML = '<tr><td colspan="6" class="text-center">Nenhum registro encontrado</td></tr>';

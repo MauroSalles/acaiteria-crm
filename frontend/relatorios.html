@@ -394,9 +394,7 @@
             filtroPage = pagina;
             try {
                 const qs = buildFilterParams(pagina);
-                const resp = await requisicao('/api/relatorios/vendas-filtradas?' + qs);
-                if (!resp.ok) { alert('Erro ao buscar relatório'); return; }
-                const d = await resp.json();
+                const d = await requisicao('/api/relatorios/vendas-filtradas?' + qs);
 
                 // Totalizadores
                 const totais = document.getElementById('filtro-totais');

@@ -212,9 +212,7 @@
     async function abrirTicket(id) {
         ticketAtivo = id;
         try {
-            const resp = await requisicao('/api/suporte/tickets/' + id);
-            if (!resp.ok) throw new Error('Ticket não encontrado');
-            const ticket = await resp.json();
+            const ticket = await requisicao('/api/suporte/tickets/' + id);
 
             document.getElementById('emptyState').style.display = 'none';
             document.getElementById('chatContent').style.display = 'flex';
@@ -267,9 +265,7 @@
     async function atualizarMensagens(id) {
         if (ticketAtivo !== id) return;
         try {
-            const resp = await requisicao('/api/suporte/tickets/' + id);
-            if (!resp.ok) return;
-            const ticket = await resp.json();
+            const ticket = await requisicao('/api/suporte/tickets/' + id);
             renderMensagens(ticket.mensagens);
         } catch (_) {}
     }
@@ -283,15 +279,13 @@
         btnEnviar.disabled = true;
         btnEnviar.textContent = '⏳';
         try {
-            const resp = await requisicao(`/api/suporte/tickets/${ticketAtivo}/mensagens`, {
+            const data = await requisicao(`/api/suporte/tickets/${ticketAtivo}/mensagens`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ conteudo })
             });
-            if (!resp.ok) {
-                let errMsg = 'Erro ao enviar mensagem';
-                try { const errJson = await resp.json(); errMsg = errJson.erro || errMsg; } catch(_) {}
-                throw new Error(errMsg);
+            if (data && data.erro) {
+                throw new Error(data.erro);
             }
             textarea.value = '';
             abrirTicket(ticketAtivo);
@@ -325,17 +319,14 @@
                 mostrarAlerta('Descrição deve ter ao menos 5 caracteres.', 'aviso');
                 return;
             }
-            const resp = await requisicao('/api/suporte/tickets', {
+            const ticket = await requisicao('/api/suporte/tickets', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
-            if (!resp.ok) {
-                let errMsg = 'Erro ao criar ticket (HTTP ' + resp.status + ')';
-                try { const errJson = await resp.json(); errMsg = errJson.erro || errJson.detalhes || errMsg; } catch(_) {}
-                throw new Error(errMsg);
+            if (ticket && ticket.erro) {
+                throw new Error(ticket.erro || ticket.detalhes || 'Erro ao criar ticket');
             }
-            const ticket = await resp.json();
             fecharModal();
             mostrarAlerta('Ticket #' + ticket.id_ticket + ' criado com sucesso!', 'sucesso');
             document.getElementById('formNovoTicket').reset();
@@ -355,15 +346,13 @@
         if (!ticketAtivo) return;
         if (!confirm('Deseja fechar este ticket?')) return;
         try {
-            const resp = await requisicao(`/api/suporte/tickets/${ticketAtivo}/status`, {
+            const data = await requisicao(`/api/suporte/tickets/${ticketAtivo}/status`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status: 'fechado' })
             });
-            if (!resp.ok) {
-                let errMsg = 'Erro ao fechar ticket';
-                try { const errJson = await resp.json(); errMsg = errJson.erro || errMsg; } catch(_) {}
-                throw new Error(errMsg);
+            if (data && data.erro) {
+                throw new Error(data.erro);
             }
             mostrarAlerta('Ticket fechado', 'info');
             abrirTicket(ticketAtivo);
@@ -431,13 +420,12 @@
         conv.scrollTop = conv.scrollHeight;
 
         try {
-            var resp = await requisicao('/api/suporte/ia-resposta', {
+            var data = await requisicao('/api/suporte/ia-resposta', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ mensagem: mensagem })
             });
-            if (!resp.ok) throw new Error('Erro HTTP ' + resp.status);
-            var data = await resp.json();
+            if (data && data.erro) throw new Error(data.erro);
             iaHistorico.push({ pergunta: mensagem, resposta: data });
 
             // Remove typing indicator
@@ -479,13 +467,12 @@
         if (texto.length < 10) { document.getElementById('iaSugestaoTicket').innerHTML = ''; return; }
         _iaDebounce = setTimeout(async function() {
             try {
-                var resp = await requisicao('/api/suporte/ia-resposta', {
+                var data = await requisicao('/api/suporte/ia-resposta', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ mensagem: texto })
                 });
-                if (!resp.ok) return;
-                var data = await resp.json();
+                if (!data || data.erro) return;
                 if (data.confianca >= 0.15) {
                     // Auto-fill categoria se confiança alta
                     if (data.confianca >= 0.3 && data.categoria_sugerida) {

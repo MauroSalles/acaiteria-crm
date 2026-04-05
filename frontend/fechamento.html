@@ -177,7 +177,7 @@
                     html = '<tr><td colspan="3" class="text-center">Nenhuma venda nesta data</td></tr>';
                 } else {
                     html += `
-                        <tr style="background-color: #f0f0f0; font-weight: bold;">
+                        <tr class="bg-total-row">
                             <td>TOTAL</td>
                             <td>${totalQtd}</td>
                             <td>R$ ${totalGeral.toFixed(2)}</td>
@@ -215,6 +215,7 @@
             const data = document.getElementById('data-fechamento').value;
             try {
                 const res = await fetch('/api/relatorios/por-data?data=' + data);
+                if (!res.ok) throw new Error('Erro ao carregar dados');
                 const d = await res.json();
                 let texto = '🍇 *Combina Açaí — Fechamento de Caixa*\n';
                 texto += '📅 ' + data.split('-').reverse().join('/') + '\n\n';

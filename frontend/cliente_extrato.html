@@ -110,13 +110,13 @@
         <!-- Badges -->
         <h2 class="section-title">🏅 Conquistas</h2>
         <div class="badges-grid" id="badges-grid">
-            <p style="color:#999;">Carregando...</p>
+            <p class="text-muted-light">Carregando...</p>
         </div>
 
         <!-- Timeline de Compras -->
         <h2 class="section-title">📋 Histórico Detalhado</h2>
         <div class="timeline" id="timeline">
-            <p style="color:#999;">Carregando...</p>
+            <p class="text-muted-light">Carregando...</p>
         </div>
     </div>
 
@@ -129,9 +129,7 @@
     // Carregar extrato
     (async function() {
         try {
-            const resp = await requisicao('/api/clientes/' + clienteId + '/extrato');
-            if (!resp.ok) return;
-            const d = await resp.json();
+            const d = await requisicao('/api/clientes/' + clienteId + '/extrato');
 
             document.getElementById('ext-compras').textContent = d.resumo.total_compras;
             document.getElementById('ext-gasto').textContent = 'R$ ' + d.resumo.total_gasto.toFixed(2);
@@ -168,9 +166,7 @@
     // Carregar badges
     (async function() {
         try {
-            const resp = await requisicao('/api/clientes/' + clienteId + '/badges');
-            if (!resp.ok) return;
-            const d = await resp.json();
+            const d = await requisicao('/api/clientes/' + clienteId + '/badges');
             const grid = document.getElementById('badges-grid');
 
             const conquistados = d.badges.map(b => `
@@ -190,7 +186,7 @@
 
             grid.innerHTML = conquistados.join('') + disponiveis.join('');
             if (!d.badges.length && !d.disponiveis.length) {
-                grid.innerHTML = '<p style="color:#999;">Nenhum badge disponível</p>';
+                grid.innerHTML = '<p class="text-muted-light">Nenhum badge disponível</p>';
             }
         } catch (e) {
             console.warn('Badges não carregados:', e);

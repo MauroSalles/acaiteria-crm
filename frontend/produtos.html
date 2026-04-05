@@ -62,7 +62,7 @@
 
             <!-- Alerta de estoque baixo -->
             <div class="card" id="card-estoque-alerta" style="display:none;border-left:4px solid #D32F2F;margin-bottom:1.5rem">
-                <h2 style="color:#D32F2F">⚠️ Alertas de Estoque</h2>
+                <h2 class="text-alert-title">⚠️ Alertas de Estoque</h2>
                 <p class="subtitle">Produtos abaixo do estoque mínimo — reposição necessária</p>
                 <div class="table-responsive">
                     <table class="table" id="tabela-estoque-baixo">
@@ -74,10 +74,10 @@
 
             <!-- Resumo rápido -->
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin-bottom:1.5rem" id="resumoProdutos">
-                <div class="card" style="text-align:center;padding:1rem"><span style="font-size:2rem">🍇</span><div id="countAcai" style="font-size:1.8rem;font-weight:800;color:#7B1FA2">-</div><small>Açaís</small></div>
-                <div class="card" style="text-align:center;padding:1rem"><span style="font-size:2rem">🍦</span><div id="countSorvete" style="font-size:1.8rem;font-weight:800;color:#7B1FA2">-</div><small>Sorvetes</small></div>
-                <div class="card" style="text-align:center;padding:1rem"><span style="font-size:2rem">📦</span><div id="countTotal" style="font-size:1.8rem;font-weight:800;color:#7B1FA2">-</div><small>Total Ativos</small></div>
-                <div class="card" style="text-align:center;padding:1rem"><span style="font-size:2rem">🔴</span><div id="countBaixo" style="font-size:1.8rem;font-weight:800;color:#D32F2F">-</div><small>Estoque Baixo</small></div>
+                <div class="card" style="text-align:center;padding:1rem"><span style="font-size:2rem">🍇</span><div id="countAcai" class="text-acai" style="font-size:1.8rem;font-weight:800">-</div><small>Açaís</small></div>
+                <div class="card" style="text-align:center;padding:1rem"><span style="font-size:2rem">🍦</span><div id="countSorvete" class="text-acai" style="font-size:1.8rem;font-weight:800">-</div><small>Sorvetes</small></div>
+                <div class="card" style="text-align:center;padding:1rem"><span style="font-size:2rem">📦</span><div id="countTotal" class="text-acai" style="font-size:1.8rem;font-weight:800">-</div><small>Total Ativos</small></div>
+                <div class="card" style="text-align:center;padding:1rem"><span style="font-size:2rem">🔴</span><div id="countBaixo" class="text-alert-title" style="font-size:1.8rem;font-weight:800">-</div><small>Estoque Baixo</small></div>
             </div>
 
             <!-- Formulário de cadastro -->
@@ -239,10 +239,10 @@
             tbody.innerHTML = lista.map(p => {
                 const baixo = p.estoque_minimo > 0 && p.estoque_atual <= p.estoque_minimo;
                 const estLabel = baixo
-                    ? `<span style="color:#c62828;font-weight:bold">⚠️ ${p.estoque_atual}</span> / ${p.estoque_minimo}`
-                    : `<span style="color:#2E7D32;font-weight:600">${p.estoque_atual}</span> / ${p.estoque_minimo}`;
+                    ? `<span class="text-danger" style="font-weight:bold">⚠️ ${p.estoque_atual}</span> / ${p.estoque_minimo}`
+                    : `<span class="text-success" style="font-weight:600">${p.estoque_atual}</span> / ${p.estoque_minimo}`;
                 const catIcon = p.categoria === 'Açaí' ? '🍇' : p.categoria === 'Sorvete' ? '🍦' : '📦';
-                return `<tr${baixo ? ' style="background:#FFF3E0"' : ''}>
+                return `<tr${baixo ? ' class="bg-warning-row"' : ''}>
                     <td>${p.id_produto}</td>
                     <td><strong>${escapeHtml(p.nome_produto)}</strong></td>
                     <td>${catIcon} ${escapeHtml(p.categoria || '-')}</td>
@@ -373,11 +373,11 @@
                 card.style.display = 'block';
                 const tbody = document.querySelector('#tabela-estoque-baixo tbody');
                 tbody.innerHTML = produtos.map(p => `
-                    <tr style="background:#FFF3E0">
+                    <tr class="bg-warning-row">
                         <td><strong>${escapeHtml(p.nome_produto)}</strong></td>
                         <td>${escapeHtml(p.categoria || '-')}</td>
                         <td>${escapeHtml(p.volume || '-')}</td>
-                        <td style="color:#c62828;font-weight:bold">${p.estoque_atual}</td>
+                        <td class="text-danger" style="font-weight:bold">${p.estoque_atual}</td>
                         <td>${p.estoque_minimo}</td>
                         <td><button onclick="editarProduto(${p.id_produto})" class="btn btn-info" style="font-size:.75rem;padding:.3rem .6rem">📦 Repor</button></td>
                     </tr>

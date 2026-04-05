@@ -114,7 +114,7 @@
                             <button type="button" class="btn btn-primary" style="padding:.5rem 1rem;margin-bottom:.2rem" onclick="adicionarItemCompra()">+ Add</button>
                         </div>
                         <div id="itens-compra-lista" style="margin-top:.8rem">
-                            <p style="color:#888;font-size:.9rem">Nenhum item adicionado</p>
+                            <p class="text-muted" style="font-size:.9rem">Nenhum item adicionado</p>
                         </div>
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1rem;padding-top:.8rem;border-top:2px solid #eee">
                             <strong>Total: <span id="compra-total">R$ 0,00</span></strong>
@@ -472,7 +472,7 @@
         function renderItensCompra() {
             const el = document.getElementById('itens-compra-lista');
             if (!itensCompraTemp.length) {
-                el.innerHTML = '<p style="color:#888;font-size:.9rem">Nenhum item adicionado</p>';
+                el.innerHTML = '<p class="text-muted" style="font-size:.9rem">Nenhum item adicionado</p>';
                 document.getElementById('compra-total').textContent = 'R$ 0,00';
                 return;
             }
@@ -597,9 +597,9 @@
                 tbody.innerHTML = cupons.map(c => {
                     const tipoLabel = c.tipo_desconto === 'percentual' ? `${c.valor_desconto}%` : formatarMoeda(c.valor_desconto);
                     const expirado = c.data_fim && new Date(c.data_fim) < new Date();
-                    const statusLabel = !c.ativo ? '<span style="color:#999">Inativo</span>'
-                        : expirado ? '<span style="color:#c62828">Expirado</span>'
-                        : '<span style="color:#2E7D32;font-weight:600">Ativo</span>';
+                    const statusLabel = !c.ativo ? '<span class="text-muted">Inativo</span>'
+                        : expirado ? '<span class="text-danger">Expirado</span>'
+                        : '<span class="text-success" style="font-weight:600">Ativo</span>';
                     return `<tr${!c.ativo ? ' style="opacity:.5"' : ''}>
                         <td><strong style="font-family:monospace;font-size:1rem">${escapeHtml(c.codigo)}</strong></td>
                         <td>${c.tipo_desconto === 'percentual' ? '📊 %' : '💰 R$'}</td>

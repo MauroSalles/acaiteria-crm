@@ -89,9 +89,12 @@ app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=7)
 
 # Proteção de cookies de sessão
 app.config["SESSION_COOKIE_HTTPONLY"] = True
-app.config["SESSION_COOKIE_SAMESITE"] = "Strict"
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 if os.environ.get("FLASK_ENV") == "production":
     app.config["SESSION_COOKIE_SECURE"] = True
+    # Render termina TLS no proxy; confiar no header X-Forwarded-Proto
+    from werkzeug.middleware.proxy_fix import ProxyFix
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
 # Desabilitar Swagger em produção
 _doc_path = (
@@ -318,6 +321,7 @@ class VendaCreateSchema(BaseModel):
     observacoes: str | None = None
     desconto_percentual: float = 0.0
     taxa: float = 0.0
+    cupom_codigo: str | None = None
     itens: list[VendaItemSchema]
 
     @field_validator("desconto_percentual")
@@ -1361,7 +1365,30 @@ def criar_venda():
         desconto_perc = Decimal(str(dados.get("desconto_percentual", 0)))
         taxa = Decimal(str(dados.get("taxa", 0)))
         desconto_valor = valor_total * desconto_perc / Decimal("100")
-        valor_total = valor_total - desconto_valor + taxa
+
+        # Aplicar cupom de desconto (se informado)
+        cupom_codigo = (dados.get("cupom_codigo") or "").strip().upper()
+        cupom_obj = None
+        if cupom_codigo:
+            cupom_obj = CupomDesconto.query.filter_by(
+                codigo=cupom_codigo
+            ).first()
+            if cupom_obj and cupom_obj.valido:
+                if cupom_obj.tipo_desconto == "percentual":
+                    desconto_valor += (
+                        valor_total
+                        * cupom_obj.valor_desconto
+                        / Decimal("100")
+                    )
+                else:
+                    desconto_valor += min(
+                        cupom_obj.valor_desconto, valor_total
+                    )
+                cupom_obj.usos_realizados = (cupom_obj.usos_realizados or 0) + 1
+
+        valor_total = max(
+            valor_total - desconto_valor + taxa, Decimal("0.00")
+        )
 
         venda.valor_total = valor_total
 

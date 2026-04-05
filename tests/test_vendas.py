@@ -259,3 +259,111 @@ class TestVendaComComplementos:
         data = resp.get_json()
         assert data['valor_total'] == 18.90
         assert data['itens'][0]['complementos'] == []
+
+
+def _setup_cupom(client, codigo='PROMO10', tipo='percentual', valor=10,
+                 usos_maximos=100, valor_minimo=0):
+    """Cria um cupom de desconto e retorna o código."""
+    rc = client.post('/api/cupons', json={
+        'codigo': codigo,
+        'tipo_desconto': tipo,
+        'valor_desconto': valor,
+        'usos_maximos': usos_maximos,
+        'valor_minimo_pedido': valor_minimo,
+    })
+    assert rc.status_code == 201, (
+        f'Falha ao criar cupom: {rc.status_code} {rc.data}'
+    )
+    return rc.get_json()['codigo']
+
+
+class TestVendaComCupom:
+    """Testes de vendas com cupom de desconto."""
+
+    def test_venda_com_cupom_percentual(self, client):
+        cid, pid = _setup_cliente_e_produto(client, consentimento=True)
+        _setup_cupom(client, 'DESC10', 'percentual', 10)
+        resp = client.post('/api/vendas', json={
+            'id_cliente': cid,
+            'forma_pagamento': 'Dinheiro',
+            'itens': [{'id_produto': pid, 'quantidade': 2}],
+            'cupom_codigo': 'DESC10',
+        })
+        assert resp.status_code == 201
+        data = resp.get_json()
+        # 18.90 * 2 = 37.80 → 37.80 - 10% = 34.02
+        assert data['valor_total'] == 34.02
+
+    def test_venda_com_cupom_fixo(self, client):
+        cid, pid = _setup_cliente_e_produto(client, consentimento=True)
+        _setup_cupom(client, 'FIXO5', 'fixo', 5)
+        resp = client.post('/api/vendas', json={
+            'id_cliente': cid,
+            'forma_pagamento': 'Dinheiro',
+            'itens': [{'id_produto': pid, 'quantidade': 1}],
+            'cupom_codigo': 'FIXO5',
+        })
+        assert resp.status_code == 201
+        data = resp.get_json()
+        # 18.90 - 5.00 = 13.90
+        assert data['valor_total'] == 13.90
+
+    def test_venda_cupom_fixo_nao_fica_negativo(self, client):
+        cid, pid = _setup_cliente_e_produto(client, consentimento=True)
+        _setup_cupom(client, 'MEGA', 'fixo', 9999)
+        resp = client.post('/api/vendas', json={
+            'id_cliente': cid,
+            'forma_pagamento': 'Dinheiro',
+            'itens': [{'id_produto': pid, 'quantidade': 1}],
+            'cupom_codigo': 'MEGA',
+        })
+        assert resp.status_code == 201
+        data = resp.get_json()
+        assert data['valor_total'] == 0.00
+
+    def test_venda_cupom_invalido_ignorado(self, client):
+        cid, pid = _setup_cliente_e_produto(client, consentimento=True)
+        resp = client.post('/api/vendas', json={
+            'id_cliente': cid,
+            'forma_pagamento': 'Dinheiro',
+            'itens': [{'id_produto': pid, 'quantidade': 1}],
+            'cupom_codigo': 'INEXISTENTE',
+        })
+        assert resp.status_code == 201
+        data = resp.get_json()
+        # Cupom não encontrado → sem desconto
+        assert data['valor_total'] == 18.90
+
+    def test_venda_cupom_incrementa_usos(self, client):
+        cid, pid = _setup_cliente_e_produto(client, consentimento=True)
+        _setup_cupom(client, 'USO1', 'percentual', 5, usos_maximos=10)
+        client.post('/api/vendas', json={
+            'id_cliente': cid,
+            'forma_pagamento': 'Dinheiro',
+            'itens': [{'id_produto': pid, 'quantidade': 1}],
+            'cupom_codigo': 'USO1',
+        })
+        # Verificar que usos_atuais incrementou
+        resp = client.get('/api/cupons')
+        assert resp.status_code == 200
+        cupons = resp.get_json()
+        cupom = [c for c in cupons if c['codigo'] == 'USO1'][0]
+        assert cupom['usos_realizados'] == 1
+
+    def test_venda_cupom_com_desconto_percentual_combinado(self, client):
+        cid, pid = _setup_cliente_e_produto(client, consentimento=True)
+        _setup_cupom(client, 'COMBO', 'percentual', 10)
+        resp = client.post('/api/vendas', json={
+            'id_cliente': cid,
+            'forma_pagamento': 'Dinheiro',
+            'itens': [{'id_produto': pid, 'quantidade': 2}],
+            'desconto_percentual': 10.0,
+            'cupom_codigo': 'COMBO',
+        })
+        assert resp.status_code == 201
+        data = resp.get_json()
+        # 18.90 * 2 = 37.80
+        # desconto_percentual 10% = 3.78
+        # cupom 10% = 3.78
+        # total = 37.80 - 7.56 = 30.24
+        assert data['valor_total'] == 30.24

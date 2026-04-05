@@ -539,7 +539,10 @@
         function gerarPixQrCode(valor, container){
             container.innerHTML = '<p style="text-align:center;color:#999;padding:1rem">Gerando QR Code PIX...</p>';
             fetch('/api/pix/qrcode?valor='+encodeURIComponent(valor)+'&txid=AcaiCRM')
-            .then(function(r){return r.json();})
+            .then(function(r){
+                if(!r.ok) throw new Error('Erro ao gerar QR Code');
+                return r.json();
+            })
             .then(function(data){
                 if(data.erro){
                     container.innerHTML = '<p style="color:red;text-align:center">'+escapeHtml(data.erro)+'</p>';
@@ -602,7 +605,8 @@
                 body: payload
             })
             .then(function(resp){
-                return resp.json().then(function(data){return {ok:resp.ok, data:data};});
+                if(!resp.ok) return resp.json().catch(function(){return {erro:'Erro no servidor'};}).then(function(data){return {ok:false, data:data};});
+                return resp.json().then(function(data){return {ok:true, data:data};});
             })
             .then(function(result){
                 if(result.ok && result.data.sucesso){

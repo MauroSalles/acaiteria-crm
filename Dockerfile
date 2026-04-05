@@ -38,7 +38,7 @@ EXPOSE 5000
 
 # Healthcheck para orquestradores
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:${PORT:-5000}/api/health')" || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')" || exit 1
 
 # Comando de produção via gunicorn
 CMD gunicorn backend.app:app \

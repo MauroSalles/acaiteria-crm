@@ -62,10 +62,10 @@
 
             <!-- Resumo -->
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1rem;margin-bottom:1.5rem">
-                <div class="card" style="text-align:center;padding:1rem"><span style="font-size:2rem">📋</span><div id="countRecebido" style="font-size:1.8rem;font-weight:800;color:#E65100">-</div><small>Recebidos</small></div>
-                <div class="card" style="text-align:center;padding:1rem"><span style="font-size:2rem">👨‍🍳</span><div id="countPreparando" style="font-size:1.8rem;font-weight:800;color:#F57C00">-</div><small>Preparando</small></div>
-                <div class="card" style="text-align:center;padding:1rem"><span style="font-size:2rem">✅</span><div id="countPronto" style="font-size:1.8rem;font-weight:800;color:#2E7D32">-</div><small>Prontos</small></div>
-                <div class="card" style="text-align:center;padding:1rem"><span style="font-size:2rem">🏁</span><div id="countEntregue" style="font-size:1.8rem;font-weight:800;color:#7B1FA2">-</div><small>Entregues</small></div>
+                <div class="card" style="text-align:center;padding:1rem"><span style="font-size:2rem">📋</span><div id="countRecebido" class="text-status-recebido" style="font-size:1.8rem;font-weight:800">-</div><small>Recebidos</small></div>
+                <div class="card" style="text-align:center;padding:1rem"><span style="font-size:2rem">👨‍🍳</span><div id="countPreparando" class="text-status-preparando" style="font-size:1.8rem;font-weight:800">-</div><small>Preparando</small></div>
+                <div class="card" style="text-align:center;padding:1rem"><span style="font-size:2rem">✅</span><div id="countPronto" class="text-status-pronto" style="font-size:1.8rem;font-weight:800">-</div><small>Prontos</small></div>
+                <div class="card" style="text-align:center;padding:1rem"><span style="font-size:2rem">🏁</span><div id="countEntregue" class="text-status-entregue" style="font-size:1.8rem;font-weight:800">-</div><small>Entregues</small></div>
             </div>
 
             <!-- Filtros -->
@@ -82,7 +82,7 @@
                         <option value="Cancelado">❌ Cancelado</option>
                     </select>
                     <input type="date" id="filtro-data" style="padding:.3rem .6rem;border-radius:6px;border:1px solid #ccc" onchange="carregarVendas()">
-                    <span id="totalVendas" style="font-size:.85rem;color:#888;margin-left:auto"></span>
+                    <span id="totalVendas" class="text-muted" style="font-size:.85rem;margin-left:auto"></span>
                 </div>
 
                 <div class="table-responsive">
@@ -129,7 +129,7 @@
                         <label>Observações</label>
                         <textarea id="edit-obs" rows="3" style="width:100%;padding:.5rem;border:1px solid #ccc;border-radius:6px"></textarea>
                     </div>
-                    <div id="edit-itens-lista" style="margin:.8rem 0;padding:.5rem;background:#f8f8f8;border-radius:8px;font-size:.85rem"></div>
+                    <div id="edit-itens-lista" class="bg-modal-items" style="margin:.8rem 0;padding:.5rem;border-radius:8px;font-size:.85rem"></div>
                     <div style="display:flex;gap:.5rem;justify-content:flex-end">
                         <button class="btn btn-info" onclick="fecharModal()">Cancelar</button>
                         <button class="btn btn-primary" onclick="salvarEdicaoVenda()">💾 Salvar</button>
@@ -163,12 +163,12 @@
             'Cancelado': '❌'
         };
 
-        const STATUS_COLORS = {
-            'Recebido': '#E65100',
-            'Preparando': '#F57C00',
-            'Pronto': '#2E7D32',
-            'Entregue': '#7B1FA2',
-            'Cancelado': '#c62828'
+        const STATUS_CSS = {
+            'Recebido': 'text-status-recebido',
+            'Preparando': 'text-status-preparando',
+            'Pronto': 'text-status-pronto',
+            'Entregue': 'text-status-entregue',
+            'Cancelado': 'text-status-cancelado'
         };
 
         const STATUS_PROXIMO = {
@@ -217,7 +217,7 @@
                 tbody.innerHTML = lista.map(v => {
                     const statusPedido = v.status_pedido || 'Recebido';
                     const icon = STATUS_ICONS[statusPedido] || '📋';
-                    const cor = STATUS_COLORS[statusPedido] || '#333';
+                    const cssClass = STATUS_CSS[statusPedido] || '';
                     const proximo = STATUS_PROXIMO[statusPedido];
                     const itensResumo = (v.itens || []).map(i =>
                         `${i.quantidade}× ${escapeHtml(i.produto_nome || '?')}`
@@ -244,7 +244,7 @@
                         <td style="font-size:.8rem;max-width:200px;overflow:hidden;text-overflow:ellipsis">${itensResumo || '-'}</td>
                         <td><strong>${formatarMoeda(v.valor_total)}</strong></td>
                         <td>${escapeHtml(v.forma_pagamento || '-')}</td>
-                        <td><span style="color:${cor};font-weight:700">${icon} ${statusPedido}</span></td>
+                        <td><span class="${cssClass}" style="font-weight:700">${icon} ${statusPedido}</span></td>
                         <td style="white-space:nowrap">${acoes}</td>
                     </tr>`;
                 }).join('');
