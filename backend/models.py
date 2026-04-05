@@ -237,6 +237,7 @@ class Venda(db.Model):
         db.String(30), default="Recebido"
     )  # Recebido | Preparando | Pronto | Entregue | Cancelado
     observacoes = db.Column(db.Text)
+    motivo_cancelamento = db.Column(db.Text)
     recibo_gerado = db.Column(db.Boolean, default=False)
     data_atualizacao = db.Column(
         db.DateTime, default=_utcnow, onupdate=_utcnow
@@ -271,6 +272,7 @@ class Venda(db.Model):
             "status_pedido": self.status_pedido or "Recebido",
             "itens": [item.to_dict() for item in self.itens],
             "observacoes": self.observacoes,
+            "motivo_cancelamento": self.motivo_cancelamento,
         }
 
 

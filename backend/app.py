@@ -190,6 +190,7 @@ with app.app_context():
         ("cliente", "pontos_fidelidade", "INTEGER DEFAULT 0"),
         ("cliente", "senha_hash", "VARCHAR(256)"),
         ("venda", "status_pedido", "VARCHAR(30) DEFAULT 'Recebido'"),
+        ("venda", "motivo_cancelamento", "TEXT"),
         ("produto", "preco_promocional", "DECIMAL(10,2)"),
     ]
     # Colunas vindas de dict interno – nunca de input externo
@@ -1513,6 +1514,8 @@ def cancelar_venda(id_venda):
 
         # Atualizar status da venda
         venda.status_pagamento = "Cancelado"
+        venda.status_pedido = "Cancelado"
+        venda.motivo_cancelamento = motivo
         venda.observacoes = (
             f'{venda.observacoes or ""}\n[CANCELADO] {motivo}'.strip()
         )

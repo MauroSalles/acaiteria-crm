@@ -95,12 +95,13 @@
                                 <th>Itens</th>
                                 <th>Total</th>
                                 <th>Pagamento</th>
+                                <th>Status Pag.</th>
                                 <th>Status Pedido</th>
                                 <th>Ações</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr><td colspan="8" class="text-center">⏳ Carregando...</td></tr>
+                            <tr><td colspan="9" class="text-center">⏳ Carregando...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -137,6 +138,50 @@
                 </div>
             </div>
 
+            <!-- Modal Cancelar/Estornar Venda -->
+            <div id="modal-cancelar" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:1001;justify-content:center;align-items:center">
+                <div class="card" style="max-width:500px;width:90%;margin:auto;margin-top:10vh;max-height:80vh;overflow-y:auto;border-left:4px solid var(--vermelho)">
+                    <h2>⚠️ Cancelar / Estornar Venda #<span id="cancel-id"></span></h2>
+                    <div id="cancel-resumo" style="background:var(--cinza-100);padding:.6rem;border-radius:8px;font-size:.9rem;margin-bottom:1rem"></div>
+
+                    <div class="form-group">
+                        <label><strong>Motivo do Cancelamento</strong></label>
+                        <select id="cancel-motivo-select" onchange="atualizarMotivoTexto()" style="padding:.4rem .6rem;border-radius:6px;border:1px solid var(--cinza-400);width:100%">
+                            <option value="">— Selecione o motivo —</option>
+                            <option value="Cartão recusado pela operadora">💳 Cartão recusado pela operadora</option>
+                            <option value="PIX estornado pelo cliente (alegação de golpe)">📱 PIX estornado (alegação de golpe)</option>
+                            <option value="PIX não confirmado / expirado">📱 PIX não confirmado / expirado</option>
+                            <option value="Cliente desistiu da compra">🚶 Cliente desistiu da compra</option>
+                            <option value="Erro no pedido (itens incorretos)">❌ Erro no pedido (itens incorretos)</option>
+                            <option value="Produto indisponível / fora de estoque">📦 Produto indisponível</option>
+                            <option value="Pedido duplicado">🔁 Pedido duplicado</option>
+                            <option value="Problema de qualidade do produto">⚠️ Problema de qualidade</option>
+                            <option value="outro">📝 Outro motivo (descrever)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Detalhes (obrigatório)</label>
+                        <textarea id="cancel-motivo-texto" rows="3" placeholder="Descreva o motivo com detalhes..." style="width:100%;padding:.5rem;border:1px solid var(--cinza-400);border-radius:6px"></textarea>
+                    </div>
+
+                    <div style="background:var(--amarelo-bg);padding:.6rem;border-radius:8px;font-size:.85rem;margin-bottom:1rem">
+                        <strong>⚠️ Atenção:</strong> Esta ação irá:
+                        <ul style="margin:.3rem 0 0 1.2rem">
+                            <li>Estornar o pagamento</li>
+                            <li>Restaurar o estoque dos produtos</li>
+                            <li>Remover pontos de fidelidade do cliente</li>
+                        </ul>
+                        <strong>Esta ação não pode ser desfeita.</strong>
+                    </div>
+
+                    <div style="display:flex;gap:.5rem;justify-content:flex-end">
+                        <button class="btn btn-info" onclick="fecharModalCancelar()">Voltar</button>
+                        <button class="btn" style="background:var(--vermelho);color:#fff" onclick="confirmarCancelamento()">🗑️ Confirmar Cancelamento</button>
+                    </div>
+                </div>
+            </div>
+
         </main>
 
         <footer class="footer">
@@ -149,9 +194,9 @@
     <script nonce="{{ csp_nonce }}">
         let vendasLista = [];
         let editandoVendaId = null;
+        let cancelandoVendaId = null;
 
         document.addEventListener('DOMContentLoaded', () => {
-            // Inicializar filtro de data com hoje
             document.getElementById('filtro-data').valueAsDate = new Date();
             carregarVendas();
         });
@@ -178,9 +223,15 @@
             'Pronto': 'Entregue',
         };
 
+        const PAG_BADGES = {
+            'Pendente': '<span style="background:#FFF8E1;color:#F57F17;padding:.15rem .5rem;border-radius:10px;font-size:.75rem;font-weight:700">⏳ Pendente</span>',
+            'Concluído': '<span style="background:var(--verde-light);color:#1b5e20;padding:.15rem .5rem;border-radius:10px;font-size:.75rem;font-weight:700">✅ Pago</span>',
+            'Cancelado': '<span style="background:#ffcdd2;color:#b71c1c;padding:.15rem .5rem;border-radius:10px;font-size:.75rem;font-weight:700">🗑️ Estornado</span>',
+        };
+
         async function carregarVendas() {
             const tbody = document.querySelector('#tabela-vendas tbody');
-            tbody.innerHTML = '<tr><td colspan="8" class="text-center">⏳ Carregando...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center">⏳ Carregando...</td></tr>';
             try {
                 const params = new URLSearchParams();
                 const data = document.getElementById('filtro-data').value;
@@ -192,13 +243,11 @@
                 const res = await requisicao(`/api/vendas?${params.toString()}&por_pagina=100`);
                 vendasLista = res.vendas || res || [];
 
-                // Filtrar por status pedido no frontend
                 const filtroStatus = document.getElementById('filtro-status-pedido').value;
                 let lista = filtroStatus
                     ? vendasLista.filter(v => (v.status_pedido || 'Recebido') === filtroStatus)
                     : vendasLista;
 
-                // Contadores
                 const contadores = { Recebido: 0, Preparando: 0, Pronto: 0, Entregue: 0 };
                 vendasLista.forEach(v => {
                     const st = v.status_pedido || 'Recebido';
@@ -211,46 +260,51 @@
                 document.getElementById('totalVendas').textContent = `${lista.length} vendas`;
 
                 if (!lista.length) {
-                    tbody.innerHTML = '<tr><td colspan="8" class="text-center">Nenhuma venda encontrada</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="9" class="text-center">Nenhuma venda encontrada</td></tr>';
                     return;
                 }
 
                 tbody.innerHTML = lista.map(v => {
                     const statusPedido = v.status_pedido || 'Recebido';
+                    const statusPag = v.status_pagamento || 'Pendente';
                     const icon = STATUS_ICONS[statusPedido] || '📋';
                     const cssClass = STATUS_CSS[statusPedido] || '';
                     const proximo = STATUS_PROXIMO[statusPedido];
+                    const pagBadge = PAG_BADGES[statusPag] || escapeHtml(statusPag);
                     const itensResumo = (v.itens || []).map(i =>
                         `${i.quantidade}× ${escapeHtml(i.produto_nome || '?')}`
                     ).join(', ');
 
                     let acoes = '';
-                    // Botão avançar status
                     if (proximo) {
                         acoes += `<button onclick="avancarStatus(${v.id_venda}, '${proximo}')" class="btn btn-primary" style="font-size:.7rem;padding:.25rem .5rem" title="Avançar para ${proximo}">${STATUS_ICONS[proximo]} ${proximo}</button> `;
                     }
-                    // Botão editar
-                    if (statusPedido !== 'Cancelado') {
-                        acoes += `<button onclick="abrirEdicao(${v.id_venda})" class="btn btn-info" style="font-size:.7rem;padding:.25rem .5rem">✏️</button> `;
+                    if (statusPedido !== 'Cancelado' && statusPag !== 'Cancelado') {
+                        acoes += `<button onclick="abrirEdicao(${v.id_venda})" class="btn btn-info" style="font-size:.7rem;padding:.25rem .5rem" title="Editar">✏️</button> `;
                     }
-                    // Botão cancelar
-                    if (v.status_pagamento !== 'Cancelado') {
-                        acoes += `<button onclick="cancelarVendaLista(${v.id_venda})" class="btn-remover" style="font-size:.7rem">❌</button>`;
+                    if (statusPag !== 'Cancelado') {
+                        acoes += `<button onclick="abrirCancelamento(${v.id_venda})" class="btn-remover" style="font-size:.7rem" title="Cancelar/Estornar">❌</button>`;
+                    }
+                    if (v.motivo_cancelamento) {
+                        acoes += ` <span title="${escapeHtml(v.motivo_cancelamento)}" style="cursor:help;font-size:.85rem">💬</span>`;
                     }
 
-                    return `<tr>
+                    const rowStyle = statusPag === 'Cancelado' ? 'opacity:.6;text-decoration:line-through;' : '';
+
+                    return `<tr style="${rowStyle}">
                         <td><strong>#${v.id_venda}</strong></td>
                         <td>${escapeHtml(v.cliente_nome || '-')}</td>
                         <td>${formatarDataHora(v.data_venda)}</td>
                         <td style="font-size:.8rem;max-width:200px;overflow:hidden;text-overflow:ellipsis">${itensResumo || '-'}</td>
                         <td><strong>${formatarMoeda(v.valor_total)}</strong></td>
                         <td>${escapeHtml(v.forma_pagamento || '-')}</td>
+                        <td>${pagBadge}</td>
                         <td><span class="${cssClass}" style="font-weight:700">${icon} ${statusPedido}</span></td>
                         <td style="white-space:nowrap">${acoes}</td>
                     </tr>`;
                 }).join('');
             } catch (e) {
-                tbody.innerHTML = '<tr><td colspan="8" class="text-center">Erro ao carregar vendas</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9" class="text-center">Erro ao carregar vendas</td></tr>';
                 mostrarAlerta('Erro: ' + e.message, 'erro');
             }
         }
@@ -279,7 +333,6 @@
             document.getElementById('edit-status-pag').value = v.status_pagamento || 'Pendente';
             document.getElementById('edit-obs').value = v.observacoes || '';
 
-            // Mostrar itens
             const itensHtml = (v.itens || []).map(i =>
                 `<div style="padding:.2rem 0;border-bottom:1px solid var(--cinza-200)">${i.quantidade}× <strong>${escapeHtml(i.produto_nome || '?')}</strong> — ${formatarMoeda(i.subtotal)}</div>`
             ).join('');
@@ -313,28 +366,74 @@
             }
         }
 
-        /* ========== CANCELAR VENDA ========== */
-        async function cancelarVendaLista(idVenda) {
-            const motivo = prompt('Motivo do cancelamento (mínimo 3 caracteres):');
-            if (!motivo || motivo.trim().length < 3) {
-                mostrarAlerta('Motivo obrigatório (mínimo 3 caracteres)', 'aviso');
+        /* ========== CANCELAR / ESTORNAR VENDA ========== */
+        function abrirCancelamento(idVenda) {
+            const v = vendasLista.find(x => x.id_venda === idVenda);
+            if (!v) return;
+            cancelandoVendaId = idVenda;
+            document.getElementById('cancel-id').textContent = idVenda;
+            document.getElementById('cancel-resumo').innerHTML =
+                `<strong>Cliente:</strong> ${escapeHtml(v.cliente_nome || '-')}<br>` +
+                `<strong>Valor:</strong> ${formatarMoeda(v.valor_total)}<br>` +
+                `<strong>Pagamento:</strong> ${escapeHtml(v.forma_pagamento || '-')} · ${escapeHtml(v.status_pagamento || 'Pendente')}<br>` +
+                `<strong>Itens:</strong> ${(v.itens || []).map(i => i.quantidade + '× ' + escapeHtml(i.produto_nome || '?')).join(', ') || '-'}`;
+            document.getElementById('cancel-motivo-select').value = '';
+            document.getElementById('cancel-motivo-texto').value = '';
+            document.getElementById('modal-cancelar').style.display = 'flex';
+        }
+
+        function fecharModalCancelar() {
+            document.getElementById('modal-cancelar').style.display = 'none';
+            cancelandoVendaId = null;
+        }
+
+        function atualizarMotivoTexto() {
+            const sel = document.getElementById('cancel-motivo-select');
+            const txt = document.getElementById('cancel-motivo-texto');
+            if (sel.value && sel.value !== 'outro') {
+                txt.value = sel.value;
+            } else if (sel.value === 'outro') {
+                txt.value = '';
+                txt.focus();
+            }
+        }
+
+        async function confirmarCancelamento() {
+            if (!cancelandoVendaId) return;
+            const motivo = document.getElementById('cancel-motivo-texto').value.trim();
+            if (motivo.length < 3) {
+                mostrarAlerta('Motivo obrigatório — mínimo 3 caracteres', 'aviso');
                 return;
             }
             try {
-                await requisicao(`/api/vendas/${idVenda}/cancelar`, {
+                const res = await requisicao(`/api/vendas/${cancelandoVendaId}/cancelar`, {
                     method: 'POST',
-                    body: JSON.stringify({ motivo: motivo.trim() })
+                    body: JSON.stringify({ motivo })
                 });
-                mostrarAlerta(`Venda #${idVenda} cancelada`, 'sucesso');
+                mostrarAlerta(
+                    `Venda #${cancelandoVendaId} cancelada ✅ Estoque restaurado · ${res.pontos_removidos || 0} pts removidos`,
+                    'sucesso'
+                );
+                fecharModalCancelar();
                 carregarVendas();
             } catch (e) {
                 mostrarAlerta('Erro: ' + e.message, 'erro');
             }
         }
 
-        // Fechar modal ao clicar fora
+        // Fechar modais ao clicar fora
         document.getElementById('modal-editar').addEventListener('click', (e) => {
             if (e.target === e.currentTarget) fecharModal();
+        });
+        document.getElementById('modal-cancelar').addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) fecharModalCancelar();
+        });
+        // Fechar com ESC
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                fecharModal();
+                fecharModalCancelar();
+            }
         });
     </script>
 </body>
