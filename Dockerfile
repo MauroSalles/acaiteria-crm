@@ -36,15 +36,13 @@ USER appuser
 # Porta padrão (Render/Railway injetam via $PORT)
 EXPOSE 5000
 
-# Healthcheck para orquestradores
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health')" || exit 1
-
-# Comando de produção via gunicorn
+# Render usa healthCheckPath do render.yaml (não precisa de Docker HEALTHCHECK)
+# Free tier = 512 MB RAM → 1 worker + --preload para economizar memória
 CMD gunicorn backend.app:app \
     --bind 0.0.0.0:${PORT:-5000} \
-    --workers 2 \
+    --workers 1 \
     --threads 4 \
     --timeout 120 \
+    --preload \
     --access-logfile - \
     --error-logfile -
