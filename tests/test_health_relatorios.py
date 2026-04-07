@@ -137,8 +137,9 @@ class TestUsuariosAPI:
         resp = client.get('/api/usuarios')
         assert resp.status_code == 200
         data = resp.get_json()
-        assert len(data) >= 1
-        assert data[0]['email'] == 'admin@teste.com'
+        items = data.get('usuarios', data) if isinstance(data, dict) else data
+        assert len(items) >= 1
+        assert items[0]['email'] == 'admin@teste.com'
 
     def test_criar_usuario(self, client):
         resp = client.post('/api/usuarios', json={

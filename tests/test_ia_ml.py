@@ -445,8 +445,9 @@ class TestComplementos:
             r = client.get("/api/complementos")
             assert r.status_code == 200
             data = r.get_json()
-            assert len(data) >= 1
-            assert data[0]["nome"] == "Leite Condensado"
+            items = data.get("complementos", data) if isinstance(data, dict) else data
+            assert len(items) >= 1
+            assert items[0]["nome"] == "Leite Condensado"
 
     def test_atualizar_complemento(self, client, app):
         with app.app_context():

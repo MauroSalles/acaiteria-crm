@@ -139,7 +139,8 @@ async function carregarProdutos() {
 // Carregar complementos/toppings disponíveis
 async function carregarComplementos() {
     try {
-        complementosDisponiveis = await requisicao('/api/complementos');
+        const resp = await requisicao('/api/complementos');
+        complementosDisponiveis = resp.complementos || resp;
         renderComplementosGrid();
     } catch (erro) {
         console.error('Erro ao carregar complementos:', erro);

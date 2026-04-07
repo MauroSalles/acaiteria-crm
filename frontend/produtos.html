@@ -77,6 +77,7 @@
                 <div class="card" style="text-align:center;padding:1rem"><span style="font-size:2rem">🍇</span><div id="countAcai" class="text-acai" style="font-size:1.8rem;font-weight:800">-</div><small>Açaís</small></div>
                 <div class="card" style="text-align:center;padding:1rem"><span style="font-size:2rem">🍦</span><div id="countSorvete" class="text-acai" style="font-size:1.8rem;font-weight:800">-</div><small>Sorvetes</small></div>
                 <div class="card" style="text-align:center;padding:1rem"><span style="font-size:2rem">📦</span><div id="countTotal" class="text-acai" style="font-size:1.8rem;font-weight:800">-</div><small>Total Ativos</small></div>
+                <div class="card" style="text-align:center;padding:1rem"><span style="font-size:2rem">🏷️</span><div id="countPromo" class="text-success" style="font-size:1.8rem;font-weight:800">-</div><small>Em Promoção</small></div>
                 <div class="card" style="text-align:center;padding:1rem"><span style="font-size:2rem">🔴</span><div id="countBaixo" class="text-alert-title" style="font-size:1.8rem;font-weight:800">-</div><small>Estoque Baixo</small></div>
             </div>
 
@@ -169,6 +170,7 @@
                                 <th>Categoria</th>
                                 <th>Volume</th>
                                 <th>Preço</th>
+                                <th>Promoção</th>
                                 <th>Estoque</th>
                                 <th>Ações</th>
                             </tr>
@@ -234,7 +236,7 @@
             counterEl.textContent = `Mostrando ${lista.length} de ${todosProdutosAdmin.length}`;
             const tbody = document.querySelector('#tabela-produtos tbody');
             if (!lista.length) {
-                tbody.innerHTML = '<tr><td colspan="7" class="text-center">Nenhum produto encontrado</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center">Nenhum produto encontrado</td></tr>';
                 return;
             }
             tbody.innerHTML = lista.map(p => {
@@ -243,12 +245,17 @@
                     ? `<span class="text-danger" style="font-weight:bold">⚠️ ${p.estoque_atual}</span> / ${p.estoque_minimo}`
                     : `<span class="text-success" style="font-weight:600">${p.estoque_atual}</span> / ${p.estoque_minimo}`;
                 const catIcon = p.categoria === 'Açaí' ? '🍇' : p.categoria === 'Sorvete' ? '🍦' : '📦';
+                const promoHtml = p.preco_promocional
+                    ? `<span class="text-success" style="font-weight:bold">${formatarMoeda(p.preco_promocional)}</span>
+                       <button onclick="removerPromocao(${p.id_produto})" class="btn-remover" style="font-size:.65rem;padding:.2rem .4rem;margin-left:.3rem" title="Remover promoção">✖</button>`
+                    : `<button onclick="definirPromocao(${p.id_produto}, '${escapeHtml(p.nome_produto).replace(/'/g, "\\'")}', ${p.preco})" class="btn btn-info" style="font-size:.7rem;padding:.2rem .5rem">🏷️ Definir</button>`;
                 return `<tr${baixo ? ' class="bg-warning-row"' : ''}>
                     <td>${p.id_produto}</td>
                     <td><strong>${escapeHtml(p.nome_produto)}</strong></td>
                     <td>${catIcon} ${escapeHtml(p.categoria || '-')}</td>
                     <td>${escapeHtml(p.volume || '-')}</td>
-                    <td>${formatarMoeda(p.preco)}</td>
+                    <td>${p.preco_promocional ? '<s style="color:#999;font-size:.8rem">' + formatarMoeda(p.preco) + '</s>' : formatarMoeda(p.preco)}</td>
+                    <td>${promoHtml}</td>
                     <td>${estLabel}</td>
                     <td style="white-space:nowrap">
                         <button onclick="editarProduto(${p.id_produto})" class="btn btn-info" style="font-size:.75rem;padding:.35rem .5rem">✏️</button>
@@ -345,19 +352,60 @@
         /* ========== CARREGAR PRODUTOS ========== */
         async function carregarProdutos() {
             const tbody = document.querySelector('#tabela-produtos tbody');
-            tbody.innerHTML = '<tr><td colspan="7" class="text-center">⏳ Carregando...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center">⏳ Carregando...</td></tr>';
             try {
                 todosProdutosAdmin = await requisicao('/api/produtos');
                 // Contadores
                 const acais = todosProdutosAdmin.filter(p => (p.categoria || '').toLowerCase() === 'açaí');
                 const sorvetes = todosProdutosAdmin.filter(p => (p.categoria || '').toLowerCase() === 'sorvete');
+                const promos = todosProdutosAdmin.filter(p => p.preco_promocional);
                 document.getElementById('countAcai').textContent = acais.length;
                 document.getElementById('countSorvete').textContent = sorvetes.length;
                 document.getElementById('countTotal').textContent = todosProdutosAdmin.length;
+                document.getElementById('countPromo').textContent = promos.length;
                 renderTabelaProdutos();
             } catch (erro) {
-                tbody.innerHTML = '<tr><td colspan="7" class="text-center">Erro ao carregar produtos</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center">Erro ao carregar produtos</td></tr>';
                 mostrarAlerta(`Erro: ${erro.message}`, 'erro');
+            }
+        }
+
+        /* ========== PROMOÇÕES ========== */
+        async function definirPromocao(id, nome, precoAtual) {
+            const valor = prompt(`🏷️ Preço promocional para "${nome}"?\n(Preço atual: R$ ${precoAtual.toFixed(2)})`, '');
+            if (valor === null) return;
+            const preco = parseFloat(valor.replace(',', '.'));
+            if (isNaN(preco) || preco <= 0) {
+                mostrarAlerta('Informe um valor numérico positivo.', 'erro');
+                return;
+            }
+            if (preco >= precoAtual) {
+                mostrarAlerta('Preço promocional deve ser menor que o preço regular.', 'erro');
+                return;
+            }
+            try {
+                await requisicao(`/api/produtos/${id}/promocao`, {
+                    method: 'PUT',
+                    body: JSON.stringify({ preco_promocional: preco })
+                });
+                mostrarAlerta(`Promoção definida: ${nome} por R$ ${preco.toFixed(2)}`, 'sucesso');
+                carregarProdutos();
+            } catch (e) {
+                mostrarAlerta(`Erro: ${e.message}`, 'erro');
+            }
+        }
+
+        async function removerPromocao(id) {
+            if (!confirm('Remover preço promocional deste produto?')) return;
+            try {
+                await requisicao(`/api/produtos/${id}/promocao`, {
+                    method: 'PUT',
+                    body: JSON.stringify({ preco_promocional: null })
+                });
+                mostrarAlerta('Promoção removida.', 'sucesso');
+                carregarProdutos();
+            } catch (e) {
+                mostrarAlerta(`Erro: ${e.message}`, 'erro');
             }
         }
 

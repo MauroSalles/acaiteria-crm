@@ -346,7 +346,8 @@ class TestVendaComCupom:
         # Verificar que usos_atuais incrementou
         resp = client.get('/api/cupons')
         assert resp.status_code == 200
-        cupons = resp.get_json()
+        data = resp.get_json()
+        cupons = data.get('cupons', data) if isinstance(data, dict) else data
         cupom = [c for c in cupons if c['codigo'] == 'USO1'][0]
         assert cupom['usos_realizados'] == 1
 

@@ -328,7 +328,8 @@
         /* ========== FORNECEDORES ========== */
         async function carregarFornecedores() {
             try {
-                fornecedoresLista = await requisicao('/api/fornecedores');
+                const resp = await requisicao('/api/fornecedores');
+                fornecedoresLista = resp.fornecedores || resp;
                 if (!Array.isArray(fornecedoresLista)) fornecedoresLista = [];
                 // Preencher select da compra
                 const sel = document.getElementById('compra-fornecedor');
@@ -592,7 +593,8 @@
         async function carregarCupons() {
             const tbody = document.querySelector('#tabela-cupons tbody');
             try {
-                const cupons = await requisicao('/api/cupons?ativo_only=false');
+                const respCup = await requisicao('/api/cupons?ativo_only=false');
+                const cupons = respCup.cupons || respCup;
                 if (!cupons.length) {
                     tbody.innerHTML = '<tr><td colspan="7" class="text-center">Nenhum cupom cadastrado</td></tr>';
                     return;

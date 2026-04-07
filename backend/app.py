@@ -209,6 +209,25 @@ with app.app_context():
             except Exception:
                 conn.rollback()
 
+        # Auto-criação de índices para colunas frequentemente filtradas
+        _indices = [
+            ("idx_cliente_ativo", "cliente", "ativo"),
+            ("idx_produto_categoria", "produto", "categoria"),
+            ("idx_venda_status_pedido", "venda", "status_pedido"),
+            ("idx_venda_data_venda", "venda", "data_venda"),
+            ("idx_venda_id_cliente", "venda", "id_cliente"),
+        ]
+        for idx_name, tabela, coluna in _indices:
+            try:
+                conn.execute(db.text(
+                    "CREATE INDEX IF NOT EXISTS {} ON {} ({})".format(
+                        idx_name, tabela, coluna
+                    )
+                ))
+                conn.commit()
+            except Exception:
+                conn.rollback()
+
 # Configurar logging estruturado
 logging.basicConfig(
     level=logging.INFO,
@@ -2637,8 +2656,21 @@ def listar_complementos():
             if incluir_inativos
             else Complemento.query.filter_by(ativo=True)
         )
-        comps = query.order_by(Complemento.categoria, Complemento.nome).all()
-        return jsonify([c.to_dict() for c in comps])
+        pagina, por_pagina = get_pagination_params(default_per_page=100)
+        total = query.count()
+        comps = (
+            query.order_by(Complemento.categoria, Complemento.nome)
+            .offset((pagina - 1) * por_pagina)
+            .limit(por_pagina)
+            .all()
+        )
+        return jsonify({
+            "complementos": [c.to_dict() for c in comps],
+            "total": total,
+            "pagina": pagina,
+            "por_pagina": por_pagina,
+            "total_paginas": max(1, math.ceil(total / por_pagina)),
+        })
     except Exception as e:
         return _erro_interno(e)
 
@@ -2830,12 +2862,14 @@ def cliente_cadastro():
         # Verificar duplicatas (normaliza telefone para só dígitos)
         if not erros and telefone:
             tel_digits = _re.sub(r"\D", "", telefone)
-            clientes_ativos = Cliente.query.filter_by(
+            # Busca SQL com LIKE nos últimos 8 dígitos (evita carregar todos)
+            sufixo = tel_digits[-8:] if len(tel_digits) >= 8 else tel_digits
+            candidatos = Cliente.query.filter_by(
                 ativo=True
             ).filter(
-                Cliente.telefone.isnot(None)
+                Cliente.telefone.ilike(f"%{sufixo}%")
             ).all()
-            for c in clientes_ativos:
+            for c in candidatos:
                 if _re.sub(r"\D", "", c.telefone or "") == tel_digits:
                     erros.append(
                         "Este telefone já está cadastrado. "
@@ -3153,10 +3187,23 @@ class UsuarioCreateSchema(BaseModel):
 @app.route("/api/usuarios", methods=["GET"])
 @api_admin_required
 def listar_usuarios():
-    """Listar todos os usuários (admin only)"""
+    """Listar todos os usuários (admin only) — com paginação."""
     try:
-        usuarios = Usuario.query.order_by(Usuario.nome).all()
-        return jsonify([u.to_dict() for u in usuarios])
+        pagina, por_pagina = get_pagination_params(default_per_page=50)
+        query = Usuario.query.order_by(Usuario.nome)
+        total = query.count()
+        usuarios = (
+            query.offset((pagina - 1) * por_pagina)
+            .limit(por_pagina)
+            .all()
+        )
+        return jsonify({
+            "usuarios": [u.to_dict() for u in usuarios],
+            "total": total,
+            "pagina": pagina,
+            "por_pagina": por_pagina,
+            "total_paginas": max(1, math.ceil(total / por_pagina)),
+        })
     except Exception as e:
         return _erro_interno(e)
 
@@ -3512,8 +3559,21 @@ def listar_fornecedores():
         incluir_inativos = request.args.get("incluir_inativos") == "true"
         if not incluir_inativos:
             query = query.filter_by(ativo=True)
-        fornecedores = query.order_by(Fornecedor.nome).all()
-        return jsonify([f.to_dict() for f in fornecedores])
+        pagina, por_pagina = get_pagination_params(default_per_page=50)
+        total = query.count()
+        fornecedores = (
+            query.order_by(Fornecedor.nome)
+            .offset((pagina - 1) * por_pagina)
+            .limit(por_pagina)
+            .all()
+        )
+        return jsonify({
+            "fornecedores": [f.to_dict() for f in fornecedores],
+            "total": total,
+            "pagina": pagina,
+            "por_pagina": por_pagina,
+            "total_paginas": max(1, math.ceil(total / por_pagina)),
+        })
     except Exception as e:
         return _erro_interno(e)
 
@@ -4001,8 +4061,21 @@ def listar_cupons():
         ativo_only = request.args.get("ativo_only") != "false"
         if ativo_only:
             query = query.filter_by(ativo=True)
-        cupons = query.order_by(CupomDesconto.data_criacao.desc()).all()
-        return jsonify([c.to_dict() for c in cupons])
+        pagina, por_pagina = get_pagination_params(default_per_page=50)
+        total = query.count()
+        cupons = (
+            query.order_by(CupomDesconto.data_criacao.desc())
+            .offset((pagina - 1) * por_pagina)
+            .limit(por_pagina)
+            .all()
+        )
+        return jsonify({
+            "cupons": [c.to_dict() for c in cupons],
+            "total": total,
+            "pagina": pagina,
+            "por_pagina": por_pagina,
+            "total_paginas": max(1, math.ceil(total / por_pagina)),
+        })
     except Exception as e:
         return _erro_interno(e)
 

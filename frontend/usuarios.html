@@ -213,7 +213,8 @@
         async function carregarUsuarios() {
             const tbody = document.querySelector('#tabela-usuarios tbody');
             try {
-                const usuarios = await requisicao('/api/usuarios');
+                const resp = await requisicao('/api/usuarios');
+                const usuarios = resp.usuarios || resp;
                 if (usuarios.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="6" class="text-center">Nenhum usuário</td></tr>';
                     return;

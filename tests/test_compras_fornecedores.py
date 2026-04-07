@@ -58,8 +58,9 @@ class TestFornecedores:
         r = client.get("/api/fornecedores")
         assert r.status_code == 200
         data = r.get_json()
-        assert len(data) >= 1
-        assert data[0]["nome"] == "Fornecedor X"
+        items = data.get("fornecedores", data) if isinstance(data, dict) else data
+        assert len(items) >= 1
+        assert items[0]["nome"] == "Fornecedor X"
 
     def test_buscar_fornecedor_por_id(self, client):
         fid = _criar_fornecedor(client)
@@ -319,7 +320,9 @@ class TestCupons:
         })
         r = client.get("/api/cupons")
         assert r.status_code == 200
-        assert len(r.get_json()) >= 1
+        data = r.get_json()
+        items = data.get("cupons", data) if isinstance(data, dict) else data
+        assert len(items) >= 1
 
     def test_validar_cupom_percentual(self, client):
         client.post("/api/cupons", json={
