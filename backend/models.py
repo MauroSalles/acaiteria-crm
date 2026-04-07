@@ -738,3 +738,64 @@ class BadgeCliente(db.Model):
                 else None
             ),
         }
+
+
+# =============================================================================
+# LANÇAMENTOS FINANCEIROS (receitas / despesas manuais)
+# =============================================================================
+
+
+class LancamentoFinanceiro(db.Model):
+    """Lançamento financeiro manual (receita ou despesa)."""
+
+    __tablename__ = "lancamento_financeiro"
+
+    id_lancamento = db.Column(db.Integer, primary_key=True)
+    tipo = db.Column(
+        db.String(20), nullable=False, index=True
+    )  # receita | despesa
+    categoria = db.Column(db.String(100), nullable=False)
+    descricao = db.Column(db.String(300))
+    valor = db.Column(db.DECIMAL(10, 2), nullable=False)
+    data_lancamento = db.Column(db.Date, nullable=False, index=True)
+    forma_pagamento = db.Column(db.String(50))
+    status = db.Column(
+        db.String(30), default="Pago"
+    )  # Pago | Pendente | Cancelado
+    comprovante = db.Column(db.String(100))
+    observacoes = db.Column(db.Text)
+    id_usuario = db.Column(
+        db.Integer, db.ForeignKey("usuario.id_usuario")
+    )
+    data_criacao = db.Column(db.DateTime, default=_utcnow)
+    data_atualizacao = db.Column(
+        db.DateTime, default=_utcnow, onupdate=_utcnow
+    )
+
+    usuario = db.relationship("Usuario", lazy=True)
+
+    def to_dict(self):
+        return {
+            "id_lancamento": self.id_lancamento,
+            "tipo": self.tipo,
+            "categoria": self.categoria,
+            "descricao": self.descricao,
+            "valor": float(self.valor),
+            "data_lancamento": (
+                self.data_lancamento.isoformat()
+                if self.data_lancamento
+                else None
+            ),
+            "forma_pagamento": self.forma_pagamento,
+            "status": self.status,
+            "comprovante": self.comprovante,
+            "observacoes": self.observacoes,
+            "usuario_nome": (
+                self.usuario.nome if self.usuario else None
+            ),
+            "data_criacao": (
+                self.data_criacao.isoformat()
+                if self.data_criacao
+                else None
+            ),
+        }

@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestão Financeira - Açaiteria CRM</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <meta name="theme-color" content="#7B1FA2">
+</head>
+<body>
+    <div class="container">
+        <!-- Navbar -->
+        <nav class="navbar">
+            <div class="navbar-brand">🍇 <strong>Combina Açaí</strong></div>
+            <div class="navbar-search">
+                <input type="text" id="globalSearch" placeholder="Buscar clientes, produtos…" autocomplete="off" aria-label="Busca global">
+                <div class="search-results" id="searchResults"></div>
+            </div>
+            <button class="navbar-toggle" onclick="document.getElementById('navMenu').classList.toggle('open')" aria-label="Menu">☰</button>
+            <ul class="navbar-menu" id="navMenu">
+                <li><a href="/">🏠 Início</a></li>
+                <li class="has-dropdown">
+                    <a href="#" onclick="navDropdown(this);return false">🛒 Vendas <span class="arrow">▾</span></a>
+                    <ul class="dropdown">
+                        <li><a href="/nova-venda">➕ Registrar Venda</a></li>
+                        <li><a href="/vendas">📋 Gerenciar Vendas</a></li>
+                    </ul>
+                </li>
+                <li class="has-dropdown">
+                    <a href="#" onclick="navDropdown(this);return false">👥 Clientes <span class="arrow">▾</span></a>
+                    <ul class="dropdown">
+                        <li><a href="/cadastro-cliente">➕ Cadastrar Cliente</a></li>
+                        <li><a href="/clientes">📋 Lista de Clientes</a></li>
+                    </ul>
+                </li>
+                <li><a href="/produtos">📦 Produtos</a></li>
+                <li><a href="/compras">📥 Compras</a></li>
+                <li class="has-dropdown active">
+                    <a href="#" onclick="navDropdown(this);return false">💰 Financeiro <span class="arrow">▾</span></a>
+                    <ul class="dropdown">
+                        <li><a href="/financeiro" class="active">💼 Gestão Financeira</a></li>
+                        <li><a href="/relatorios">📊 Relatórios</a></li>
+                        <li><a href="/fechamento">🔐 Fechamento de Caixa</a></li>
+                    </ul>
+                </li>
+                <li><a href="/suporte">🎧 Suporte</a></li>
+                <li><a href="/politica-privacidade">🔒 LGPD</a></li>
+                {% if papel == 'admin' %}
+                <li><a href="/usuarios">👤 Usuários</a></li>
+                <li><a href="/historico">📋 Histórico</a></li>
+                {% endif %}
+                <li class="nav-separator"></li>
+                <li class="nav-user-info">👤 {{ usuario_nome }}</li>
+                <li><button class="dark-toggle" id="darkToggle" aria-label="Alternar tema escuro">🌙</button></li>
+                <li><a href="/logout" class="nav-logout">⬅ Sair</a></li>
+            </ul>
+        </nav>
+
+        <main class="content">
+            <h1>💼 Gestão Financeira</h1>
+            <p class="subtitle">Controle receitas, despesas e acompanhe o fluxo de caixa do estabelecimento</p>
+
+            <!-- Cards de resumo consolidado -->
+            <div class="stats-grid" id="resumo-cards" style="margin-bottom: 1.5rem;">
+                <div class="stat-card" style="border-left: 4px solid #4CAF50;">
+                    <div class="stat-label">📈 Receitas</div>
+                    <div class="stat-value" id="total-receitas" style="color: #4CAF50;">R$ 0,00</div>
+                    <small id="detalhe-receitas" class="text-muted">Vendas + Manual</small>
+                </div>
+                <div class="stat-card" style="border-left: 4px solid #F44336;">
+                    <div class="stat-label">📉 Despesas</div>
+                    <div class="stat-value" id="total-despesas" style="color: #F44336;">R$ 0,00</div>
+                    <small id="detalhe-despesas" class="text-muted">Compras + Manual</small>
+                </div>
+                <div class="stat-card" style="border-left: 4px solid #2196F3;">
+                    <div class="stat-label">💰 Saldo Líquido</div>
+                    <div class="stat-value" id="saldo-liquido" style="color: #2196F3;">R$ 0,00</div>
+                    <small class="text-muted">Receitas − Despesas</small>
+                </div>
+            </div>
+
+            <!-- Ações e Filtros -->
+            <div class="card">
+                <div class="action-buttons" style="margin-bottom: 1rem;">
+                    <button id="btn-novo" class="btn btn-primary">➕ Novo Lançamento</button>
+                    <button id="btn-atualizar" class="btn btn-info">🔄 Atualizar</button>
+                    <button id="btn-exportar" class="btn btn-success">💾 Exportar CSV</button>
+                </div>
+
+                <!-- Filtros -->
+                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: flex-end; margin-bottom: 1rem;">
+                    <div>
+                        <label style="font-size: 0.85rem; font-weight: 600;">Tipo</label>
+                        <select id="filtro-tipo" class="form-control" style="width: 140px;">
+                            <option value="">Todos</option>
+                            <option value="receita">📈 Receita</option>
+                            <option value="despesa">📉 Despesa</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size: 0.85rem; font-weight: 600;">Status</label>
+                        <select id="filtro-status" class="form-control" style="width: 130px;">
+                            <option value="">Todos</option>
+                            <option value="Pago">Pago</option>
+                            <option value="Pendente">Pendente</option>
+                            <option value="Cancelado">Cancelado</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size: 0.85rem; font-weight: 600;">Data Início</label>
+                        <input type="date" id="filtro-data-inicio" class="form-control" style="width: 155px;">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.85rem; font-weight: 600;">Data Fim</label>
+                        <input type="date" id="filtro-data-fim" class="form-control" style="width: 155px;">
+                    </div>
+                    <div style="flex: 1; min-width: 180px;">
+                        <label style="font-size: 0.85rem; font-weight: 600;">Buscar</label>
+                        <input type="text" id="filtro-busca" class="form-control" placeholder="🔍 Descrição, categoria...">
+                    </div>
+                    <button class="btn btn-primary" id="btn-filtrar">🔎 Filtrar</button>
+                    <button class="btn btn-secondary" id="btn-limpar">✖ Limpar</button>
+                </div>
+
+                <!-- Tabela de lançamentos -->
+                <div class="table-responsive">
+                    <table class="table" id="tabela-financeiro">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Tipo</th>
+                                <th>Categoria</th>
+                                <th>Descrição</th>
+                                <th>Valor</th>
+                                <th>Pagamento</th>
+                                <th>Status</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td colspan="8" class="text-center">⏳ Carregando...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="paginacao" style="margin-top: 1rem; text-align: center;"></div>
+            </div>
+
+            <div id="mensagem" class="alert" style="display: none; margin-top: 20px;"></div>
+
+            <!-- Modal Criar/Editar Lançamento -->
+            <div id="modal-lancamento" role="dialog" aria-modal="true" aria-labelledby="modal-titulo" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
+                <div class="bg-white-card" style="border-radius:16px; padding:2rem; max-width:540px; width:90%; margin:auto; position:relative; top:50%; transform:translateY(-50%); box-shadow:0 8px 32px rgba(0,0,0,0.2); max-height:90vh; overflow-y:auto;">
+                    <h2 id="modal-titulo" class="text-acai" style="margin-top:0;">➕ Novo Lançamento</h2>
+                    <input type="hidden" id="edit-id">
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                        <div class="form-group">
+                            <label for="edit-tipo">Tipo *</label>
+                            <select id="edit-tipo" class="form-control" required>
+                                <option value="despesa">📉 Despesa</option>
+                                <option value="receita">📈 Receita</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-categoria">Categoria *</label>
+                            <input type="text" id="edit-categoria" class="form-control" required
+                                   list="lista-categorias" placeholder="Ex: Aluguel, Energia...">
+                            <datalist id="lista-categorias"></datalist>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="edit-descricao">Descrição</label>
+                        <input type="text" id="edit-descricao" class="form-control" placeholder="Detalhes do lançamento">
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                        <div class="form-group">
+                            <label for="edit-valor">Valor (R$) *</label>
+                            <input type="number" id="edit-valor" class="form-control" required min="0.01" step="0.01" placeholder="0,00">
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-data">Data *</label>
+                            <input type="date" id="edit-data" class="form-control" required>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                        <div class="form-group">
+                            <label for="edit-pagamento">Forma Pagamento</label>
+                            <select id="edit-pagamento" class="form-control">
+                                <option value="">—</option>
+                                <option value="Dinheiro">Dinheiro</option>
+                                <option value="PIX">PIX</option>
+                                <option value="Crédito">Crédito</option>
+                                <option value="Débito">Débito</option>
+                                <option value="Boleto">Boleto</option>
+                                <option value="Transferência">Transferência</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-status">Status</label>
+                            <select id="edit-status" class="form-control">
+                                <option value="Pago">✅ Pago</option>
+                                <option value="Pendente">🕐 Pendente</option>
+                                <option value="Cancelado">❌ Cancelado</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="edit-comprovante">Comprovante / NF</label>
+                        <input type="text" id="edit-comprovante" class="form-control" placeholder="Nº da nota fiscal ou referência">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="edit-observacoes">Observações</label>
+                        <textarea id="edit-observacoes" class="form-control" rows="2" placeholder="Notas adicionais"></textarea>
+                    </div>
+
+                    <div id="modal-erro" class="text-error" style="font-size:0.9rem; margin-bottom:0.5rem; display:none;"></div>
+                    <div style="display:flex; gap:0.5rem; justify-content:flex-end;">
+                        <button class="btn btn-secondary" id="btn-cancelar-modal">Cancelar</button>
+                        <button class="btn btn-primary" id="btn-salvar">💾 Salvar</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer class="footer">
+            <p>© 2026 Combina Açaí — CRM | Desenvolvido por <a href="/sobre" style="color:inherit;text-decoration:underline">Grupo 22 — UNIVESP</a></p>
+            <p>Eixo Computação · <a href="/sobre" style="color:inherit;text-decoration:underline">Sobre o Projeto</a></p>
+        </footer>
+    </div>
+
+    <script nonce="{{ csp_nonce }}" src="{{ url_for('static', filename='script.js') }}"></script>
+    <script nonce="{{ csp_nonce }}">
+        let paginaAtual = 1;
+        let lancamentosCache = [];
+
+        // ============= CATEGORIAS SUGERIDAS =============
+        const CATEGORIAS_PADRAO = {
+            despesa: ['Aluguel', 'Energia', 'Água', 'Internet', 'Salários', 'Fornecedores', 'Manutenção', 'Marketing', 'Impostos', 'Transporte', 'Material de Limpeza', 'Embalagens', 'Outros'],
+            receita: ['Venda Avulsa', 'Serviço', 'Aluguel Recebido', 'Reembolso', 'Outros']
+        };
+
+        function atualizarCategoriasSugeridas() {
+            const tipo = document.getElementById('edit-tipo').value;
+            const dl = document.getElementById('lista-categorias');
+            dl.innerHTML = (CATEGORIAS_PADRAO[tipo] || []).map(c => `<option value="${c}">`).join('');
+        }
+
+        // ============= CARREGAR RESUMO CONSOLIDADO =============
+        async function carregarResumo() {
+            try {
+                const di = document.getElementById('filtro-data-inicio').value;
+                const df = document.getElementById('filtro-data-fim').value;
+                let url = '/api/financeiro/resumo';
+                const params = new URLSearchParams();
+                if (di) params.set('data_inicio', di);
+                if (df) params.set('data_fim', df);
+                if (params.toString()) url += '?' + params.toString();
+
+                const res = await fetch(url);
+                if (!res.ok) return;
+                const d = await res.json();
+
+                document.getElementById('total-receitas').textContent = 'R$ ' + d.total_receitas.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+                document.getElementById('total-despesas').textContent = 'R$ ' + d.total_despesas.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+
+                const saldoEl = document.getElementById('saldo-liquido');
+                saldoEl.textContent = 'R$ ' + d.saldo.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+                saldoEl.style.color = d.saldo >= 0 ? '#4CAF50' : '#F44336';
+
+                document.getElementById('detalhe-receitas').textContent =
+                    `Vendas: R$ ${d.detalhamento.receitas_vendas.toFixed(2)} · Manual: R$ ${d.detalhamento.receitas_manual.toFixed(2)}`;
+                document.getElementById('detalhe-despesas').textContent =
+                    `Compras: R$ ${d.detalhamento.despesas_compras.toFixed(2)} · Manual: R$ ${d.detalhamento.despesas_manual.toFixed(2)}`;
+            } catch (e) {
+                console.error('Erro ao carregar resumo:', e);
+            }
+        }
+
+        // ============= CARREGAR LANÇAMENTOS =============
+        async function carregarLancamentos(pagina) {
+            pagina = pagina || 1;
+            paginaAtual = pagina;
+            try {
+                const params = new URLSearchParams();
+                params.set('pagina', pagina);
+                params.set('por_pagina', '30');
+
+                const tipo = document.getElementById('filtro-tipo').value;
+                const status = document.getElementById('filtro-status').value;
+                const di = document.getElementById('filtro-data-inicio').value;
+                const df = document.getElementById('filtro-data-fim').value;
+                const busca = document.getElementById('filtro-busca').value.trim();
+
+                if (tipo) params.set('tipo', tipo);
+                if (status) params.set('status', status);
+                if (di) params.set('data_inicio', di);
+                if (df) params.set('data_fim', df);
+                if (busca) params.set('busca', busca);
+
+                const res = await fetch('/api/financeiro?' + params.toString());
+                if (res.status === 401) { window.location.href = '/login'; return; }
+                if (!res.ok) throw new Error('Erro ao carregar');
+                const dados = await res.json();
+                lancamentosCache = dados.lancamentos || [];
+
+                const tbody = document.querySelector('#tabela-financeiro tbody');
+
+                if (lancamentosCache.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="8" class="text-center">Nenhum lançamento encontrado</td></tr>';
+                    document.getElementById('paginacao').innerHTML = '';
+                    return;
+                }
+
+                tbody.innerHTML = lancamentosCache.map(l => {
+                    const tipoIcon = l.tipo === 'receita' ? '📈' : '📉';
+                    const tipoClass = l.tipo === 'receita' ? 'color:#4CAF50;font-weight:700' : 'color:#F44336;font-weight:700';
+                    const statusBadge = l.status === 'Pago' ? '✅' : l.status === 'Pendente' ? '🕐' : '❌';
+                    const dataFormatada = l.data_lancamento ? new Date(l.data_lancamento + 'T00:00:00').toLocaleDateString('pt-BR') : '-';
+                    return `<tr>
+                        <td>${dataFormatada}</td>
+                        <td style="${tipoClass}">${tipoIcon} ${l.tipo === 'receita' ? 'Receita' : 'Despesa'}</td>
+                        <td><strong>${escapeHtml(l.categoria)}</strong></td>
+                        <td>${escapeHtml(l.descricao || '-')}</td>
+                        <td style="${tipoClass}">R$ ${l.valor.toFixed(2)}</td>
+                        <td>${escapeHtml(l.forma_pagamento || '-')}</td>
+                        <td>${statusBadge} ${l.status}</td>
+                        <td style="white-space: nowrap;">
+                            <button class="btn btn-info btn-editar" data-id="${l.id_lancamento}" aria-label="Editar" style="font-size:0.75rem;padding:0.3rem 0.5rem;">✏️</button>
+                            <button class="btn-remover btn-excluir" data-id="${l.id_lancamento}" data-desc="${escapeHtml(l.categoria)}" aria-label="Excluir" style="font-size:0.8rem;">🗑️</button>
+                        </td>
+                    </tr>`;
+                }).join('');
+
+                // Event listeners para edição e exclusão
+                document.querySelectorAll('.btn-editar').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const id = parseInt(this.getAttribute('data-id'));
+                        const lanc = lancamentosCache.find(l => l.id_lancamento === id);
+                        if (lanc) abrirEdicao(lanc);
+                    });
+                });
+                document.querySelectorAll('.btn-excluir').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const id = parseInt(this.getAttribute('data-id'));
+                        const desc = this.getAttribute('data-desc');
+                        excluirLancamento(id, desc);
+                    });
+                });
+
+                // Paginação
+                const pagDiv = document.getElementById('paginacao');
+                if (dados.total_paginas > 1) {
+                    let html = '';
+                    if (paginaAtual > 1) html += `<button class="btn btn-secondary" onclick="carregarLancamentos(${paginaAtual - 1})" style="margin:0 0.25rem;">◀ Anterior</button>`;
+                    html += `<span style="margin:0 1rem;">Página ${dados.pagina} de ${dados.total_paginas} (${dados.total} lançamentos)</span>`;
+                    if (paginaAtual < dados.total_paginas) html += `<button class="btn btn-secondary" onclick="carregarLancamentos(${paginaAtual + 1})" style="margin:0 0.25rem;">Próxima ▶</button>`;
+                    pagDiv.innerHTML = html;
+                } else {
+                    pagDiv.innerHTML = dados.total > 0 ? `<span class="text-muted">${dados.total} lançamento(s)</span>` : '';
+                }
+            } catch (erro) {
+                document.querySelector('#tabela-financeiro tbody').innerHTML =
+                    `<tr><td colspan="8" class="text-center" style="color:red;">❌ ${erro.message}</td></tr>`;
+            }
+        }
+
+        // ============= MODAL CRIAR/EDITAR =============
+        function abrirNovo() {
+            document.getElementById('edit-id').value = '';
+            document.getElementById('modal-titulo').textContent = '➕ Novo Lançamento';
+            document.getElementById('edit-tipo').value = 'despesa';
+            document.getElementById('edit-categoria').value = '';
+            document.getElementById('edit-descricao').value = '';
+            document.getElementById('edit-valor').value = '';
+            document.getElementById('edit-data').valueAsDate = new Date();
+            document.getElementById('edit-pagamento').value = '';
+            document.getElementById('edit-status').value = 'Pago';
+            document.getElementById('edit-comprovante').value = '';
+            document.getElementById('edit-observacoes').value = '';
+            document.getElementById('modal-erro').style.display = 'none';
+            atualizarCategoriasSugeridas();
+            document.getElementById('modal-lancamento').style.display = 'flex';
+        }
+
+        function abrirEdicao(lanc) {
+            document.getElementById('edit-id').value = lanc.id_lancamento;
+            document.getElementById('modal-titulo').textContent = '✏️ Editar Lançamento';
+            document.getElementById('edit-tipo').value = lanc.tipo;
+            document.getElementById('edit-categoria').value = lanc.categoria;
+            document.getElementById('edit-descricao').value = lanc.descricao || '';
+            document.getElementById('edit-valor').value = lanc.valor;
+            document.getElementById('edit-data').value = lanc.data_lancamento || '';
+            document.getElementById('edit-pagamento').value = lanc.forma_pagamento || '';
+            document.getElementById('edit-status').value = lanc.status || 'Pago';
+            document.getElementById('edit-comprovante').value = lanc.comprovante || '';
+            document.getElementById('edit-observacoes').value = lanc.observacoes || '';
+            document.getElementById('modal-erro').style.display = 'none';
+            atualizarCategoriasSugeridas();
+            document.getElementById('modal-lancamento').style.display = 'flex';
+        }
+
+        function fecharModal() {
+            document.getElementById('modal-lancamento').style.display = 'none';
+        }
+
+        async function salvarLancamento() {
+            const id = document.getElementById('edit-id').value;
+            const dados = {
+                tipo: document.getElementById('edit-tipo').value,
+                categoria: document.getElementById('edit-categoria').value.trim(),
+                descricao: document.getElementById('edit-descricao').value.trim() || null,
+                valor: parseFloat(document.getElementById('edit-valor').value),
+                data_lancamento: document.getElementById('edit-data').value,
+                forma_pagamento: document.getElementById('edit-pagamento').value || null,
+                status: document.getElementById('edit-status').value,
+                comprovante: document.getElementById('edit-comprovante').value.trim() || null,
+                observacoes: document.getElementById('edit-observacoes').value.trim() || null,
+            };
+
+            // Validações
+            if (!dados.categoria) { mostrarErroModal('Categoria é obrigatória'); return; }
+            if (!dados.valor || dados.valor <= 0) { mostrarErroModal('Valor deve ser maior que zero'); return; }
+            if (!dados.data_lancamento) { mostrarErroModal('Data é obrigatória'); return; }
+
+            const btn = document.getElementById('btn-salvar');
+            btn.disabled = true;
+            btn.textContent = '⏳ Salvando...';
+
+            try {
+                const url = id ? `/api/financeiro/${id}` : '/api/financeiro';
+                const method = id ? 'PUT' : 'POST';
+
+                const res = await fetch(url, {
+                    method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(dados),
+                });
+                const result = await res.json();
+
+                if (!res.ok) {
+                    mostrarErroModal(result.erro || 'Erro ao salvar');
+                    return;
+                }
+
+                fecharModal();
+                mostrarAlerta(id ? '✅ Lançamento atualizado!' : '✅ Lançamento criado!', 'sucesso');
+                carregarLancamentos(paginaAtual);
+                carregarResumo();
+            } catch (e) {
+                mostrarErroModal('Erro de conexão: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '💾 Salvar';
+            }
+        }
+
+        function mostrarErroModal(msg) {
+            const el = document.getElementById('modal-erro');
+            el.textContent = msg;
+            el.style.display = 'block';
+        }
+
+        // ============= EXCLUIR =============
+        async function excluirLancamento(id, desc) {
+            confirmar('Excluir Lançamento', `Tem certeza que deseja excluir "${desc}"? Essa ação não pode ser desfeita.`, async () => {
+                try {
+                    const res = await fetch(`/api/financeiro/${id}`, { method: 'DELETE' });
+                    if (res.ok) {
+                        mostrarAlerta('✅ Lançamento excluído', 'sucesso');
+                        carregarLancamentos(paginaAtual);
+                        carregarResumo();
+                    } else {
+                        const r = await res.json().catch(() => ({}));
+                        mostrarAlerta('❌ ' + (r.erro || 'Erro ao excluir'), 'erro');
+                    }
+                } catch (e) {
+                    mostrarAlerta('❌ Erro: ' + e.message, 'erro');
+                }
+            }, '🗑️');
+        }
+
+        // ============= EXPORTAR CSV =============
+        function exportarCSV() {
+            const params = new URLSearchParams();
+            const tipo = document.getElementById('filtro-tipo').value;
+            const status = document.getElementById('filtro-status').value;
+            const di = document.getElementById('filtro-data-inicio').value;
+            const df = document.getElementById('filtro-data-fim').value;
+            if (tipo) params.set('tipo', tipo);
+            if (status) params.set('status', status);
+            if (di) params.set('data_inicio', di);
+            if (df) params.set('data_fim', df);
+            params.set('por_pagina', '10000');
+
+            fetch('/api/financeiro?' + params.toString())
+                .then(r => r.json())
+                .then(dados => {
+                    const rows = [['Data', 'Tipo', 'Categoria', 'Descrição', 'Valor', 'Pagamento', 'Status', 'Comprovante']];
+                    (dados.lancamentos || []).forEach(l => {
+                        rows.push([
+                            l.data_lancamento || '',
+                            l.tipo,
+                            l.categoria,
+                            l.descricao || '',
+                            l.valor.toFixed(2),
+                            l.forma_pagamento || '',
+                            l.status,
+                            l.comprovante || '',
+                        ]);
+                    });
+                    const csv = rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\n');
+                    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `financeiro_${new Date().toISOString().split('T')[0]}.csv`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    mostrarAlerta('✅ CSV exportado!', 'sucesso');
+                })
+                .catch(e => mostrarAlerta('❌ Erro: ' + e.message, 'erro'));
+        }
+
+        // ============= EVENT LISTENERS =============
+        document.getElementById('btn-novo').addEventListener('click', abrirNovo);
+        document.getElementById('btn-atualizar').addEventListener('click', () => { carregarLancamentos(1); carregarResumo(); });
+        document.getElementById('btn-exportar').addEventListener('click', exportarCSV);
+        document.getElementById('btn-filtrar').addEventListener('click', () => { carregarLancamentos(1); carregarResumo(); });
+        document.getElementById('btn-limpar').addEventListener('click', () => {
+            document.getElementById('filtro-tipo').value = '';
+            document.getElementById('filtro-status').value = '';
+            document.getElementById('filtro-data-inicio').value = '';
+            document.getElementById('filtro-data-fim').value = '';
+            document.getElementById('filtro-busca').value = '';
+            carregarLancamentos(1);
+            carregarResumo();
+        });
+        document.getElementById('btn-salvar').addEventListener('click', salvarLancamento);
+        document.getElementById('btn-cancelar-modal').addEventListener('click', fecharModal);
+        document.getElementById('modal-lancamento').addEventListener('click', function(e) {
+            if (e.target === this) fecharModal();
+        });
+        document.getElementById('edit-tipo').addEventListener('change', atualizarCategoriasSugeridas);
+        document.getElementById('filtro-busca').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') { carregarLancamentos(1); carregarResumo(); }
+        });
+
+        // ============= INICIALIZAÇÃO =============
+        window.addEventListener('load', () => {
+            carregarResumo();
+            carregarLancamentos(1);
+        });
+    </script>
+</body>
+</html>

@@ -53,6 +53,7 @@ from .models import (
     ItemCompra,
     CupomDesconto,
     BadgeCliente,
+    LancamentoFinanceiro,
 )
 
 # =============================================================================
@@ -297,7 +298,7 @@ def inject_user():
     }
 
 
-# ── Helper de validação de e-mail ────────────────────────────────
+# -- Helper de validação de e-mail --------------------
 _EMAIL_RE = _re.compile(
     r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$"
 )
@@ -308,7 +309,7 @@ def _email_valido(email: str) -> bool:
     return bool(_EMAIL_RE.match(email))
 
 
-# ── Helper de paginação ──────────────────────────────────────────
+# -- Helper de paginação -------------------------
 def get_pagination_params(default_per_page=50):
     """Extrai e valida parâmetros de paginação da query string."""
     pagina = max(1, min(request.args.get("pagina", 1, type=int), 10000))
@@ -388,6 +389,42 @@ class ProdutoUpdateSchema(BaseModel):
     ativo: bool | None = None
     estoque_atual: int | None = None
     estoque_minimo: int | None = None
+
+
+class LancamentoFinanceiroSchema(BaseModel):
+    tipo: str
+    categoria: str
+    descricao: str | None = None
+    valor: float
+    data_lancamento: str
+    forma_pagamento: str | None = None
+    status: str | None = "Pago"
+    comprovante: str | None = None
+    observacoes: str | None = None
+
+    @field_validator("tipo")
+    @classmethod
+    def tipo_valido(cls, v: str) -> str:
+        if v not in ("receita", "despesa"):
+            raise ValueError("Tipo deve ser 'receita' ou 'despesa'")
+        return v
+
+    @field_validator("valor")
+    @classmethod
+    def valor_positivo(cls, v: float) -> float:
+        if v <= 0:
+            raise ValueError("Valor deve ser maior que zero")
+        return v
+
+    @field_validator("status")
+    @classmethod
+    def status_valido(cls, v: str | None) -> str:
+        validos = ("Pago", "Pendente", "Cancelado")
+        if v and v not in validos:
+            raise ValueError(
+                f"Status deve ser um de: {', '.join(validos)}"
+            )
+        return v or "Pago"
 
 
 def validar_payload(schema_cls):
@@ -2442,6 +2479,13 @@ def pagina_produtos():
 def pagina_fechamento():
     """Página de fechamento diário"""
     return render_template("fechamento.html")
+
+
+@app.route("/financeiro")
+@login_required
+def pagina_financeiro():
+    """Página de gestão financeira (receitas/despesas)"""
+    return render_template("financeiro.html")
 
 
 @app.route("/sobre")
@@ -5725,6 +5769,354 @@ def relatorio_vendas_filtradas():
                 for r in resumo_pagamento
             ],
         })
+    except Exception as e:
+        return _erro_interno(e)
+
+
+# =============================================================================
+# ROTAS - GESTÃO FINANCEIRA (receitas / despesas manuais)
+# =============================================================================
+
+
+@app.route("/api/financeiro", methods=["GET"])
+@api_login_required
+def listar_lancamentos():
+    """Lista lançamentos financeiros com filtros e resumo."""
+    try:
+        query = LancamentoFinanceiro.query
+
+        tipo = request.args.get("tipo")
+        if tipo:
+            query = query.filter(LancamentoFinanceiro.tipo == tipo)
+
+        categoria = request.args.get("categoria")
+        if categoria:
+            query = query.filter(
+                LancamentoFinanceiro.categoria == categoria
+            )
+
+        status = request.args.get("status")
+        if status:
+            query = query.filter(
+                LancamentoFinanceiro.status == status
+            )
+
+        data_inicio = request.args.get("data_inicio")
+        data_fim = request.args.get("data_fim")
+        if data_inicio:
+            query = query.filter(
+                LancamentoFinanceiro.data_lancamento >= data_inicio
+            )
+        if data_fim:
+            query = query.filter(
+                LancamentoFinanceiro.data_lancamento <= data_fim
+            )
+
+        busca = request.args.get("busca", "").strip()
+        if busca:
+            term = f"%{busca}%"
+            query = query.filter(
+                db.or_(
+                    LancamentoFinanceiro.descricao.ilike(term),
+                    LancamentoFinanceiro.categoria.ilike(term),
+                    LancamentoFinanceiro.comprovante.ilike(term),
+                )
+            )
+
+        pagina, por_pagina = get_pagination_params()
+        total = query.count()
+        lancamentos = (
+            query.order_by(
+                LancamentoFinanceiro.data_lancamento.desc(),
+                LancamentoFinanceiro.id_lancamento.desc(),
+            )
+            .offset((pagina - 1) * por_pagina)
+            .limit(por_pagina)
+            .all()
+        )
+
+        # Resumo geral (sem paginação, respeitando filtros)
+        total_receitas = float(
+            query.filter(
+                LancamentoFinanceiro.tipo == "receita",
+                LancamentoFinanceiro.status != "Cancelado",
+            ).with_entities(
+                db.func.coalesce(
+                    db.func.sum(LancamentoFinanceiro.valor), 0
+                )
+            ).scalar()
+        )
+        total_despesas = float(
+            query.filter(
+                LancamentoFinanceiro.tipo == "despesa",
+                LancamentoFinanceiro.status != "Cancelado",
+            ).with_entities(
+                db.func.coalesce(
+                    db.func.sum(LancamentoFinanceiro.valor), 0
+                )
+            ).scalar()
+        )
+
+        return jsonify({
+            "lancamentos": [lf.to_dict() for lf in lancamentos],
+            "total": total,
+            "pagina": pagina,
+            "por_pagina": por_pagina,
+            "total_paginas": math.ceil(total / por_pagina) if total else 0,
+            "resumo": {
+                "total_receitas": round(total_receitas, 2),
+                "total_despesas": round(total_despesas, 2),
+                "saldo": round(total_receitas - total_despesas, 2),
+            },
+        })
+    except Exception as e:
+        return _erro_interno(e)
+
+
+@app.route("/api/financeiro", methods=["POST"])
+@api_login_required
+def criar_lancamento():
+    """Cria um novo lançamento financeiro."""
+    try:
+        dados = validar_payload(LancamentoFinanceiroSchema)
+    except ValueError as e:
+        return jsonify({"erro": str(e)}), 400
+
+    try:
+        from datetime import date as date_type
+
+        try:
+            dt = date_type.fromisoformat(dados["data_lancamento"])
+        except ValueError:
+            return jsonify(
+                {"erro": "Formato de data inválido. Use YYYY-MM-DD"}
+            ), 400
+
+        lanc = LancamentoFinanceiro(
+            tipo=dados["tipo"],
+            categoria=dados["categoria"],
+            descricao=dados.get("descricao"),
+            valor=Decimal(str(dados["valor"])),
+            data_lancamento=dt,
+            forma_pagamento=dados.get("forma_pagamento"),
+            status=dados.get("status", "Pago"),
+            comprovante=dados.get("comprovante"),
+            observacoes=dados.get("observacoes"),
+            id_usuario=session.get("id_usuario"),
+        )
+        db.session.add(lanc)
+        db.session.commit()
+
+        registrar_log(
+            "criar", "lancamento_financeiro",
+            lanc.id_lancamento,
+            f"{lanc.tipo}: {lanc.categoria} R${lanc.valor}",
+        )
+
+        return jsonify(lanc.to_dict()), 201
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
+@app.route("/api/financeiro/<int:lid>", methods=["PUT"])
+@api_login_required
+def atualizar_lancamento(lid):
+    """Atualiza um lançamento financeiro existente."""
+    lanc = LancamentoFinanceiro.query.get(lid)
+    if not lanc:
+        return jsonify({"erro": "Lançamento não encontrado"}), 404
+
+    dados = request.get_json(silent=True) or {}
+
+    try:
+        if "tipo" in dados:
+            if dados["tipo"] not in ("receita", "despesa"):
+                return jsonify(
+                    {"erro": "Tipo deve ser 'receita' ou 'despesa'"}
+                ), 400
+            lanc.tipo = dados["tipo"]
+
+        if "categoria" in dados:
+            lanc.categoria = dados["categoria"]
+        if "descricao" in dados:
+            lanc.descricao = dados["descricao"]
+        if "valor" in dados:
+            v = float(dados["valor"])
+            if v <= 0:
+                return jsonify(
+                    {"erro": "Valor deve ser maior que zero"}
+                ), 400
+            lanc.valor = Decimal(str(v))
+        if "data_lancamento" in dados:
+            from datetime import date as date_type
+
+            try:
+                lanc.data_lancamento = date_type.fromisoformat(
+                    dados["data_lancamento"]
+                )
+            except ValueError:
+                return jsonify(
+                    {"erro": "Data inválida. Use YYYY-MM-DD"}
+                ), 400
+        if "forma_pagamento" in dados:
+            lanc.forma_pagamento = dados["forma_pagamento"]
+        if "status" in dados:
+            if dados["status"] not in ("Pago", "Pendente", "Cancelado"):
+                return jsonify({"erro": "Status inválido"}), 400
+            lanc.status = dados["status"]
+        if "comprovante" in dados:
+            lanc.comprovante = dados["comprovante"]
+        if "observacoes" in dados:
+            lanc.observacoes = dados["observacoes"]
+
+        db.session.commit()
+
+        registrar_log(
+            "editar", "lancamento_financeiro",
+            lanc.id_lancamento,
+            f"{lanc.tipo}: {lanc.categoria} R${lanc.valor}",
+        )
+
+        return jsonify(lanc.to_dict())
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
+@app.route("/api/financeiro/<int:lid>", methods=["DELETE"])
+@api_login_required
+def deletar_lancamento(lid):
+    """Exclui um lançamento financeiro."""
+    lanc = LancamentoFinanceiro.query.get(lid)
+    if not lanc:
+        return jsonify({"erro": "Lançamento não encontrado"}), 404
+
+    try:
+        desc = f"{lanc.tipo}: {lanc.categoria} R${lanc.valor}"
+        db.session.delete(lanc)
+        db.session.commit()
+
+        registrar_log(
+            "excluir", "lancamento_financeiro",
+            lid, desc,
+        )
+
+        return jsonify({"mensagem": "Lançamento excluído com sucesso"})
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
+@app.route("/api/financeiro/resumo", methods=["GET"])
+@api_login_required
+def resumo_financeiro():
+    """Resumo financeiro consolidado (lançamentos + vendas + compras)."""
+    try:
+        data_inicio = request.args.get("data_inicio")
+        data_fim = request.args.get("data_fim")
+
+        # --- Lançamentos manuais ---
+        q_lanc = LancamentoFinanceiro.query.filter(
+            LancamentoFinanceiro.status != "Cancelado"
+        )
+        if data_inicio:
+            q_lanc = q_lanc.filter(
+                LancamentoFinanceiro.data_lancamento >= data_inicio
+            )
+        if data_fim:
+            q_lanc = q_lanc.filter(
+                LancamentoFinanceiro.data_lancamento <= data_fim
+            )
+
+        receitas_manual = float(
+            q_lanc.filter(
+                LancamentoFinanceiro.tipo == "receita"
+            ).with_entities(
+                db.func.coalesce(
+                    db.func.sum(LancamentoFinanceiro.valor), 0
+                )
+            ).scalar()
+        )
+        despesas_manual = float(
+            q_lanc.filter(
+                LancamentoFinanceiro.tipo == "despesa"
+            ).with_entities(
+                db.func.coalesce(
+                    db.func.sum(LancamentoFinanceiro.valor), 0
+                )
+            ).scalar()
+        )
+
+        # --- Vendas (receitas automáticas) ---
+        q_vendas = Venda.query.filter(
+            Venda.status_pagamento != "Cancelado"
+        )
+        if data_inicio:
+            q_vendas = q_vendas.filter(
+                db.func.date(Venda.data_venda) >= data_inicio
+            )
+        if data_fim:
+            q_vendas = q_vendas.filter(
+                db.func.date(Venda.data_venda) <= data_fim
+            )
+        receitas_vendas = float(
+            q_vendas.with_entities(
+                db.func.coalesce(db.func.sum(Venda.valor_total), 0)
+            ).scalar()
+        )
+
+        # --- Compras de Estoque (despesas automáticas) ---
+        q_compras = CompraEstoque.query.filter(
+            CompraEstoque.status != "Cancelado"
+        )
+        if data_inicio:
+            q_compras = q_compras.filter(
+                db.func.date(CompraEstoque.data_compra) >= data_inicio
+            )
+        if data_fim:
+            q_compras = q_compras.filter(
+                db.func.date(CompraEstoque.data_compra) <= data_fim
+            )
+        despesas_compras = float(
+            q_compras.with_entities(
+                db.func.coalesce(
+                    db.func.sum(CompraEstoque.valor_total), 0
+                )
+            ).scalar()
+        )
+
+        total_receitas = receitas_vendas + receitas_manual
+        total_despesas = despesas_compras + despesas_manual
+        saldo = total_receitas - total_despesas
+
+        return jsonify({
+            "total_receitas": round(total_receitas, 2),
+            "total_despesas": round(total_despesas, 2),
+            "saldo": round(saldo, 2),
+            "detalhamento": {
+                "receitas_vendas": round(receitas_vendas, 2),
+                "receitas_manual": round(receitas_manual, 2),
+                "despesas_compras": round(despesas_compras, 2),
+                "despesas_manual": round(despesas_manual, 2),
+            },
+        })
+    except Exception as e:
+        return _erro_interno(e)
+
+
+@app.route("/api/financeiro/categorias", methods=["GET"])
+@api_login_required
+def categorias_financeiro():
+    """Retorna categorias distintas usadas nos lançamentos."""
+    try:
+        cats = (
+            db.session.query(LancamentoFinanceiro.categoria)
+            .distinct()
+            .order_by(LancamentoFinanceiro.categoria)
+            .all()
+        )
+        return jsonify([c[0] for c in cats])
     except Exception as e:
         return _erro_interno(e)
 
