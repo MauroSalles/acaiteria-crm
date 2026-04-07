@@ -1,4 +1,4 @@
-const CACHE_NAME = 'acai-crm-v13';
+const CACHE_NAME = 'acai-crm-v14';
 const STATIC_ASSETS = [
   '/static/estilos.css',
   '/static/script.js',

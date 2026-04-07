@@ -772,12 +772,14 @@ def obter_cliente(id_cliente):
         if not cliente:
             return jsonify({"erro": "Cliente não encontrado"}), 404
 
-        # Detalhes com histórico de vendas
+        # Detalhes com histórico de vendas (agregação SQL, sem N+1)
         cliente_dict = cliente.to_dict()
-        cliente_dict["total_vendas"] = len(cliente.vendas)
-        cliente_dict["faturamento_total"] = float(
-            sum(v.valor_total for v in cliente.vendas)
-        )
+        stats = db.session.query(
+            db.func.count(Venda.id_venda),
+            db.func.coalesce(db.func.sum(Venda.valor_total), 0),
+        ).filter(Venda.id_cliente == id_cliente).first()
+        cliente_dict["total_vendas"] = stats[0]
+        cliente_dict["faturamento_total"] = float(stats[1])
 
         return jsonify(cliente_dict)
     except Exception as e:
@@ -1377,6 +1379,11 @@ def criar_venda():
                 )
 
             quantidade = int(item_dados["quantidade"])
+            if quantidade < 1 or quantidade > 9999:
+                return (
+                    jsonify({"erro": f"Quantidade inválida: {quantidade}. Deve ser entre 1 e 9999"}),
+                    400,
+                )
 
             # Verificar estoque somente se controle ativo
             # (estoque ou mínimo > 0)
@@ -1488,8 +1495,8 @@ def criar_venda():
         novos_badges = []
         try:
             novos_badges = _verificar_badges(dados["id_cliente"])
-        except Exception:
-            pass  # Badges são bônus, não devem bloquear venda
+        except Exception as e:
+            logger.warning("Erro ao verificar badges do cliente %s: %s", dados["id_cliente"], e)
 
         registrar_log(
             "criar",
@@ -2158,12 +2165,10 @@ def exportar_clientes_csv():
 
     def sanitize_csv(value):
         """Previne CSV formula injection (=, +, -, @, |, %, tab, CR)"""
-        if (
-            isinstance(value, str)
-            and value
-            and value[0] in ("=", "+", "-", "@", "|", "%", "\t", "\r")
-        ):
-            return "'" + value
+        if isinstance(value, str) and value:
+            stripped = value.lstrip()
+            if stripped and stripped[0] in ("=", "+", "-", "@", "|", "%", "\t", "\r"):
+                return "'" + value
         return value
 
     try:
@@ -2646,8 +2651,9 @@ def totem_cadastrar_cliente():
             201,
         )
 
-    except Exception:
+    except Exception as e:
         db.session.rollback()
+        logger.exception("Erro no auto-cadastro totem: %s", e)
         return jsonify({"erro": "Erro interno. Tente novamente."}), 500
 
 
@@ -5934,7 +5940,7 @@ def criar_lancamento():
             status=dados.get("status", "Pago"),
             comprovante=dados.get("comprovante"),
             observacoes=dados.get("observacoes"),
-            id_usuario=session.get("id_usuario"),
+            id_usuario=session.get("usuario_id"),
         )
         db.session.add(lanc)
         db.session.commit()

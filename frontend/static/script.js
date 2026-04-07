@@ -293,7 +293,8 @@ function exportarCSV(dados, nomeArquivo = 'exportacao.csv') {
             if (valor == null) return '';
             valor = String(valor);
             // Sanitizar formula injection (=, +, -, @, \t, \r)
-            if (/^[=+\-@\t\r]/.test(valor)) {
+            const stripped = valor.trimStart();
+            if (/^[=+\-@|\t\r%]/.test(stripped)) {
                 valor = "'" + valor;
             }
             // Escape para valores com vírgula ou aspas
