@@ -144,6 +144,7 @@ async function carregarComplementos() {
         renderComplementosGrid();
     } catch (erro) {
         console.error('Erro ao carregar complementos:', erro);
+        mostrarAlerta('\u274c Erro ao carregar complementos', 'erro');
     }
 }
 

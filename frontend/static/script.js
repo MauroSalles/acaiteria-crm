@@ -135,6 +135,11 @@ function escapeHtml(texto) {
     return div.innerHTML;
 }
 
+// Escape string for inline JS attributes (onclick etc.)
+function escapeJsStr(texto) {
+    return escapeHtml(texto).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
 // Formatador de data
 function formatarData(data) {
     return new Date(data).toLocaleDateString('pt-BR');

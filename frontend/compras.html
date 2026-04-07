@@ -352,8 +352,8 @@
                         <td>${escapeHtml(f.telefone || '-')}</td>
                         <td>${escapeHtml(f.email || '-')}</td>
                         <td style="white-space:nowrap">
-                            <button onclick="editarFornecedor(${f.id_fornecedor})" class="btn btn-info" style="font-size:.75rem;padding:.35rem .5rem">✏️</button>
-                            <button onclick="desativarFornecedor(${f.id_fornecedor}, '${escapeHtml(f.nome).replace(/'/g, "\\'")}')" class="btn-remover" style="font-size:.75rem">🗑️</button>
+                            <button onclick="editarFornecedor(${f.id_fornecedor})" class="btn btn-info" style="font-size:.75rem;padding:.35rem .5rem" aria-label="Editar fornecedor">✏️</button>
+                            <button onclick="desativarFornecedor(${f.id_fornecedor}, '${escapeJsStr(f.nome)}')" class="btn-remover" style="font-size:.75rem" aria-label="Desativar fornecedor">🗑️</button>
                         </td>
                     </tr>
                 `).join('');
@@ -486,7 +486,7 @@
                 total += item.subtotal;
                 return `<div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem .6rem;background:#f8f8f8;border-radius:6px;margin-bottom:.3rem">
                     <span><strong>${escapeHtml(item.nome_produto)}</strong> — ${item.quantidade}× R$ ${item.preco_unitario.toFixed(2)} = <strong>R$ ${item.subtotal.toFixed(2)}</strong></span>
-                    <button type="button" class="btn-remover" style="font-size:.75rem" onclick="removerItemCompra(${i})">❌</button>
+                    <button type="button" class="btn-remover" style="font-size:.75rem" onclick="removerItemCompra(${i})" aria-label="Remover item">❌</button>
                 </div>`;
             }).join('');
             document.getElementById('compra-total').textContent = formatarMoeda(total);
@@ -514,6 +514,9 @@
                 })),
             };
 
+            const btnCompra = e.target.querySelector('button[type="submit"]');
+            btnCompra.disabled = true;
+            btnCompra.textContent = '⏳ Registrando...';
             try {
                 await requisicao('/api/compras', {
                     method: 'POST', body: JSON.stringify(dados)
@@ -526,6 +529,9 @@
                 carregarProdutosSelect();
             } catch (erro) {
                 mostrarAlerta('Erro: ' + erro.message, 'erro');
+            } finally {
+                btnCompra.disabled = false;
+                btnCompra.textContent = '💾 Registrar Compra';
             }
         });
 
@@ -549,7 +555,7 @@
                         acoes.push(`<button onclick="receberCompra(${c.id_compra})" class="btn btn-primary" style="font-size:.7rem;padding:.25rem .5rem">✅ Receber</button>`);
                     }
                     if (c.status !== 'Cancelado') {
-                        acoes.push(`<button onclick="cancelarCompra(${c.id_compra})" class="btn-remover" style="font-size:.7rem">❌</button>`);
+                        acoes.push(`<button onclick="cancelarCompra(${c.id_compra})" class="btn-remover" style="font-size:.7rem" aria-label="Cancelar compra">❌</button>`);
                     }
                     return `<tr>
                         <td>${c.id_compra}</td>
@@ -614,7 +620,7 @@
                         <td>${c.usos_realizados}${c.usos_maximos > 0 ? '/' + c.usos_maximos : '/∞'}</td>
                         <td>${c.data_fim ? formatarData(c.data_fim) : '∞'} ${statusLabel}</td>
                         <td>
-                            ${c.ativo ? `<button onclick="desativarCupom(${c.id_cupom}, '${escapeHtml(c.codigo)}')" class="btn-remover" style="font-size:.7rem">🗑️</button>` : ''}
+                            ${c.ativo ? `<button onclick="desativarCupom(${c.id_cupom}, '${escapeHtml(c.codigo)}')" class="btn-remover" style="font-size:.7rem" aria-label="Desativar cupom">🗑️</button>` : ''}
                         </td>
                     </tr>`;
                 }).join('');
@@ -641,6 +647,9 @@
                 return;
             }
 
+            const btnCupom = e.target.querySelector('button[type="submit"]');
+            btnCupom.disabled = true;
+            btnCupom.textContent = '⏳ Criando...';
             try {
                 await requisicao('/api/cupons', {
                     method: 'POST', body: JSON.stringify(dados)
@@ -650,6 +659,9 @@
                 carregarCupons();
             } catch (erro) {
                 mostrarAlerta('Erro: ' + erro.message, 'erro');
+            } finally {
+                btnCupom.disabled = false;
+                btnCupom.textContent = '💾 Criar Cupom';
             }
         });
 

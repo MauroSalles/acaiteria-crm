@@ -249,7 +249,7 @@
                 const promoHtml = p.preco_promocional
                     ? `<span class="text-success" style="font-weight:bold">${formatarMoeda(p.preco_promocional)}</span>
                        <button onclick="removerPromocao(${p.id_produto})" class="btn-remover" style="font-size:.65rem;padding:.2rem .4rem;margin-left:.3rem" title="Remover promoção">✖</button>`
-                    : `<button onclick="definirPromocao(${p.id_produto}, '${escapeHtml(p.nome_produto).replace(/'/g, "\\'")}', ${p.preco})" class="btn btn-info" style="font-size:.7rem;padding:.2rem .5rem">🏷️ Definir</button>`;
+                    : `<button onclick="definirPromocao(${p.id_produto}, '${escapeJsStr(p.nome_produto)}', ${p.preco})" class="btn btn-info" style="font-size:.7rem;padding:.2rem .5rem">🏷️ Definir</button>`;
                 return `<tr${baixo ? ' class="bg-warning-row"' : ''}>
                     <td>${p.id_produto}</td>
                     <td><strong>${escapeHtml(p.nome_produto)}</strong></td>
@@ -259,8 +259,8 @@
                     <td>${promoHtml}</td>
                     <td>${estLabel}</td>
                     <td style="white-space:nowrap">
-                        <button onclick="editarProduto(${p.id_produto})" class="btn btn-info" style="font-size:.75rem;padding:.35rem .5rem">✏️</button>
-                        <button onclick="deletarProduto(${p.id_produto}, '${escapeHtml(p.nome_produto).replace(/'/g, "\\'")}')" class="btn-remover" style="font-size:.75rem">🗑️</button>
+                        <button onclick="editarProduto(${p.id_produto})" class="btn btn-info" style="font-size:.75rem;padding:.35rem .5rem" aria-label="Editar produto">✏️</button>
+                        <button onclick="deletarProduto(${p.id_produto}, '${escapeJsStr(p.nome_produto)}')" class="btn-remover" style="font-size:.75rem" aria-label="Desativar produto">🗑️</button>
                     </td>
                 </tr>`;
             }).join('');
@@ -285,6 +285,10 @@
                 return;
             }
 
+            const btn = document.getElementById('btnSubmit');
+            btn.disabled = true;
+            const textoOriginal = btn.textContent;
+            btn.textContent = '⏳ Salvando...';
             try {
                 if (editandoId) {
                     await requisicao(`/api/produtos/${editandoId}`, {
@@ -305,6 +309,9 @@
                 carregarEstoqueBaixo();
             } catch (erro) {
                 mostrarAlerta(`Erro: ${erro.message}`, 'erro');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = textoOriginal;
             }
         });
 
@@ -434,6 +441,7 @@
                 `).join('');
             } catch (e) {
                 console.error('Erro ao carregar estoque baixo:', e);
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center">\u26a0\ufe0f Erro ao carregar estoque</td></tr>';
             }
         }
     </script>

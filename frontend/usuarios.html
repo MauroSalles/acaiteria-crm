@@ -161,6 +161,10 @@
                 dados.senha = senha;
             }
 
+            const btn = document.getElementById('btn-salvar');
+            btn.disabled = true;
+            const textoOriginal = btn.textContent;
+            btn.textContent = '⏳ Salvando...';
             try {
                 if (editandoId) {
                     await requisicao(`/api/usuarios/${editandoId}`, {
@@ -180,6 +184,9 @@
                 carregarUsuarios();
             } catch (erro) {
                 mostrarAlerta('Erro: ' + erro.message, 'erro');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = textoOriginal;
             }
         });
 
@@ -237,8 +244,8 @@
                         <td>${u.data_criacao ? new Date(u.data_criacao).toLocaleDateString('pt-BR') : '-'}</td>
                         <td>
                             ${u.ativo ? `
-                                <button onclick="editarUsuario(${u.id_usuario}, '${escapeHtml(u.nome).replace(/'/g, "\\'")}', '${escapeHtml(u.email).replace(/'/g, "\\'")}', '${u.papel}')" class="btn btn-info" style="font-size:0.75rem;padding:0.4rem 0.6rem;">✏️</button>
-                                <button onclick="desativarUsuario(${u.id_usuario}, '${escapeHtml(u.nome).replace(/'/g, "\\'")}')" class="btn-remover" style="font-size:0.75rem;">🗑️</button>
+                                <button aria-label="Editar usuário" onclick="editarUsuario(${u.id_usuario}, '${escapeJsStr(u.nome)}', '${escapeJsStr(u.email)}', '${u.papel}')" class="btn btn-info" style="font-size:0.75rem;padding:0.4rem 0.6rem;">✏️</button>
+                                <button aria-label="Desativar usuário" onclick="desativarUsuario(${u.id_usuario}, '${escapeJsStr(u.nome)}')" class="btn-remover" style="font-size:0.75rem;">🗑️</button>
                             ` : '<em>desativado</em>'}
                         </td>
                     </tr>

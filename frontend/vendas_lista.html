@@ -296,10 +296,10 @@
                         acoes += `<button onclick="avancarStatus(${v.id_venda}, '${proximo}')" class="btn btn-primary" style="font-size:.7rem;padding:.25rem .5rem" title="Avançar para ${proximo}">${STATUS_ICONS[proximo]} ${proximo}</button> `;
                     }
                     if (statusPedido !== 'Cancelado' && statusPag !== 'Cancelado') {
-                        acoes += `<button onclick="abrirEdicao(${v.id_venda})" class="btn btn-info" style="font-size:.7rem;padding:.25rem .5rem" title="Editar">✏️</button> `;
+                        acoes += `<button onclick="abrirEdicao(${v.id_venda})" class="btn btn-info" style="font-size:.7rem;padding:.25rem .5rem" title="Editar" aria-label="Editar venda">✏️</button> `;
                     }
                     if (statusPag !== 'Cancelado') {
-                        acoes += `<button onclick="abrirCancelamento(${v.id_venda})" class="btn-remover" style="font-size:.7rem" title="Cancelar/Estornar">❌</button>`;
+                        acoes += `<button onclick="abrirCancelamento(${v.id_venda})" class="btn-remover" style="font-size:.7rem" title="Cancelar/Estornar" aria-label="Cancelar venda">❌</button>`;
                     }
                     if (v.motivo_cancelamento) {
                         acoes += ` <span title="${escapeHtml(v.motivo_cancelamento)}" style="cursor:help;font-size:.85rem">💬</span>`;

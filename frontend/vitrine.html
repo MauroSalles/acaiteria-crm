@@ -332,7 +332,7 @@
             return '🍨';
         }
         function escapeHtml(text){var d=document.createElement('div');d.textContent=text||'';return d.innerHTML;}
-        function escapeAttr(text){return escapeHtml(text).replace(/'/g,'&#39;').replace(/"/g,'&quot;');}
+        function escapeAttr(text){return escapeHtml(text).replace(/\\/g,'\\\\').replace(/'/g,'&#39;').replace(/"/g,'&quot;');}
         function fmt(v){return 'R$ '+(+v).toFixed(2).replace('.',',');}
 
         function showToast(msg, tipo){

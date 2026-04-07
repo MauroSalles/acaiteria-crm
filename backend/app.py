@@ -3314,6 +3314,10 @@ def criar_usuario():
 
         db.session.add(usuario)
         db.session.commit()
+        registrar_log(
+            "criar", "usuario", usuario.id_usuario,
+            f"Novo usuario: {usuario.nome} ({usuario.papel})",
+        )
         return jsonify(usuario.to_dict()), 201
     except Exception as e:
         db.session.rollback()
@@ -3361,6 +3365,10 @@ def atualizar_usuario(id_usuario):
             usuario.ativo = bool(dados["ativo"])
 
         db.session.commit()
+        registrar_log(
+            "atualizar", "usuario", id_usuario,
+            f"Usuario atualizado: {usuario.nome}",
+        )
         return jsonify(usuario.to_dict())
     except Exception as e:
         db.session.rollback()
@@ -3386,6 +3394,10 @@ def deletar_usuario(id_usuario):
 
         usuario.ativo = False
         db.session.commit()
+        registrar_log(
+            "desativar", "usuario", id_usuario,
+            f"Usuario desativado: {usuario.nome}",
+        )
         return jsonify({"mensagem": f"Usuário {usuario.nome} desativado"})
     except Exception as e:
         db.session.rollback()
@@ -3575,6 +3587,10 @@ def enviar_mensagem_ticket(id_ticket):
             ticket.status = "em_andamento"
 
         db.session.commit()
+        registrar_log(
+            "mensagem", "ticket", id_ticket,
+            f"Mensagem enviada no ticket #{id_ticket}",
+        )
         return jsonify(msg.to_dict()), 201
     except Exception as e:
         db.session.rollback()

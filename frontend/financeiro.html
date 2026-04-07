@@ -279,6 +279,7 @@
                     `Compras: R$ ${d.detalhamento.despesas_compras.toFixed(2)} · Manual: R$ ${d.detalhamento.despesas_manual.toFixed(2)}`;
             } catch (e) {
                 console.error('Erro ao carregar resumo:', e);
+                mostrarAlerta('\u26a0\ufe0f Erro ao carregar resumo financeiro', 'erro');
             }
         }
 

@@ -195,8 +195,7 @@
                 grid.innerHTML = '<p class="text-muted-light">Nenhum badge disponível</p>';
             }
         } catch (e) {
-            console.warn('Badges não carregados:', e);
-        }
+            console.warn('Badges não carregados:', e);            document.getElementById('badges-grid').innerHTML = '<p class="text-muted-light">\u26a0\ufe0f N\u00e3o foi poss\u00edvel carregar badges</p>';        }
     })();
     </script>
 </body>
