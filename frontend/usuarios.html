@@ -74,8 +74,8 @@
                     </div>
                     <div class="form-group">
                         <label for="senha">Senha <span aria-hidden="true">*</span></label>
-                        <input type="password" id="senha" name="senha" placeholder="Mínimo 4 caracteres" minlength="4" aria-describedby="senha-help" oninput="atualizarForcaSenha(this.value)">
-                        <small id="senha-help">Mínimo 4 caracteres</small>
+                        <input type="password" id="senha" name="senha" placeholder="Mínimo 8 caracteres, 1 maiúscula, 1 número" minlength="8" aria-describedby="senha-help" oninput="atualizarForcaSenha(this.value)">
+                        <small id="senha-help">Mínimo 8 caracteres, 1 letra maiúscula e 1 número</small>
                         <div class="password-strength" id="password-strength">
                             <div class="strength-bar"><div class="strength-fill" id="strength-fill"></div></div>
                             <span class="strength-label" id="strength-label"></span>
@@ -121,7 +121,7 @@
         </main>
 
         <footer class="footer">
-            <p>&copy; 2026 — Projeto Integrador UNIVESP | Grupo 22 | Polo Lorena/SP</p>
+            <p>© 2026 Combina Açaí — CRM | Desenvolvido por <a href="/sobre" style="color:inherit;text-decoration:underline">Grupo 22 — UNIVESP</a></p>
             <p>Eixo Computação · <a href="/sobre" style="color:inherit;text-decoration:underline">Sobre o Projeto</a></p>
         </footer>
     </div>
@@ -145,8 +145,16 @@
             if (editandoId) {
                 if (senha) dados.senha = senha;
             } else {
-                if (!senha || senha.length < 4) {
-                    mostrarAlerta('Senha é obrigatória (mínimo 4 caracteres)', 'erro');
+                if (!senha || senha.length < 8) {
+                    mostrarAlerta('Senha é obrigatória (mínimo 8 caracteres)', 'erro');
+                    return;
+                }
+                if (!/[A-Z]/.test(senha)) {
+                    mostrarAlerta('Senha deve conter pelo menos 1 letra maiúscula', 'erro');
+                    return;
+                }
+                if (!/[0-9]/.test(senha)) {
+                    mostrarAlerta('Senha deve conter pelo menos 1 número', 'erro');
                     return;
                 }
                 dados.senha = senha;
@@ -192,7 +200,7 @@
             editandoId = null;
             document.getElementById('form-usuario').reset();
             document.getElementById('senha').setAttribute('required', '');
-            document.getElementById('senha').placeholder = 'Mínimo 4 caracteres';
+            document.getElementById('senha').placeholder = 'Mínimo 8 caracteres, 1 maiúscula, 1 número';
             document.getElementById('form-titulo').textContent = 'Cadastrar Novo Usuário';
             document.getElementById('btn-salvar').textContent = 'Cadastrar Usuário';
             document.getElementById('btn-cancelar').style.display = 'none';

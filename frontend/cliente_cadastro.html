@@ -69,8 +69,8 @@
             <input type="email" name="email" class="auth-input" placeholder="seu@email.com" value="{{ dados.get('email', '') }}">
 
             <label class="auth-label">🔒 Crie uma senha *</label>
-            <input type="password" name="senha" class="auth-input" placeholder="Mínimo 6 caracteres" required minlength="6" autocomplete="new-password">
-            <p class="password-hint">Use ao menos 6 caracteres. Você usará essa senha para acessar seus pontos e histórico.</p>
+            <input type="password" name="senha" class="auth-input" placeholder="Mínimo 8 caracteres" required minlength="8" autocomplete="new-password">
+            <p class="password-hint">Use ao menos 8 caracteres, 1 letra maiúscula e 1 número.</p>
 
             <label class="auth-label">🍨 Preferências (opcional)</label>
             <textarea name="observacoes" class="auth-textarea" placeholder="Ex: Gosto de açaí com granola e morango...">{{ dados.get('observacoes', '') }}</textarea>

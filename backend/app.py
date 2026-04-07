@@ -197,7 +197,7 @@ with app.app_context():
     _sql_map = {
         (t, c): tipo for t, c, tipo in _migracoes
     }
-    with db.engine.connect() as conn:
+    with db.engine.begin() as conn:
         for (tabela, coluna), tipo in _sql_map.items():
             try:
                 conn.execute(db.text(
@@ -205,18 +205,18 @@ with app.app_context():
                         tabela, coluna, tipo
                     )
                 ))
-                conn.commit()
             except Exception:
-                conn.rollback()
+                pass  # coluna já existe — ignorar
 
-        # Auto-criação de índices para colunas frequentemente filtradas
-        _indices = [
-            ("idx_cliente_ativo", "cliente", "ativo"),
-            ("idx_produto_categoria", "produto", "categoria"),
-            ("idx_venda_status_pedido", "venda", "status_pedido"),
-            ("idx_venda_data_venda", "venda", "data_venda"),
-            ("idx_venda_id_cliente", "venda", "id_cliente"),
-        ]
+    # Auto-criação de índices para colunas frequentemente filtradas
+    _indices = [
+        ("idx_cliente_ativo", "cliente", "ativo"),
+        ("idx_produto_categoria", "produto", "categoria"),
+        ("idx_venda_status_pedido", "venda", "status_pedido"),
+        ("idx_venda_data_venda", "venda", "data_venda"),
+        ("idx_venda_id_cliente", "venda", "id_cliente"),
+    ]
+    with db.engine.begin() as conn:
         for idx_name, tabela, coluna in _indices:
             try:
                 conn.execute(db.text(
@@ -224,9 +224,8 @@ with app.app_context():
                         idx_name, tabela, coluna
                     )
                 ))
-                conn.commit()
             except Exception:
-                conn.rollback()
+                pass  # índice já existe — ignorar
 
 # Configurar logging estruturado
 logging.basicConfig(
@@ -239,10 +238,7 @@ logger = logging.getLogger("acaiteria-crm")
 def _erro_interno(e):
     """Loga exceção e retorna resposta segura (sem stack trace em produção)."""
     logger.exception("Erro interno: %s", e)
-    if (
-        app.config.get("TESTING")
-        or os.environ.get("FLASK_ENV") == "development"
-    ):
+    if app.config.get("TESTING"):
         return jsonify({"erro": str(e)}), 500
     return jsonify({"erro": "Erro interno do servidor"}), 500
 
@@ -299,6 +295,17 @@ def inject_user():
         "papel": session.get("papel", ""),
         "csp_nonce": g.get("csp_nonce", ""),
     }
+
+
+# ── Helper de validação de e-mail ────────────────────────────────
+_EMAIL_RE = _re.compile(
+    r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$"
+)
+
+
+def _email_valido(email: str) -> bool:
+    """Retorna True se o e-mail possuir formato válido."""
+    return bool(_EMAIL_RE.match(email))
 
 
 # ── Helper de paginação ──────────────────────────────────────────
@@ -769,7 +776,7 @@ def atualizar_cliente(id_cliente):
         # Validar e-mail se fornecido
         if "email" in dados:
             email = (dados["email"] or "").strip().lower() or None
-            if email and "@" not in email:
+            if email and not _email_valido(email):
                 return jsonify({"erro": "E-mail inválido"}), 400
             # Impedir remoção de e-mail se cliente tem senha
             if not email and cliente.senha_hash:
@@ -2490,7 +2497,7 @@ def totem_cadastrar_cliente():
         observacoes = (dados.get("observacoes") or "").strip() or None
 
         # Validar email se fornecido
-        if email and "@" not in email:
+        if email and not _email_valido(email):
             return jsonify({"erro": "E-mail inválido"}), 400
 
         # Verificar duplicidade por telefone ou email
@@ -2848,15 +2855,23 @@ def cliente_cadastro():
         erros = []
         if not nome or len(nome) < 2:
             erros.append("Nome deve ter ao menos 2 caracteres.")
-        if not senha or len(senha) < 6:
-            erros.append("Senha deve ter ao menos 6 caracteres.")
+        if not senha or len(senha) < 8:
+            erros.append("Senha deve ter ao menos 8 caracteres.")
+        elif not _re.search(r"[A-Z]", senha):
+            erros.append(
+                "Senha deve conter pelo menos 1 letra maiúscula."
+            )
+        elif not _re.search(r"[0-9]", senha):
+            erros.append(
+                "Senha deve conter pelo menos 1 número."
+            )
         if not consentimento:
             erros.append("Consentimento LGPD é obrigatório.")
         if not email and not telefone:
             erros.append(
                 "Informe ao menos email ou telefone para login."
             )
-        if email and "@" not in email:
+        if email and not _email_valido(email):
             erros.append("E-mail inválido.")
 
         # Verificar duplicatas (normaliza telefone para só dígitos)
@@ -2966,9 +2981,12 @@ def cliente_painel():
         session.clear()
         return redirect("/cliente/login")
 
-    # Histórico de compras
+    # Histórico de compras (com itens e produtos eager-loaded)
     vendas = (
         Venda.query.filter_by(id_cliente=cliente.id_cliente)
+        .options(
+            joinedload(Venda.itens).joinedload(ItemVenda.produto)
+        )
         .order_by(Venda.data_venda.desc())
         .limit(20)
         .all()
@@ -3100,7 +3118,7 @@ def cliente_checkout():
             id_cliente=cliente.id_cliente,
             valor_total=valor_total,
             forma_pagamento=forma_pagamento,
-            status_pagamento="Pendente",
+            status_pagamento="Concluído",
             observacoes=observacoes,
         )
         db.session.add(venda)
@@ -3115,7 +3133,7 @@ def cliente_checkout():
             id_venda=venda.id_venda,
             valor_pago=valor_total,
             metodo=forma_pagamento,
-            status="Pendente",
+            status="Concluído",
         )
         db.session.add(pagamento)
 
@@ -3174,6 +3192,14 @@ class UsuarioCreateSchema(BaseModel):
     def senha_forte(cls, v: str) -> str:
         if len(v) < 8:
             raise ValueError("Senha deve ter ao menos 8 caracteres")
+        if not _re.search(r"[A-Z]", v):
+            raise ValueError(
+                "Senha deve conter pelo menos 1 letra maiúscula"
+            )
+        if not _re.search(r"[0-9]", v):
+            raise ValueError(
+                "Senha deve conter pelo menos 1 número"
+            )
         return v
 
     @field_validator("papel")

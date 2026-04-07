@@ -145,7 +145,7 @@ class TestUsuariosAPI:
         resp = client.post('/api/usuarios', json={
             'nome': 'Operador Teste',
             'email': 'operador@teste.com',
-            'senha': 'op123456',
+            'senha': 'Op123456',
             'papel': 'operador'
         })
         assert resp.status_code == 201
@@ -154,9 +154,13 @@ class TestUsuariosAPI:
         assert data['papel'] == 'operador'
 
     def test_criar_usuario_email_duplicado(self, client):
+        client.post('/api/usuarios', json={
+            'nome': 'First', 'email': 'dup@teste.com',
+            'senha': 'Abcd1234', 'papel': 'operador'
+        })
         resp = client.post('/api/usuarios', json={
-            'nome': 'Dup', 'email': 'admin@teste.com',
-            'senha': 'abcd1234', 'papel': 'operador'
+            'nome': 'Dup', 'email': 'dup@teste.com',
+            'senha': 'Abcd1234', 'papel': 'operador'
         })
         assert resp.status_code == 409
 
@@ -164,7 +168,7 @@ class TestUsuariosAPI:
         # Criar primeiro
         resp = client.post('/api/usuarios', json={
             'nome': 'Edit Test', 'email': 'edit@teste.com',
-            'senha': 'abcd1234', 'papel': 'operador'
+            'senha': 'Abcd1234', 'papel': 'operador'
         })
         uid = resp.get_json()['id_usuario']
         # Atualizar
@@ -175,7 +179,7 @@ class TestUsuariosAPI:
     def test_desativar_usuario(self, client):
         resp = client.post('/api/usuarios', json={
             'nome': 'Del Test', 'email': 'del@teste.com',
-            'senha': 'abcd1234', 'papel': 'operador'
+            'senha': 'Abcd1234', 'papel': 'operador'
         })
         uid = resp.get_json()['id_usuario']
         resp = client.delete(f'/api/usuarios/{uid}')

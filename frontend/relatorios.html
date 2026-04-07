@@ -208,7 +208,7 @@
         </main>
 
         <footer class="footer">
-            <p>© 2026 — Projeto Integrador UNIVESP | Grupo 22 | Polo Lorena/SP</p>
+            <p>© 2026 Combina Açaí — CRM | Desenvolvido por <a href="/sobre" style="color:inherit;text-decoration:underline">Grupo 22 — UNIVESP</a></p>
             <p>Eixo Computação · <a href="/sobre" style="color:inherit;text-decoration:underline">Sobre o Projeto</a></p>
         </footer>
     </div>
@@ -317,6 +317,10 @@
 
         // Exportar clientes em CSV
         document.getElementById('btn-exportar-clientes').addEventListener('click', async () => {
+            const btn = document.getElementById('btn-exportar-clientes');
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = '⏳ Exportando...';
             try {
                 const resposta = await fetch('/api/exportar/clientes-csv');
                 if (!resposta.ok) throw new Error('Erro ao exportar');
@@ -329,8 +333,12 @@
                 document.body.appendChild(a);
                 a.click();
                 window.URL.revokeObjectURL(url);
+                mostrarAlerta('✅ Exportação concluída!', 'sucesso');
             } catch (erro) {
-                alert('❌ Erro ao exportar: ' + erro.message);
+                mostrarAlerta('❌ Erro ao exportar: ' + erro.message, 'erro');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = originalText;
             }
         });
 

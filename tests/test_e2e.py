@@ -761,11 +761,11 @@ class TestSenhaMinima:
         assert resp.status_code == 400
 
     def test_criar_usuario_senha_exata_8(self, client):
-        """Senha com exatamente 8 chars deve ser aceita."""
+        """Senha com exatamente 8 chars (com maiúscula e dígito) deve ser aceita."""
         resp = client.post('/api/usuarios', json={
             'nome': 'Teste Senha OK',
             'email': 'senha8@teste.com',
-            'senha': '12345678',
+            'senha': 'Abcd1234',
             'papel': 'operador',
         })
         assert resp.status_code == 201
@@ -776,7 +776,7 @@ class TestSenhaMinima:
         resp = client.post('/api/usuarios', json={
             'nome': 'Update Senha',
             'email': 'upsenha@teste.com',
-            'senha': 'senhavalida123',
+            'senha': 'Senha1234',
             'papel': 'operador',
         })
         uid = resp.get_json()['id_usuario']

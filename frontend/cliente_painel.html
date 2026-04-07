@@ -155,6 +155,12 @@
                                 {{ item.quantidade }}x {{ item.produto.nome_produto if item.produto else 'Produto' }}{% if not loop.last %}, {% endif %}
                             {% endfor %}
                         </div>
+                        <div style="font-size:0.82rem;color:#888;margin-top:0.2rem;">
+                            💳 {{ v.forma_pagamento or 'Não informado' }}
+                            {% if v.status_pedido and v.status_pedido != 'Recebido' %}
+                                · 📦 {{ v.status_pedido }}
+                            {% endif %}
+                        </div>
                     </div>
                     <div style="text-align:right;">
                         <div class="venda-valor">R$ {{ "%.2f"|format(v.valor_total|float) }}</div>
