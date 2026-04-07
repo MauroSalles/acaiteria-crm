@@ -1975,6 +1975,19 @@ def relatorio_por_data():
         total_vendas = len(vendas_dia)
         faturamento = sum(v.valor_total for v in vendas_dia)
 
+        canceladas = sum(
+            1 for v in vendas_dia
+            if (v.status_pagamento or "") == "Cancelado"
+        )
+        total_descontos = sum(
+            v.desconto_percentual or 0 for v in vendas_dia
+        )
+        vendas_ativas = [
+            v for v in vendas_dia
+            if (v.status_pagamento or "") != "Cancelado"
+        ]
+        faturamento_liquido = sum(v.valor_total for v in vendas_ativas)
+
         por_forma = {}
         for venda in vendas_dia:
             forma = venda.forma_pagamento or "Indefinido"
@@ -1988,6 +2001,9 @@ def relatorio_por_data():
                 "data": data_filtro.isoformat(),
                 "total_vendas": total_vendas,
                 "faturamento_total": float(faturamento),
+                "canceladas": canceladas,
+                "total_descontos": float(total_descontos),
+                "faturamento_liquido": float(faturamento_liquido),
                 "por_forma_pagamento": {
                     k: {
                         "quantidade": v["quantidade"],

@@ -150,12 +150,20 @@
                         <span class="value">${dados.total_vendas}</span>
                     </div>
                     <div class="stat-box">
-                        <span class="label">Faturamento:</span>
+                        <span class="label">Faturamento Bruto:</span>
                         <span class="value">R$ ${dados.faturamento_total.toFixed(2)}</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="label">Faturamento Líquido:</span>
+                        <span class="value" style="color:var(--verde);font-weight:700">R$ ${(dados.faturamento_liquido || dados.faturamento_total).toFixed(2)}</span>
                     </div>
                     <div class="stat-box">
                         <span class="label">Ticket Médio:</span>
                         <span class="value">R$ ${dados.ticket_medio.toFixed(2)}</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="label">Cancelamentos:</span>
+                        <span class="value" style="${dados.canceladas > 0 ? 'color:var(--vermelho)' : ''}">${dados.canceladas || 0}</span>
                     </div>
                 `;
 
@@ -223,8 +231,10 @@
                 let texto = '🍇 *Combina Açaí — Fechamento de Caixa*\n';
                 texto += '📅 ' + data.split('-').reverse().join('/') + '\n\n';
                 texto += '🛒 Vendas: ' + d.total_vendas + '\n';
-                texto += '💰 Faturamento: R$ ' + d.faturamento_total.toFixed(2) + '\n';
+                texto += '💰 Faturamento Bruto: R$ ' + d.faturamento_total.toFixed(2) + '\n';
+                texto += '✅ Faturamento Líquido: R$ ' + (d.faturamento_liquido || d.faturamento_total).toFixed(2) + '\n';
                 texto += '📊 Ticket Médio: R$ ' + d.ticket_medio.toFixed(2) + '\n';
+                if (d.canceladas > 0) texto += '❌ Cancelamentos: ' + d.canceladas + '\n';
                 if (d.por_forma_pagamento) {
                     texto += '\n💳 *Por forma de pagamento:*\n';
                     for (const [forma, info] of Object.entries(d.por_forma_pagamento)) {

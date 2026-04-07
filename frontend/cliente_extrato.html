@@ -164,6 +164,8 @@
             }
         } catch (e) {
             console.warn('Extrato não carregado:', e);
+            const tl = document.getElementById('timeline');
+            tl.innerHTML = '<div class="empty-state"><span class="emoji">⚠️</span><p>Não foi possível carregar o extrato. Tente recarregar a página.</p></div>';
         }
     })();
 

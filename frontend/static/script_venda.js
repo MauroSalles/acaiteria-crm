@@ -614,14 +614,32 @@ function exibirRecibo(venda) {
         ════════════════════════════════
     `;
     
-    // Mostrar no console
-    console.log(recibo);
-    
     // Copiar para clipboard
     copiarParaClipboard(recibo);
-    
-    // Mostrar em alert
-    alert(recibo);
+
+    // Abrir janela de impressão com recibo formatado
+    const printWin = window.open('', '_blank', 'width=400,height=600');
+    if (printWin) {
+        printWin.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+        <title>Recibo #${venda.id_venda}</title>
+        <style>
+            body{font-family:'Courier New',monospace;font-size:12px;margin:0;padding:10px;width:280px}
+            pre{white-space:pre-wrap;word-wrap:break-word;margin:0}
+            .actions{margin-top:12px;text-align:center;display:flex;gap:8px;justify-content:center}
+            .actions button{padding:8px 16px;border:none;border-radius:6px;cursor:pointer;font-weight:700;font-size:13px}
+            .btn-print{background:#6C2EB9;color:#fff}
+            .btn-close{background:#eee;color:#333}
+            @media print{.actions{display:none!important}}
+        </style></head><body>
+        <pre>${recibo}</pre>
+        <div class="actions">
+            <button class="btn-print" onclick="window.print()">🖨️ Imprimir</button>
+            <button class="btn-close" onclick="window.close()">✖ Fechar</button>
+        </div></body></html>`);
+        printWin.document.close();
+    } else {
+        alert(recibo);
+    }
 }
 
 // Cancelar venda

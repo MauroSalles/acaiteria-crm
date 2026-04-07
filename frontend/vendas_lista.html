@@ -82,7 +82,17 @@
                         <option value="Entregue">🏁 Entregue</option>
                         <option value="Cancelado">❌ Cancelado</option>
                     </select>
-                    <input type="date" id="filtro-data" style="padding:.3rem .6rem;border-radius:6px;border:1px solid var(--cinza-400)" onchange="carregarVendas()">
+                    <select id="filtro-pagamento" style="padding:.3rem .6rem;border-radius:6px;border:1px solid var(--cinza-400)" onchange="carregarVendas()">
+                        <option value="">Forma pagamento</option>
+                        <option value="Dinheiro">💵 Dinheiro</option>
+                        <option value="Cartão">💳 Cartão</option>
+                        <option value="Pix">📱 Pix</option>
+                    </select>
+                    <label style="font-size:.8rem;color:var(--cinza-600)">De:</label>
+                    <input type="date" id="filtro-data-inicio" style="padding:.3rem .6rem;border-radius:6px;border:1px solid var(--cinza-400)" onchange="carregarVendas()">
+                    <label style="font-size:.8rem;color:var(--cinza-600)">Até:</label>
+                    <input type="date" id="filtro-data-fim" style="padding:.3rem .6rem;border-radius:6px;border:1px solid var(--cinza-400)" onchange="carregarVendas()">
+                    <input type="text" id="filtro-busca" placeholder="🔍 Buscar cliente..." style="padding:.3rem .6rem;border-radius:6px;border:1px solid var(--cinza-400);min-width:150px" oninput="carregarVendas()">
                     <span id="totalVendas" class="text-muted" style="font-size:.85rem;margin-left:auto"></span>
                 </div>
 
@@ -198,7 +208,9 @@
         let cancelandoVendaId = null;
 
         document.addEventListener('DOMContentLoaded', () => {
-            document.getElementById('filtro-data').valueAsDate = new Date();
+            const hoje = new Date().toISOString().slice(0,10);
+            document.getElementById('filtro-data-inicio').value = hoje;
+            document.getElementById('filtro-data-fim').value = hoje;
             carregarVendas();
         });
 
@@ -235,19 +247,22 @@
             tbody.innerHTML = '<tr><td colspan="9" class="text-center">⏳ Carregando...</td></tr>';
             try {
                 const params = new URLSearchParams();
-                const data = document.getElementById('filtro-data').value;
-                if (data) {
-                    params.set('data_inicio', data);
-                    params.set('data_fim', data);
-                }
+                const dataInicio = document.getElementById('filtro-data-inicio').value;
+                const dataFim = document.getElementById('filtro-data-fim').value;
+                if (dataInicio) params.set('data_inicio', dataInicio);
+                if (dataFim) params.set('data_fim', dataFim);
 
                 const res = await requisicao(`/api/vendas?${params.toString()}&por_pagina=100`);
                 vendasLista = res.vendas || res || [];
 
                 const filtroStatus = document.getElementById('filtro-status-pedido').value;
-                let lista = filtroStatus
-                    ? vendasLista.filter(v => (v.status_pedido || 'Recebido') === filtroStatus)
-                    : vendasLista;
+                const filtroPagamento = document.getElementById('filtro-pagamento').value;
+                const filtroBusca = (document.getElementById('filtro-busca').value || '').toLowerCase().trim();
+
+                let lista = vendasLista;
+                if (filtroStatus) lista = lista.filter(v => (v.status_pedido || 'Recebido') === filtroStatus);
+                if (filtroPagamento) lista = lista.filter(v => (v.forma_pagamento || '') === filtroPagamento);
+                if (filtroBusca) lista = lista.filter(v => (v.cliente_nome || '').toLowerCase().includes(filtroBusca));
 
                 const contadores = { Recebido: 0, Preparando: 0, Pronto: 0, Entregue: 0 };
                 vendasLista.forEach(v => {
