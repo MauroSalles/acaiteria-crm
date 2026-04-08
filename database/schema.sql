@@ -10,13 +10,30 @@
 -- =============================================================================
 
 -- Limpar banco de dados anterior (se existente)
+-- Ordem inversa de dependência para evitar FK violations
+DROP TABLE IF EXISTS item_venda_complemento;
+DROP TABLE IF EXISTS combo_kit_item;
+DROP TABLE IF EXISTS assinatura_cliente;
+DROP TABLE IF EXISTS item_compra;
 DROP TABLE IF EXISTS mensagem_ticket;
 DROP TABLE IF EXISTS ticket_suporte;
 DROP TABLE IF EXISTS log_acao;
 DROP TABLE IF EXISTS consentimento_historico;
+DROP TABLE IF EXISTS badge_cliente;
+DROP TABLE IF EXISTS two_factor_secret;
+DROP TABLE IF EXISTS indicacao;
+DROP TABLE IF EXISTS lancamento_financeiro;
+DROP TABLE IF EXISTS webhook_config;
 DROP TABLE IF EXISTS pagamento;
 DROP TABLE IF EXISTS item_venda;
 DROP TABLE IF EXISTS venda;
+DROP TABLE IF EXISTS complemento;
+DROP TABLE IF EXISTS compra_estoque;
+DROP TABLE IF EXISTS fornecedor;
+DROP TABLE IF EXISTS cupom_desconto;
+DROP TABLE IF EXISTS combo_kit;
+DROP TABLE IF EXISTS assinatura;
+DROP TABLE IF EXISTS loja;
 DROP TABLE IF EXISTS produto;
 DROP TABLE IF EXISTS cliente;
 DROP TABLE IF EXISTS usuario;
@@ -34,6 +51,8 @@ CREATE TABLE usuario (
     data_criacao DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE INDEX idx_usuario_email ON usuario(email);
+
 -- =============================================================================
 -- TABELA: CLIENTE
 -- =============================================================================
@@ -42,6 +61,7 @@ CREATE TABLE cliente (
     nome VARCHAR(150) NOT NULL,
     telefone VARCHAR(20),
     email VARCHAR(100),
+    senha_hash VARCHAR(256),
     data_cadastro DATETIME DEFAULT CURRENT_TIMESTAMP,
     observacoes TEXT,
     consentimento_lgpd BOOLEAN DEFAULT 0,
@@ -79,8 +99,11 @@ CREATE TABLE produto (
     categoria VARCHAR(50),
     descricao TEXT,
     preco DECIMAL(10, 2) NOT NULL,
+    volume VARCHAR(20),
     estoque_atual INTEGER DEFAULT 0,
     estoque_minimo INTEGER DEFAULT 0,
+    preco_promocional DECIMAL(10, 2),
+    foto_url VARCHAR(500),
     ativo BOOLEAN DEFAULT 1,
     data_criacao DATETIME DEFAULT CURRENT_TIMESTAMP,
     data_atualizacao DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -89,6 +112,19 @@ CREATE TABLE produto (
 CREATE INDEX idx_produto_nome ON produto(nome_produto);
 CREATE INDEX idx_produto_categoria ON produto(categoria);
 CREATE INDEX idx_produto_ativo ON produto(ativo);
+
+-- =============================================================================
+-- TABELA: COMPLEMENTO (toppings para self-service)
+-- =============================================================================
+CREATE TABLE complemento (
+    id_complemento INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome VARCHAR(100) NOT NULL,
+    categoria VARCHAR(50),
+    unidade_medida VARCHAR(30),
+    preco_adicional DECIMAL(10, 2) DEFAULT 0,
+    ativo BOOLEAN DEFAULT 1,
+    data_criacao DATETIME DEFAULT CURRENT_TIMESTAMP
+);
 
 -- =============================================================================
 -- TABELA: VENDA
@@ -100,7 +136,10 @@ CREATE TABLE venda (
     valor_total DECIMAL(10, 2) NOT NULL,
     forma_pagamento VARCHAR(50),
     status_pagamento VARCHAR(50) DEFAULT 'Pendente',
+    status_pedido VARCHAR(30) DEFAULT 'Recebido',
     observacoes TEXT,
+    motivo_cancelamento TEXT,
+    data_agendamento DATETIME,
     recibo_gerado BOOLEAN DEFAULT 0,
     data_atualizacao DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -108,6 +147,7 @@ CREATE TABLE venda (
 CREATE INDEX idx_venda_cliente ON venda(id_cliente);
 CREATE INDEX idx_venda_data ON venda(data_venda);
 CREATE INDEX idx_venda_status ON venda(status_pagamento);
+CREATE INDEX ix_venda_data_status ON venda(data_venda, status_pagamento);
 
 -- =============================================================================
 -- TABELA: ITEM_VENDA
@@ -123,6 +163,19 @@ CREATE TABLE item_venda (
 
 CREATE INDEX idx_item_venda ON item_venda(id_venda);
 CREATE INDEX idx_item_produto ON item_venda(id_produto);
+
+-- =============================================================================
+-- TABELA: ITEM_VENDA_COMPLEMENTO
+-- =============================================================================
+CREATE TABLE item_venda_complemento (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_item INTEGER NOT NULL REFERENCES item_venda(id_item) ON DELETE CASCADE,
+    id_complemento INTEGER NOT NULL REFERENCES complemento(id_complemento),
+    preco_unitario DECIMAL(10, 2) DEFAULT 0
+);
+
+CREATE INDEX idx_ivc_item ON item_venda_complemento(id_item);
+CREATE INDEX idx_ivc_complemento ON item_venda_complemento(id_complemento);
 
 -- =============================================================================
 -- TABELA: PAGAMENTO
@@ -146,7 +199,7 @@ CREATE INDEX idx_pagamento_data ON pagamento(data_pagamento);
 -- =============================================================================
 CREATE TABLE log_acao (
     id_log INTEGER PRIMARY KEY AUTOINCREMENT,
-    id_usuario INTEGER REFERENCES usuario(id_usuario),
+    id_usuario INTEGER REFERENCES usuario(id_usuario) ON DELETE SET NULL,
     acao VARCHAR(50) NOT NULL,
     entidade VARCHAR(50) NOT NULL,
     id_entidade INTEGER,
@@ -154,6 +207,8 @@ CREATE TABLE log_acao (
     ip VARCHAR(45),
     data_hora DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE INDEX ix_log_data_entidade ON log_acao(data_hora, entidade);
 
 -- =============================================================================
 -- TABELA: TICKET_SUPORTE
@@ -181,6 +236,209 @@ CREATE TABLE mensagem_ticket (
 );
 
 -- =============================================================================
+-- TABELA: FORNECEDOR
+-- =============================================================================
+CREATE TABLE fornecedor (
+    id_fornecedor INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome VARCHAR(200) NOT NULL,
+    cnpj VARCHAR(18) UNIQUE,
+    telefone VARCHAR(20),
+    email VARCHAR(150),
+    endereco TEXT,
+    observacoes TEXT,
+    ativo BOOLEAN DEFAULT 1,
+    data_criacao DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- =============================================================================
+-- TABELA: COMPRA_ESTOQUE
+-- =============================================================================
+CREATE TABLE compra_estoque (
+    id_compra INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_fornecedor INTEGER NOT NULL REFERENCES fornecedor(id_fornecedor),
+    data_compra DATETIME DEFAULT CURRENT_TIMESTAMP,
+    valor_total DECIMAL(10, 2) NOT NULL DEFAULT 0,
+    nota_fiscal VARCHAR(50),
+    status VARCHAR(30) DEFAULT 'Pendente',
+    observacoes TEXT,
+    data_atualizacao DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_compra_fornecedor ON compra_estoque(id_fornecedor);
+CREATE INDEX idx_compra_data ON compra_estoque(data_compra);
+
+-- =============================================================================
+-- TABELA: ITEM_COMPRA
+-- =============================================================================
+CREATE TABLE item_compra (
+    id_item INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_compra INTEGER NOT NULL REFERENCES compra_estoque(id_compra) ON DELETE CASCADE,
+    id_produto INTEGER NOT NULL REFERENCES produto(id_produto),
+    quantidade INTEGER NOT NULL,
+    preco_unitario DECIMAL(10, 2) NOT NULL,
+    subtotal DECIMAL(10, 2) NOT NULL
+);
+
+CREATE INDEX idx_item_compra ON item_compra(id_compra);
+
+-- =============================================================================
+-- TABELA: CUPOM_DESCONTO
+-- =============================================================================
+CREATE TABLE cupom_desconto (
+    id_cupom INTEGER PRIMARY KEY AUTOINCREMENT,
+    codigo VARCHAR(30) UNIQUE NOT NULL,
+    descricao VARCHAR(200),
+    tipo_desconto VARCHAR(20) NOT NULL DEFAULT 'percentual',
+    valor_desconto DECIMAL(10, 2) NOT NULL,
+    valor_minimo_pedido DECIMAL(10, 2) DEFAULT 0,
+    usos_maximos INTEGER DEFAULT 0,
+    usos_realizados INTEGER DEFAULT 0,
+    ativo BOOLEAN DEFAULT 1,
+    data_inicio DATETIME DEFAULT CURRENT_TIMESTAMP,
+    data_fim DATETIME,
+    data_criacao DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_cupom_codigo ON cupom_desconto(codigo);
+
+-- =============================================================================
+-- TABELA: BADGE_CLIENTE (gamificação)
+-- =============================================================================
+CREATE TABLE badge_cliente (
+    id_badge INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_cliente INTEGER NOT NULL REFERENCES cliente(id_cliente),
+    codigo VARCHAR(50) NOT NULL,
+    nome VARCHAR(100) NOT NULL,
+    descricao VARCHAR(200),
+    icone VARCHAR(10) DEFAULT '🏅',
+    data_conquista DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_badge_cliente ON badge_cliente(id_cliente);
+
+-- =============================================================================
+-- TABELA: LANCAMENTO_FINANCEIRO (receitas / despesas manuais)
+-- =============================================================================
+CREATE TABLE lancamento_financeiro (
+    id_lancamento INTEGER PRIMARY KEY AUTOINCREMENT,
+    tipo VARCHAR(20) NOT NULL,
+    categoria VARCHAR(100) NOT NULL,
+    descricao VARCHAR(300),
+    valor DECIMAL(10, 2) NOT NULL,
+    data_lancamento DATE NOT NULL,
+    forma_pagamento VARCHAR(50),
+    status VARCHAR(30) DEFAULT 'Pago',
+    comprovante VARCHAR(100),
+    observacoes TEXT,
+    id_usuario INTEGER REFERENCES usuario(id_usuario),
+    data_criacao DATETIME DEFAULT CURRENT_TIMESTAMP,
+    data_atualizacao DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_lanc_tipo ON lancamento_financeiro(tipo);
+CREATE INDEX idx_lanc_data ON lancamento_financeiro(data_lancamento);
+CREATE INDEX ix_lanc_data_tipo ON lancamento_financeiro(data_lancamento, tipo);
+
+-- =============================================================================
+-- TABELA: TWO_FACTOR_SECRET (2FA)
+-- =============================================================================
+CREATE TABLE two_factor_secret (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_usuario INTEGER NOT NULL UNIQUE REFERENCES usuario(id_usuario),
+    secret VARCHAR(32) NOT NULL,
+    ativo BOOLEAN DEFAULT 0,
+    data_ativacao DATETIME
+);
+
+-- =============================================================================
+-- TABELA: COMBO_KIT
+-- =============================================================================
+CREATE TABLE combo_kit (
+    id_combo INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome VARCHAR(150) NOT NULL,
+    descricao TEXT,
+    preco_combo DECIMAL(10, 2) NOT NULL,
+    ativo BOOLEAN DEFAULT 1,
+    data_criacao DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- =============================================================================
+-- TABELA: COMBO_KIT_ITEM
+-- =============================================================================
+CREATE TABLE combo_kit_item (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_combo INTEGER NOT NULL REFERENCES combo_kit(id_combo) ON DELETE CASCADE,
+    id_produto INTEGER NOT NULL REFERENCES produto(id_produto),
+    quantidade INTEGER DEFAULT 1
+);
+
+-- =============================================================================
+-- TABELA: INDICACAO (programa de referral)
+-- =============================================================================
+CREATE TABLE indicacao (
+    id_indicacao INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_cliente_indicador INTEGER NOT NULL REFERENCES cliente(id_cliente),
+    id_cliente_indicado INTEGER REFERENCES cliente(id_cliente),
+    codigo_indicacao VARCHAR(20) NOT NULL,
+    bonus_concedido BOOLEAN DEFAULT 0,
+    data_indicacao DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_indicacao_codigo ON indicacao(codigo_indicacao);
+
+-- =============================================================================
+-- TABELA: ASSINATURA (planos mensais)
+-- =============================================================================
+CREATE TABLE assinatura (
+    id_assinatura INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome_plano VARCHAR(100) NOT NULL,
+    descricao TEXT,
+    preco_mensal DECIMAL(10, 2) NOT NULL,
+    limite_usos INTEGER DEFAULT 10,
+    ativo BOOLEAN DEFAULT 1,
+    data_criacao DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- =============================================================================
+-- TABELA: ASSINATURA_CLIENTE
+-- =============================================================================
+CREATE TABLE assinatura_cliente (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_assinatura INTEGER NOT NULL REFERENCES assinatura(id_assinatura),
+    id_cliente INTEGER NOT NULL REFERENCES cliente(id_cliente),
+    data_inicio DATE NOT NULL,
+    data_fim DATE NOT NULL,
+    usos_realizados INTEGER DEFAULT 0,
+    status VARCHAR(20) DEFAULT 'ativa',
+    data_criacao DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- =============================================================================
+-- TABELA: WEBHOOK_CONFIG
+-- =============================================================================
+CREATE TABLE webhook_config (
+    id_webhook INTEGER PRIMARY KEY AUTOINCREMENT,
+    evento VARCHAR(50) NOT NULL,
+    url VARCHAR(500) NOT NULL,
+    ativo BOOLEAN DEFAULT 1,
+    secret VARCHAR(64),
+    data_criacao DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- =============================================================================
+-- TABELA: LOJA (multi-unidade)
+-- =============================================================================
+CREATE TABLE loja (
+    id_loja INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome VARCHAR(150) NOT NULL,
+    endereco TEXT,
+    telefone VARCHAR(20),
+    cnpj VARCHAR(18),
+    ativa BOOLEAN DEFAULT 1,
+    data_criacao DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- =============================================================================
 -- DADOS DE TESTE / SEED DATA
 -- =============================================================================
 
@@ -205,6 +463,14 @@ INSERT INTO produto (nome_produto, categoria, descricao, preco, estoque_atual, e
 ('Água', 'Bebidas', 'Água mineral', 3.00, 100, 20, 1),
 ('Refrigerante', 'Bebidas', 'Refrigerante 350ml', 5.00, 80, 15, 1),
 ('Granola Extra', 'Adicionais', 'Granola caseira extra', 5.00, 60, 10, 1);
+
+-- Inserir complementos
+INSERT INTO complemento (nome, categoria, unidade_medida, preco_adicional, ativo) VALUES
+('Granola', 'Farináceo', 'g', 2.00, 1),
+('Leite Condensado', 'Calda', 'ml', 3.00, 1),
+('Morango', 'Fruta', 'unidade', 2.50, 1),
+('Banana', 'Fruta', 'unidade', 1.50, 1),
+('Leite em Pó', 'Extra', 'g', 2.00, 1);
 
 -- Inserir vendas de exemplo (últimos 10 dias)
 INSERT INTO venda (id_cliente, data_venda, valor_total, forma_pagamento, status_pagamento, recibo_gerado) VALUES
@@ -337,5 +603,6 @@ ORDER BY data DESC;
 -- FIM DO SCHEMA
 -- =============================================================================
 -- Última atualização: 2026
--- Status: v2.0 - Schema completo compatível com SQLite, incluindo tabelas de
---         usuários, suporte, auditoria e fidelidade.
+-- Status: v3.0 - Schema completo sincronizado com models.py (26 tabelas),
+--         incluindo complementos, combos, assinaturas, indicações, cupons,
+--         financeiro, 2FA, webhooks, multi-loja e gamificação.

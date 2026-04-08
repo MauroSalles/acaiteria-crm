@@ -1,4 +1,4 @@
-const CACHE_NAME = 'acai-crm-v16';
+const CACHE_NAME = 'acai-crm-v17';
 const SYNC_QUEUE = 'acai-sync-queue';
 const STATIC_ASSETS = [
   '/static/estilos.css',

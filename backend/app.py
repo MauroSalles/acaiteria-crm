@@ -1164,6 +1164,7 @@ def criar_produto():
 
         db.session.add(produto)
         db.session.commit()
+        _invalidar_cache_vitrine()
         registrar_log(
             "criar",
             "produto",
@@ -1225,6 +1226,7 @@ def atualizar_produto(id_produto):
             produto.estoque_minimo = max(0, int(dados["estoque_minimo"]))
 
         db.session.commit()
+        _invalidar_cache_vitrine()
         registrar_log(
             "editar",
             "produto",
@@ -1249,6 +1251,7 @@ def deletar_produto(id_produto):
 
         produto.ativo = False
         db.session.commit()
+        _invalidar_cache_vitrine()
         registrar_log(
             "excluir",
             "produto",
@@ -2249,7 +2252,7 @@ def exportar_clientes_csv():
     def sanitize_csv(value):
         """Previne CSV formula injection (=, +, -, @, |, %, tab, CR)"""
         if isinstance(value, str) and value:
-            stripped = value.lstrip()
+            stripped = value.strip()
             if stripped and stripped[0] in ("=", "+", "-", "@", "|", "%", "\t", "\r"):
                 return "'" + value
         return value
@@ -2865,6 +2868,19 @@ def criar_complemento():
         return _erro_interno(e)
 
 
+@app.route("/api/complementos/<int:cid>", methods=["GET"])
+@api_login_required
+def obter_complemento(cid):
+    """Obter detalhes de um complemento."""
+    try:
+        comp = db.session.get(Complemento, cid)
+        if not comp:
+            return jsonify({"erro": "Complemento não encontrado"}), 404
+        return jsonify(comp.to_dict())
+    except Exception as e:
+        return _erro_interno(e)
+
+
 @app.route("/api/complementos/<int:cid>", methods=["PUT"])
 @limiter.limit("30 per minute")
 @api_login_required
@@ -2974,6 +2990,7 @@ def cliente_login():
         ).first()
 
         if cliente and cliente.verificar_senha(senha):
+            session.clear()
             session.permanent = True
             session["cliente_id"] = cliente.id_cliente
             session["cliente_nome"] = cliente.nome
@@ -5237,7 +5254,12 @@ def pix_qrcode():
 
 def _construir_matriz_compras():
     """Constrói matriz cliente×produto a partir do histórico de vendas."""
-    vendas = Venda.query.options(joinedload(Venda.itens)).all()
+    vendas = (
+        Venda.query.options(joinedload(Venda.itens))
+        .order_by(Venda.data_venda.desc())
+        .limit(5000)
+        .all()
+    )
     # {id_cliente: {id_produto: quantidade_total}}
     matriz = {}
     for v in vendas:
@@ -6054,6 +6076,16 @@ def criar_lancamento():
         return _erro_interno(e)
 
 
+@app.route("/api/financeiro/<int:lid>", methods=["GET"])
+@api_login_required
+def obter_lancamento(lid):
+    """Obter detalhes de um lançamento financeiro."""
+    lanc = LancamentoFinanceiro.query.get(lid)
+    if not lanc:
+        return jsonify({"erro": "Lançamento não encontrado"}), 404
+    return jsonify(lanc.to_dict())
+
+
 @app.route("/api/financeiro/<int:lid>", methods=["PUT"])
 @api_login_required
 def atualizar_lancamento(lid):
@@ -6122,14 +6154,14 @@ def atualizar_lancamento(lid):
 @app.route("/api/financeiro/<int:lid>", methods=["DELETE"])
 @api_login_required
 def deletar_lancamento(lid):
-    """Exclui um lançamento financeiro."""
+    """Cancela (soft delete) um lançamento financeiro."""
     lanc = LancamentoFinanceiro.query.get(lid)
     if not lanc:
         return jsonify({"erro": "Lançamento não encontrado"}), 404
 
     try:
         desc = f"{lanc.tipo}: {lanc.categoria} R${lanc.valor}"
-        db.session.delete(lanc)
+        lanc.status = "Cancelado"
         db.session.commit()
 
         registrar_log(
@@ -6137,7 +6169,7 @@ def deletar_lancamento(lid):
             lid, desc,
         )
 
-        return jsonify({"mensagem": "Lançamento excluído com sucesso"})
+        return jsonify({"mensagem": "Lançamento cancelado com sucesso"})
     except Exception as e:
         db.session.rollback()
         return _erro_interno(e)
@@ -6994,6 +7026,16 @@ def listar_combos():
     return jsonify([c.to_dict() for c in combos])
 
 
+@app.route("/api/combos/<int:cid>", methods=["GET"])
+@api_login_required
+def obter_combo(cid):
+    """Obter detalhes de um combo/kit."""
+    combo = ComboKit.query.get(cid)
+    if not combo:
+        return jsonify({"erro": "Combo não encontrado"}), 404
+    return jsonify(combo.to_dict())
+
+
 @app.route("/api/combos", methods=["POST"])
 @api_admin_required
 def criar_combo():
@@ -7321,6 +7363,64 @@ def criar_plano():
     except Exception as e:
         db.session.rollback()
         return _erro_interno(e)
+
+
+@app.route("/api/assinaturas/planos/<int:pid>", methods=["GET"])
+@api_login_required
+def obter_plano(pid):
+    """Obter detalhes de um plano de assinatura."""
+    plano = Assinatura.query.get(pid)
+    if not plano:
+        return jsonify({"erro": "Plano não encontrado"}), 404
+    return jsonify(plano.to_dict())
+
+
+@app.route("/api/assinaturas/planos/<int:pid>", methods=["PUT"])
+@api_admin_required
+def atualizar_plano(pid):
+    """Atualiza plano de assinatura."""
+    try:
+        plano = Assinatura.query.get(pid)
+        if not plano:
+            return jsonify({"erro": "Plano não encontrado"}), 404
+
+        dados = request.get_json(silent=True) or {}
+        if "nome_plano" in dados:
+            plano.nome_plano = dados["nome_plano"].strip()
+        if "descricao" in dados:
+            plano.descricao = dados["descricao"]
+        if "preco_mensal" in dados:
+            plano.preco_mensal = Decimal(str(dados["preco_mensal"]))
+        if "limite_usos" in dados:
+            plano.limite_usos = int(dados["limite_usos"])
+        if "ativo" in dados:
+            plano.ativo = bool(dados["ativo"])
+
+        db.session.commit()
+        registrar_log(
+            "editar", "assinatura", pid,
+            f"Plano editado: {plano.nome_plano}",
+        )
+        return jsonify(plano.to_dict())
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
+@app.route("/api/assinaturas/planos/<int:pid>", methods=["DELETE"])
+@api_admin_required
+def desativar_plano(pid):
+    """Desativa plano de assinatura (soft delete)."""
+    plano = Assinatura.query.get(pid)
+    if not plano:
+        return jsonify({"erro": "Plano não encontrado"}), 404
+    plano.ativo = False
+    db.session.commit()
+    registrar_log(
+        "excluir", "assinatura", pid,
+        f"Plano desativado: {plano.nome_plano}",
+    )
+    return jsonify({"mensagem": "Plano desativado"})
 
 
 @app.route("/api/assinaturas/assinar", methods=["POST"])
