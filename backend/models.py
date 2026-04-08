@@ -158,6 +158,7 @@ class Produto(db.Model):
     estoque_minimo = db.Column(db.Integer, default=0)
     preco_promocional = db.Column(db.DECIMAL(10, 2), nullable=True)
     ativo = db.Column(db.Boolean, default=True, index=True)
+    foto_url = db.Column(db.String(500), nullable=True)
     data_criacao = db.Column(db.DateTime, default=_utcnow)
     data_atualizacao = db.Column(
         db.DateTime, default=_utcnow, onupdate=_utcnow
@@ -184,6 +185,7 @@ class Produto(db.Model):
                 if self.preco_promocional
                 else None
             ),
+            "foto_url": self.foto_url,
             "ativo": self.ativo,
         }
 
@@ -223,6 +225,9 @@ class Venda(db.Model):
     """Modelo de Venda"""
 
     __tablename__ = "venda"
+    __table_args__ = (
+        db.Index('ix_venda_data_status', 'data_venda', 'status_pagamento'),
+    )
 
     id_venda = db.Column(db.Integer, primary_key=True)
     id_cliente = db.Column(
@@ -238,6 +243,7 @@ class Venda(db.Model):
     )  # Recebido | Preparando | Pronto | Entregue | Cancelado
     observacoes = db.Column(db.Text)
     motivo_cancelamento = db.Column(db.Text)
+    data_agendamento = db.Column(db.DateTime, nullable=True)
     recibo_gerado = db.Column(db.Boolean, default=False)
     data_atualizacao = db.Column(
         db.DateTime, default=_utcnow, onupdate=_utcnow
@@ -392,6 +398,9 @@ class LogAcao(db.Model):
     """Modelo de Histórico/Audit Log de ações do sistema"""
 
     __tablename__ = "log_acao"
+    __table_args__ = (
+        db.Index('ix_log_data_entidade', 'data_hora', 'entidade'),
+    )
 
     id_log = db.Column(db.Integer, primary_key=True)
     id_usuario = db.Column(
@@ -749,6 +758,9 @@ class LancamentoFinanceiro(db.Model):
     """Lançamento financeiro manual (receita ou despesa)."""
 
     __tablename__ = "lancamento_financeiro"
+    __table_args__ = (
+        db.Index('ix_lanc_data_tipo', 'data_lancamento', 'tipo'),
+    )
 
     id_lancamento = db.Column(db.Integer, primary_key=True)
     tipo = db.Column(
@@ -798,4 +810,298 @@ class LancamentoFinanceiro(db.Model):
                 if self.data_criacao
                 else None
             ),
+        }
+
+
+# =============================================================================
+# 2FA — TWO-FACTOR AUTHENTICATION
+# =============================================================================
+
+
+class TwoFactorSecret(db.Model):
+    """Segredo TOTP para autenticação em dois fatores (admin)."""
+
+    __tablename__ = "two_factor_secret"
+
+    id = db.Column(db.Integer, primary_key=True)
+    id_usuario = db.Column(
+        db.Integer, db.ForeignKey("usuario.id_usuario"),
+        nullable=False, unique=True,
+    )
+    secret = db.Column(db.String(32), nullable=False)
+    ativo = db.Column(db.Boolean, default=False)
+    data_ativacao = db.Column(db.DateTime)
+
+    usuario = db.relationship(
+        "Usuario", backref=db.backref("two_factor", uselist=False, lazy=True)
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "id_usuario": self.id_usuario,
+            "ativo": self.ativo,
+            "data_ativacao": (
+                self.data_ativacao.isoformat()
+                if self.data_ativacao else None
+            ),
+        }
+
+
+# =============================================================================
+# COMBOS / KITS — Agrupamento de produtos com preço especial
+# =============================================================================
+
+
+class ComboKit(db.Model):
+    """Combo/Kit de produtos com preço promocional."""
+
+    __tablename__ = "combo_kit"
+
+    id_combo = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(150), nullable=False)
+    descricao = db.Column(db.Text)
+    preco_combo = db.Column(db.DECIMAL(10, 2), nullable=False)
+    ativo = db.Column(db.Boolean, default=True)
+    data_criacao = db.Column(db.DateTime, default=_utcnow)
+
+    itens = db.relationship(
+        "ComboKitItem", backref="combo", lazy=True,
+        cascade="all, delete-orphan",
+    )
+
+    def to_dict(self):
+        preco_individual = sum(
+            float(i.produto.preco) * i.quantidade
+            for i in self.itens if i.produto
+        )
+        return {
+            "id_combo": self.id_combo,
+            "nome": self.nome,
+            "descricao": self.descricao,
+            "preco_combo": float(self.preco_combo),
+            "preco_individual": round(preco_individual, 2),
+            "economia": round(preco_individual - float(self.preco_combo), 2),
+            "ativo": self.ativo,
+            "itens": [i.to_dict() for i in self.itens],
+        }
+
+
+class ComboKitItem(db.Model):
+    """Item individual de um combo/kit."""
+
+    __tablename__ = "combo_kit_item"
+
+    id = db.Column(db.Integer, primary_key=True)
+    id_combo = db.Column(
+        db.Integer, db.ForeignKey("combo_kit.id_combo"), nullable=False
+    )
+    id_produto = db.Column(
+        db.Integer, db.ForeignKey("produto.id_produto"), nullable=False
+    )
+    quantidade = db.Column(db.Integer, default=1)
+
+    produto = db.relationship("Produto", lazy=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "id_produto": self.id_produto,
+            "produto_nome": (
+                self.produto.nome_produto if self.produto else None
+            ),
+            "quantidade": self.quantidade,
+            "preco_unitario": (
+                float(self.produto.preco) if self.produto else 0
+            ),
+        }
+
+
+# =============================================================================
+# PROGRAMA DE INDICAÇÃO
+# =============================================================================
+
+
+class Indicacao(db.Model):
+    """Registro de indicação entre clientes (programa de referral)."""
+
+    __tablename__ = "indicacao"
+
+    id_indicacao = db.Column(db.Integer, primary_key=True)
+    id_cliente_indicador = db.Column(
+        db.Integer, db.ForeignKey("cliente.id_cliente"), nullable=False
+    )
+    id_cliente_indicado = db.Column(
+        db.Integer, db.ForeignKey("cliente.id_cliente"), nullable=True
+    )
+    codigo_indicacao = db.Column(
+        db.String(20), nullable=False, index=True
+    )
+    bonus_concedido = db.Column(db.Boolean, default=False)
+    data_indicacao = db.Column(db.DateTime, default=_utcnow)
+
+    indicador = db.relationship(
+        "Cliente", foreign_keys=[id_cliente_indicador],
+        backref="indicacoes_feitas",
+    )
+    indicado = db.relationship(
+        "Cliente", foreign_keys=[id_cliente_indicado],
+        backref="indicacao_recebida",
+    )
+
+    def to_dict(self):
+        return {
+            "id_indicacao": self.id_indicacao,
+            "indicador_nome": (
+                self.indicador.nome if self.indicador else None
+            ),
+            "indicado_nome": (
+                self.indicado.nome if self.indicado else None
+            ),
+            "codigo_indicacao": self.codigo_indicacao,
+            "bonus_concedido": self.bonus_concedido,
+            "data_indicacao": (
+                self.data_indicacao.isoformat()
+                if self.data_indicacao else None
+            ),
+        }
+
+
+# =============================================================================
+# ASSINATURAS / PLANOS MENSAIS
+# =============================================================================
+
+
+class Assinatura(db.Model):
+    """Plano de assinatura mensal (ex: 10 açaís/mês)."""
+
+    __tablename__ = "assinatura"
+
+    id_assinatura = db.Column(db.Integer, primary_key=True)
+    nome_plano = db.Column(db.String(100), nullable=False)
+    descricao = db.Column(db.Text)
+    preco_mensal = db.Column(db.DECIMAL(10, 2), nullable=False)
+    limite_usos = db.Column(db.Integer, default=10)
+    ativo = db.Column(db.Boolean, default=True)
+    data_criacao = db.Column(db.DateTime, default=_utcnow)
+
+    clientes = db.relationship(
+        "AssinaturaCliente", backref="assinatura", lazy=True
+    )
+
+    def to_dict(self):
+        return {
+            "id_assinatura": self.id_assinatura,
+            "nome_plano": self.nome_plano,
+            "descricao": self.descricao,
+            "preco_mensal": float(self.preco_mensal),
+            "limite_usos": self.limite_usos,
+            "ativo": self.ativo,
+        }
+
+
+class AssinaturaCliente(db.Model):
+    """Vínculo de assinatura ativa de um cliente."""
+
+    __tablename__ = "assinatura_cliente"
+
+    id = db.Column(db.Integer, primary_key=True)
+    id_assinatura = db.Column(
+        db.Integer, db.ForeignKey("assinatura.id_assinatura"), nullable=False
+    )
+    id_cliente = db.Column(
+        db.Integer, db.ForeignKey("cliente.id_cliente"), nullable=False
+    )
+    data_inicio = db.Column(db.Date, nullable=False)
+    data_fim = db.Column(db.Date, nullable=False)
+    usos_realizados = db.Column(db.Integer, default=0)
+    status = db.Column(db.String(20), default="ativa")
+    data_criacao = db.Column(db.DateTime, default=_utcnow)
+
+    cliente = db.relationship("Cliente", backref="assinaturas")
+
+    @property
+    def usos_restantes(self):
+        if not self.assinatura:
+            return 0
+        return max(0, self.assinatura.limite_usos - self.usos_realizados)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "plano": (
+                self.assinatura.nome_plano if self.assinatura else None
+            ),
+            "cliente_nome": (
+                self.cliente.nome if self.cliente else None
+            ),
+            "data_inicio": (
+                self.data_inicio.isoformat()
+                if self.data_inicio else None
+            ),
+            "data_fim": (
+                self.data_fim.isoformat() if self.data_fim else None
+            ),
+            "usos_realizados": self.usos_realizados,
+            "usos_restantes": self.usos_restantes,
+            "status": self.status,
+        }
+
+
+# =============================================================================
+# WEBHOOK CONFIG — Notificação de eventos para sistemas externos
+# =============================================================================
+
+
+class WebhookConfig(db.Model):
+    """Configuração de webhook para eventos do sistema."""
+
+    __tablename__ = "webhook_config"
+
+    id_webhook = db.Column(db.Integer, primary_key=True)
+    evento = db.Column(db.String(50), nullable=False)
+    url = db.Column(db.String(500), nullable=False)
+    ativo = db.Column(db.Boolean, default=True)
+    secret = db.Column(db.String(64))
+    data_criacao = db.Column(db.DateTime, default=_utcnow)
+
+    def to_dict(self):
+        return {
+            "id_webhook": self.id_webhook,
+            "evento": self.evento,
+            "url": self.url,
+            "ativo": self.ativo,
+            "data_criacao": (
+                self.data_criacao.isoformat()
+                if self.data_criacao else None
+            ),
+        }
+
+
+# =============================================================================
+# MULTI-LOJA — Suporte a múltiplas unidades
+# =============================================================================
+
+
+class Loja(db.Model):
+    """Unidade/filial da açaiteria."""
+
+    __tablename__ = "loja"
+
+    id_loja = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(200), nullable=False)
+    endereco = db.Column(db.Text)
+    telefone = db.Column(db.String(20))
+    cnpj = db.Column(db.String(18))
+    ativa = db.Column(db.Boolean, default=True)
+    data_criacao = db.Column(db.DateTime, default=_utcnow)
+
+    def to_dict(self):
+        return {
+            "id_loja": self.id_loja,
+            "nome": self.nome,
+            "endereco": self.endereco,
+            "telefone": self.telefone,
+            "cnpj": self.cnpj,
+            "ativa": self.ativa,
         }

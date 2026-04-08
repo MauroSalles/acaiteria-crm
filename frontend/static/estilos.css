@@ -1343,6 +1343,14 @@ hr { border: none; border-top: 1px solid var(--cinza-200); margin: 1rem 0; }
 .pull-refresh-indicator.show { transform: translateX(-50%) translateY(0); }
 
 /* ==========================================================================
+   LAZY LOADING — Seções carregadas sob demanda (#9)
+   ========================================================================== */
+.lazy-section { opacity: 0; transform: translateY(10px); transition: opacity .4s ease, transform .4s ease; }
+.lazy-section.loaded { opacity: 1; transform: translateY(0); }
+img[data-src] { opacity: 0; transition: opacity .3s ease; }
+img[data-src][src] { opacity: 1; }
+
+/* ==========================================================================
    TABLE HEADERS (sem position:sticky para evitar overlap com overflow-x:auto)
    ========================================================================== */
 

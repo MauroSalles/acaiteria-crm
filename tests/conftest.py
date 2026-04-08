@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.abspath(
 os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
 os.environ.setdefault('PIX_CHAVE', 'teste@pix.com')
 
-from backend.app import app as flask_app, limiter  # noqa: E402
+from backend.app import app as flask_app, limiter, cache  # noqa: E402
 from backend.models import db as _db, Usuario  # noqa: E402
 
 
@@ -30,8 +30,10 @@ def app():
             'poolclass': StaticPool,
         },
         'SQLALCHEMY_ECHO': False,
+        'CACHE_TYPE': 'NullCache',
     })
     limiter.enabled = False
+    cache.init_app(flask_app)
 
     with flask_app.app_context():
         _db.drop_all()

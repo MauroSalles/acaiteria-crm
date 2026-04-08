@@ -954,3 +954,46 @@ async function registrarVendaComLGPD(id_cliente, itens, forma_pagamento) {
         startY = 0;
     }, { passive: true });
 })();
+
+// =============================================================================
+// LAZY LOADING — Intersection Observer para seções e imagens (#9)
+// =============================================================================
+(function() {
+    if (!('IntersectionObserver' in window)) return;
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Lazy load de imagens com data-src
+        var lazyImages = document.querySelectorAll('img[data-src]');
+        if (lazyImages.length) {
+            var imgObserver = new IntersectionObserver(function(entries) {
+                entries.forEach(function(entry) {
+                    if (entry.isIntersecting) {
+                        var img = entry.target;
+                        img.src = img.dataset.src;
+                        img.removeAttribute('data-src');
+                        imgObserver.unobserve(img);
+                    }
+                });
+            }, { rootMargin: '200px' });
+            lazyImages.forEach(function(img) { imgObserver.observe(img); });
+        }
+
+        // Lazy load de seções com class "lazy-section"
+        var lazySections = document.querySelectorAll('.lazy-section');
+        if (lazySections.length) {
+            var secObserver = new IntersectionObserver(function(entries) {
+                entries.forEach(function(entry) {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('loaded');
+                        var fn = entry.target.dataset.loadFn;
+                        if (fn && typeof window[fn] === 'function') {
+                            window[fn](entry.target);
+                        }
+                        secObserver.unobserve(entry.target);
+                    }
+                });
+            }, { rootMargin: '100px', threshold: 0.1 });
+            lazySections.forEach(function(sec) { secObserver.observe(sec); });
+        }
+    });
+})();

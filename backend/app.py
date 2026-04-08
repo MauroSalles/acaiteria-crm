@@ -54,6 +54,14 @@ from .models import (
     CupomDesconto,
     BadgeCliente,
     LancamentoFinanceiro,
+    TwoFactorSecret,
+    ComboKit,
+    ComboKitItem,
+    Indicacao,
+    Assinatura,
+    AssinaturaCliente,
+    WebhookConfig,
+    Loja,
 )
 
 # =============================================================================
@@ -114,12 +122,46 @@ api = Api(
     prefix="/api",
 )
 
+
+def _rate_limit_key():
+    """Rate-limit por usuario_id (se logado) ou IP."""
+    from flask import session as _sess
+    uid = _sess.get("usuario_id")
+    return f"user:{uid}" if uid else get_remote_address()
+
+
 limiter = Limiter(
-    get_remote_address,
+    _rate_limit_key,
     app=app,
     default_limits=["300 per hour"],
     storage_uri="memory://",
 )
+
+# --- Cache Layer (#6) — SimpleCache para endpoints de leitura ---
+from flask_caching import Cache  # noqa: E402
+
+cache = Cache(app, config={
+    "CACHE_TYPE": "SimpleCache",
+    "CACHE_DEFAULT_TIMEOUT": 300,
+})
+
+# --- 2FA — import pyotp ---
+import pyotp  # noqa: E402
+
+# --- WebSocket (#22) — opcional, não quebra se não instalado ---
+try:
+    from flask_socketio import SocketIO, emit  # noqa: F401
+    socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+
+    @socketio.on("connect")
+    def _ws_connect():
+        emit("status", {"msg": "Conectado ao CRM"})
+
+    @socketio.on("ping_crm")
+    def _ws_ping(data):
+        emit("pong_crm", {"echo": data})
+except ImportError:
+    socketio = None
 
 health_ns = Namespace(
     "health", description="Healthcheck e metadados da API", path="/"
@@ -561,6 +603,25 @@ def login():
         senha = request.form.get("senha", "")
         usuario = Usuario.query.filter_by(email=email, ativo=True).first()
         if usuario and usuario.verificar_senha(senha):
+            # --- 2FA check ---
+            tf = TwoFactorSecret.query.filter_by(
+                id_usuario=usuario.id_usuario, ativo=True
+            ).first()
+            if tf:
+                codigo_2fa = request.form.get("codigo_2fa", "").strip()
+                if not codigo_2fa:
+                    return render_template(
+                        "login.html", need_2fa=True,
+                        email=email, senha=senha,
+                    )
+                totp = pyotp.TOTP(tf.secret)
+                if not totp.verify(codigo_2fa, valid_window=1):
+                    return render_template(
+                        "login.html", need_2fa=True,
+                        email=email, senha=senha,
+                        erro="Código 2FA inválido.",
+                    )
+            # --- fim 2FA ---
             session.permanent = True
             session["usuario_id"] = usuario.id_usuario
             session["usuario_nome"] = usuario.nome
@@ -2670,6 +2731,7 @@ def vitrine():
 
 @app.route("/api/vitrine/produtos", methods=["GET"])
 @limiter.limit("60 per minute")
+@cache.cached(timeout=120, query_string=True, key_prefix="vitrine_produtos")
 def vitrine_produtos():
     """API pública — lista produtos ativos para a vitrine."""
     try:
@@ -5594,6 +5656,7 @@ def ia_stats():
 
 @app.route("/api/dashboard/kpi", methods=["GET"])
 @api_login_required
+@cache.cached(timeout=60, key_prefix="dashboard_kpi")
 def dashboard_kpi():
     """KPIs operacionais em tempo real para o dashboard."""
     try:
@@ -6507,6 +6570,1208 @@ def previsao_estoque():
         })
     except Exception as e:
         return _erro_interno(e)
+
+
+# =============================================================================
+# FEATURE #24 — API VERSIONING (v1 proxy transparente)
+# =============================================================================
+
+
+@app.route("/api/version", methods=["GET"])
+def api_version():
+    """Retorna versão da API e prefixos disponíveis."""
+    return jsonify({
+        "version": "1.0",
+        "prefix": "/api",
+        "versioned_prefix": "/api/v1",
+        "changelog": "v1.0 — versão inicial estável",
+    })
+
+
+@app.route(
+    "/api/v1/<path:subpath>",
+    methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
+)
+def api_v1_proxy(subpath):
+    """API v1 — proxy transparente para endpoints atuais."""
+    target = f"/api/{subpath}"
+    qs = request.query_string.decode()
+    if qs:
+        target += f"?{qs}"
+    return redirect(target, code=307)
+
+
+# =============================================================================
+# FEATURE #25 — OPENAPI / SWAGGER EXPORT
+# =============================================================================
+
+
+@app.route("/api/openapi.json", methods=["GET"])
+def openapi_export():
+    """Exporta especificação OpenAPI 2.0 (Swagger) como JSON."""
+    try:
+        spec = api.__schema__
+        return jsonify(spec)
+    except Exception:
+        return jsonify({
+            "swagger": "2.0",
+            "info": {"title": "Acaiteria CRM API", "version": "1.0"},
+            "paths": {},
+        })
+
+
+# =============================================================================
+# FEATURE #6 — CACHE: invalidação manual ao criar/editar dados
+# =============================================================================
+
+
+def _invalidar_cache_vitrine():
+    """Invalida cache de endpoints da vitrine após alteração de produtos."""
+    cache.delete_many("vitrine_produtos", "dashboard_kpi")
+
+
+# =============================================================================
+# FEATURE #8 — CURSOR PAGINATION (alternativa a OFFSET/LIMIT)
+# =============================================================================
+
+
+@app.route("/api/vendas/cursor", methods=["GET"])
+@api_login_required
+def vendas_cursor_pagination():
+    """Lista vendas com cursor-pagination (mais eficiente para grandes bases).
+
+    Params: after_id (int), limit (int, max 100), status (str)
+    """
+    try:
+        after_id = request.args.get("after_id", type=int)
+        limit = min(request.args.get("limit", 20, type=int), 100)
+        status = request.args.get("status", "").strip()
+
+        query = Venda.query
+        if after_id:
+            query = query.filter(Venda.id_venda < after_id)
+        if status:
+            query = query.filter(Venda.status_pagamento == status)
+
+        vendas = (
+            query.order_by(Venda.id_venda.desc())
+            .limit(limit + 1)
+            .all()
+        )
+
+        has_next = len(vendas) > limit
+        if has_next:
+            vendas = vendas[:limit]
+
+        next_cursor = vendas[-1].id_venda if vendas and has_next else None
+
+        return jsonify({
+            "vendas": [v.to_dict() for v in vendas],
+            "next_cursor": next_cursor,
+            "has_next": has_next,
+            "limit": limit,
+        })
+    except Exception as e:
+        return _erro_interno(e)
+
+
+# =============================================================================
+# FEATURE #2 — 2FA (Two-Factor Authentication) ENDPOINTS
+# =============================================================================
+
+
+@app.route("/api/2fa/setup", methods=["POST"])
+@api_login_required
+def setup_2fa():
+    """Gera secret TOTP e URI para configurar no app autenticador."""
+    try:
+        uid = session.get("usuario_id")
+        usuario = Usuario.query.get(uid)
+        if not usuario:
+            return jsonify({"erro": "Usuário não encontrado"}), 404
+
+        existing = TwoFactorSecret.query.filter_by(
+            id_usuario=uid
+        ).first()
+        if existing and existing.ativo:
+            return jsonify({"erro": "2FA já está ativo"}), 400
+
+        secret = pyotp.random_base32()
+
+        if existing:
+            existing.secret = secret
+            existing.ativo = False
+            existing.data_ativacao = None
+        else:
+            existing = TwoFactorSecret(
+                id_usuario=uid, secret=secret, ativo=False,
+            )
+            db.session.add(existing)
+        db.session.commit()
+
+        totp = pyotp.TOTP(secret)
+        uri = totp.provisioning_uri(
+            name=usuario.email,
+            issuer_name="Açaiteria CRM",
+        )
+
+        return jsonify({
+            "secret": secret,
+            "uri": uri,
+            "mensagem": "Use o app autenticador para escanear o QR code.",
+        })
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
+@app.route("/api/2fa/verify", methods=["POST"])
+@api_login_required
+def verify_2fa():
+    """Verifica código TOTP e ativa 2FA."""
+    try:
+        uid = session.get("usuario_id")
+        dados = request.get_json(silent=True) or {}
+        codigo = str(dados.get("codigo", "")).strip()
+
+        if not codigo:
+            return jsonify({"erro": "Código obrigatório"}), 400
+
+        tf = TwoFactorSecret.query.filter_by(id_usuario=uid).first()
+        if not tf:
+            return jsonify({"erro": "Execute setup primeiro"}), 400
+
+        totp = pyotp.TOTP(tf.secret)
+        if not totp.verify(codigo, valid_window=1):
+            return jsonify({"erro": "Código inválido"}), 400
+
+        tf.ativo = True
+        tf.data_ativacao = datetime.now(timezone.utc)
+        db.session.commit()
+
+        registrar_log("ativar", "2fa", uid, "2FA ativado com sucesso")
+
+        return jsonify({"mensagem": "2FA ativado com sucesso!"})
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
+@app.route("/api/2fa/disable", methods=["POST"])
+@api_login_required
+def disable_2fa():
+    """Desativa 2FA do usuário logado."""
+    try:
+        uid = session.get("usuario_id")
+        tf = TwoFactorSecret.query.filter_by(
+            id_usuario=uid, ativo=True
+        ).first()
+        if not tf:
+            return jsonify({"erro": "2FA não está ativo"}), 400
+
+        tf.ativo = False
+        db.session.commit()
+
+        registrar_log("desativar", "2fa", uid, "2FA desativado")
+        return jsonify({"mensagem": "2FA desativado com sucesso."})
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
+@app.route("/api/2fa/status", methods=["GET"])
+@api_login_required
+def status_2fa():
+    """Retorna status do 2FA do usuário logado."""
+    uid = session.get("usuario_id")
+    tf = TwoFactorSecret.query.filter_by(id_usuario=uid).first()
+    return jsonify({
+        "ativo": bool(tf and tf.ativo),
+        "data_ativacao": (
+            tf.data_ativacao.isoformat()
+            if tf and tf.data_ativacao else None
+        ),
+    })
+
+
+# =============================================================================
+# FEATURE #14 — UPLOAD DE FOTO DO PRODUTO (Base64)
+# =============================================================================
+
+
+@app.route("/api/produtos/<int:pid>/foto", methods=["POST"])
+@api_admin_required
+def upload_foto_produto(pid):
+    """Upload de foto do produto em Base64 (max 500KB)."""
+    try:
+        produto = Produto.query.get(pid)
+        if not produto:
+            return jsonify({"erro": "Produto não encontrado"}), 404
+
+        dados = request.get_json(silent=True) or {}
+        foto_url = dados.get("foto_url", "").strip()
+
+        if not foto_url:
+            return jsonify({"erro": "foto_url obrigatório"}), 400
+
+        # Aceitar data:image/... base64 ou URL externa
+        if foto_url.startswith("data:image/"):
+            import base64
+            try:
+                header, data = foto_url.split(",", 1)
+                decoded = base64.b64decode(data)
+                if len(decoded) > 512_000:  # 500KB max
+                    return jsonify(
+                        {"erro": "Imagem excede 500KB"}
+                    ), 400
+            except Exception:
+                return jsonify(
+                    {"erro": "Base64 inválido"}
+                ), 400
+        elif not foto_url.startswith("https://"):
+            return jsonify(
+                {"erro": "URL deve usar HTTPS ou ser data:image/"}
+            ), 400
+
+        produto.foto_url = foto_url
+        db.session.commit()
+        _invalidar_cache_vitrine()
+
+        registrar_log(
+            "editar", "produto", pid, "Foto atualizada"
+        )
+        return jsonify({
+            "mensagem": "Foto atualizada",
+            "produto": produto.to_dict(),
+        })
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
+# =============================================================================
+# FEATURE #15 — WEBHOOKS — notificar sistemas externos
+# =============================================================================
+
+
+def _disparar_webhooks(evento, payload):
+    """Dispara webhooks para o evento especificado (fire-and-forget)."""
+    import threading
+    import urllib.request
+    import json as _json
+
+    hooks = WebhookConfig.query.filter_by(
+        evento=evento, ativo=True
+    ).all()
+    if not hooks:
+        return
+
+    for hook in hooks:
+        def _send(url, data, secret):
+            try:
+                body = _json.dumps(data).encode("utf-8")
+                req = urllib.request.Request(
+                    url, data=body,
+                    headers={"Content-Type": "application/json"},
+                )
+                if secret:
+                    import hashlib
+                    import hmac
+                    sig = hmac.new(
+                        secret.encode(), body, hashlib.sha256
+                    ).hexdigest()
+                    req.add_header("X-Webhook-Signature", sig)
+                urllib.request.urlopen(req, timeout=10)
+            except Exception as exc:
+                logger.warning("Webhook falhou: %s — %s", url, exc)
+
+        threading.Thread(
+            target=_send,
+            args=(hook.url, payload, hook.secret),
+            daemon=True,
+        ).start()
+
+
+@app.route("/api/webhooks", methods=["GET"])
+@api_admin_required
+def listar_webhooks():
+    """Lista webhooks configurados."""
+    hooks = WebhookConfig.query.all()
+    return jsonify([h.to_dict() for h in hooks])
+
+
+@app.route("/api/webhooks", methods=["POST"])
+@api_admin_required
+def criar_webhook():
+    """Cria configuração de webhook."""
+    try:
+        dados = request.get_json(silent=True) or {}
+        evento = dados.get("evento", "").strip()
+        url = dados.get("url", "").strip()
+
+        eventos_validos = [
+            "venda_criada", "pedido_pronto", "cliente_novo",
+            "estoque_baixo",
+        ]
+        if evento not in eventos_validos:
+            return jsonify({
+                "erro": f"Evento inválido. Válidos: {eventos_validos}"
+            }), 400
+        if not url or not url.startswith("https://"):
+            return jsonify(
+                {"erro": "URL obrigatória (HTTPS)"}
+            ), 400
+
+        hook = WebhookConfig(
+            evento=evento, url=url,
+            secret=secrets.token_hex(32),
+        )
+        db.session.add(hook)
+        db.session.commit()
+
+        return jsonify(hook.to_dict()), 201
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
+@app.route("/api/webhooks/<int:wid>", methods=["DELETE"])
+@api_admin_required
+def deletar_webhook(wid):
+    """Remove webhook."""
+    hook = WebhookConfig.query.get(wid)
+    if not hook:
+        return jsonify({"erro": "Webhook não encontrado"}), 404
+    db.session.delete(hook)
+    db.session.commit()
+    return jsonify({"mensagem": "Webhook removido"})
+
+
+# =============================================================================
+# FEATURE #16 — COMBOS / KITS
+# =============================================================================
+
+
+@app.route("/api/combos", methods=["GET"])
+@api_login_required
+def listar_combos():
+    """Lista combos/kits disponíveis."""
+    combos = ComboKit.query.filter_by(ativo=True).all()
+    return jsonify([c.to_dict() for c in combos])
+
+
+@app.route("/api/combos", methods=["POST"])
+@api_admin_required
+def criar_combo():
+    """Cria combo/kit com produtos e preço especial."""
+    try:
+        dados = request.get_json(silent=True) or {}
+        nome = dados.get("nome", "").strip()
+        preco = dados.get("preco_combo")
+        itens = dados.get("itens", [])
+
+        if not nome or preco is None:
+            return jsonify(
+                {"erro": "nome e preco_combo obrigatórios"}
+            ), 400
+        if not itens or not isinstance(itens, list):
+            return jsonify(
+                {"erro": "itens deve ser uma lista com ao menos 1 item"}
+            ), 400
+
+        combo = ComboKit(
+            nome=nome,
+            descricao=dados.get("descricao", ""),
+            preco_combo=Decimal(str(preco)),
+        )
+        for item in itens:
+            pid = item.get("id_produto")
+            qtd = item.get("quantidade", 1)
+            prod = Produto.query.get(pid)
+            if not prod or not prod.ativo:
+                return jsonify(
+                    {"erro": f"Produto {pid} não encontrado ou inativo"}
+                ), 400
+            combo.itens.append(ComboKitItem(
+                id_produto=pid, quantidade=qtd,
+            ))
+
+        db.session.add(combo)
+        db.session.commit()
+
+        registrar_log(
+            "criar", "combo", combo.id_combo, f"Combo: {nome}"
+        )
+        return jsonify(combo.to_dict()), 201
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
+@app.route("/api/combos/<int:cid>", methods=["PUT"])
+@api_admin_required
+def atualizar_combo(cid):
+    """Atualiza combo/kit."""
+    try:
+        combo = ComboKit.query.get(cid)
+        if not combo:
+            return jsonify({"erro": "Combo não encontrado"}), 404
+
+        dados = request.get_json(silent=True) or {}
+        if "nome" in dados:
+            combo.nome = dados["nome"].strip()
+        if "descricao" in dados:
+            combo.descricao = dados["descricao"]
+        if "preco_combo" in dados:
+            combo.preco_combo = Decimal(str(dados["preco_combo"]))
+        if "ativo" in dados:
+            combo.ativo = bool(dados["ativo"])
+
+        db.session.commit()
+        return jsonify(combo.to_dict())
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
+@app.route("/api/combos/<int:cid>", methods=["DELETE"])
+@api_admin_required
+def deletar_combo(cid):
+    """Desativa combo/kit."""
+    combo = ComboKit.query.get(cid)
+    if not combo:
+        return jsonify({"erro": "Combo não encontrado"}), 404
+    combo.ativo = False
+    db.session.commit()
+    return jsonify({"mensagem": "Combo desativado"})
+
+
+# =============================================================================
+# FEATURE #4 — PROGRAMA DE INDICAÇÃO (REFERRAL)
+# =============================================================================
+
+
+@app.route("/api/indicacoes/codigo/<int:id_cliente>", methods=["GET"])
+@api_login_required
+def gerar_codigo_indicacao(id_cliente):
+    """Gera ou retorna código de indicação único do cliente."""
+    cliente = Cliente.query.get(id_cliente)
+    if not cliente or not cliente.ativo:
+        return jsonify({"erro": "Cliente não encontrado"}), 404
+
+    # Verificar se já tem código de indicação gerado
+    existente = Indicacao.query.filter_by(
+        id_cliente_indicador=id_cliente,
+        id_cliente_indicado=None,
+    ).first()
+    if existente:
+        codigo = existente.codigo_indicacao
+    else:
+        codigo = f"IND{id_cliente:04d}{secrets.token_hex(3).upper()}"
+        placeholder = Indicacao(
+            id_cliente_indicador=id_cliente,
+            codigo_indicacao=codigo,
+        )
+        db.session.add(placeholder)
+        db.session.commit()
+
+    return jsonify({
+        "codigo": codigo,
+        "cliente": cliente.nome,
+        "link": f"/totem?ref={codigo}",
+    })
+
+
+@app.route("/api/indicacoes/validar", methods=["POST"])
+@api_login_required
+def validar_indicacao():
+    """Valida código de indicação e concede bônus aos dois."""
+    BONUS_PONTOS = 50
+    try:
+        dados = request.get_json(silent=True) or {}
+        codigo = dados.get("codigo", "").strip().upper()
+        id_indicado = dados.get("id_cliente_indicado")
+
+        if not codigo or not id_indicado:
+            return jsonify(
+                {"erro": "codigo e id_cliente_indicado obrigatórios"}
+            ), 400
+
+        # Encontrar indicação existente com esse código
+        ref = Indicacao.query.filter_by(
+            codigo_indicacao=codigo
+        ).first()
+        if not ref:
+            return jsonify(
+                {"erro": "Código de indicação inválido"}
+            ), 404
+
+        indicador = Cliente.query.get(ref.id_cliente_indicador)
+        indicado = Cliente.query.get(id_indicado)
+        if not indicador or not indicado:
+            return jsonify(
+                {"erro": "Cliente não encontrado"}
+            ), 404
+        if indicador.id_cliente == indicado.id_cliente:
+            return jsonify(
+                {"erro": "Não pode indicar a si mesmo"}
+            ), 400
+
+        # Verificar se já existe indicação entre eles
+        ja_existe = Indicacao.query.filter_by(
+            id_cliente_indicador=indicador.id_cliente,
+            id_cliente_indicado=indicado.id_cliente,
+        ).first()
+        if ja_existe:
+            return jsonify(
+                {"erro": "Indicação já registrada"}
+            ), 400
+
+        # Atualizar registro pendente e conceder bônus
+        ref.id_cliente_indicado = indicado.id_cliente
+        ref.bonus_concedido = True
+
+        indicador.pontos_fidelidade = (
+            (indicador.pontos_fidelidade or 0) + BONUS_PONTOS
+        )
+        indicado.pontos_fidelidade = (
+            (indicado.pontos_fidelidade or 0) + BONUS_PONTOS
+        )
+        db.session.commit()
+
+        return jsonify({
+            "mensagem": (
+                f"Indicação validada! +{BONUS_PONTOS} pontos "
+                f"para {indicador.nome} e {indicado.nome}"
+            ),
+            "indicador_pontos": indicador.pontos_fidelidade,
+            "indicado_pontos": indicado.pontos_fidelidade,
+        })
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
+@app.route("/api/indicacoes", methods=["GET"])
+@api_login_required
+def listar_indicacoes():
+    """Lista todas as indicações registradas."""
+    indicacoes = Indicacao.query.order_by(
+        Indicacao.data_indicacao.desc()
+    ).limit(100).all()
+    return jsonify([i.to_dict() for i in indicacoes])
+
+
+# =============================================================================
+# FEATURE #17 — AGENDAMENTO DE PEDIDOS
+# =============================================================================
+
+
+@app.route("/api/vendas/<int:vid>/agendar", methods=["PUT"])
+@api_login_required
+def agendar_pedido(vid):
+    """Define data/hora de agendamento para retirada do pedido."""
+    try:
+        venda = Venda.query.get(vid)
+        if not venda:
+            return jsonify({"erro": "Venda não encontrada"}), 404
+
+        dados = request.get_json(silent=True) or {}
+        data_str = dados.get("data_agendamento", "").strip()
+        if not data_str:
+            return jsonify(
+                {"erro": "data_agendamento obrigatório (ISO 8601)"}
+            ), 400
+
+        try:
+            dt = datetime.fromisoformat(data_str)
+        except ValueError:
+            return jsonify(
+                {"erro": "Formato inválido. Use ISO 8601"}
+            ), 400
+
+        agora = datetime.now(timezone.utc)
+        if dt.tzinfo:
+            if dt < agora:
+                return jsonify(
+                    {"erro": "Data deve ser no futuro"}
+                ), 400
+        else:
+            if dt < agora.replace(tzinfo=None):
+                return jsonify(
+                    {"erro": "Data deve ser no futuro"}
+                ), 400
+
+        venda.data_agendamento = dt
+        db.session.commit()
+
+        return jsonify({
+            "mensagem": "Pedido agendado",
+            "data_agendamento": dt.isoformat(),
+            "venda": venda.to_dict(),
+        })
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
+@app.route("/api/agendamentos", methods=["GET"])
+@api_login_required
+def listar_agendamentos():
+    """Lista vendas agendadas (futuras)."""
+    try:
+        vendas = (
+            Venda.query
+            .filter(Venda.data_agendamento.isnot(None))
+            .filter(Venda.status_pedido != "Cancelado")
+            .order_by(Venda.data_agendamento.asc())
+            .limit(50)
+            .all()
+        )
+        return jsonify([
+            {
+                **v.to_dict(),
+                "data_agendamento": (
+                    v.data_agendamento.isoformat()
+                    if v.data_agendamento else None
+                ),
+            }
+            for v in vendas
+        ])
+    except Exception as e:
+        return _erro_interno(e)
+
+
+# =============================================================================
+# FEATURE #18 — ASSINATURAS / PLANOS MENSAIS
+# =============================================================================
+
+
+@app.route("/api/assinaturas/planos", methods=["GET"])
+@api_login_required
+def listar_planos():
+    """Lista planos de assinatura disponíveis."""
+    planos = Assinatura.query.filter_by(ativo=True).all()
+    return jsonify([p.to_dict() for p in planos])
+
+
+@app.route("/api/assinaturas/planos", methods=["POST"])
+@api_admin_required
+def criar_plano():
+    """Cria novo plano de assinatura."""
+    try:
+        dados = request.get_json(silent=True) or {}
+        nome = dados.get("nome_plano", "").strip()
+        preco = dados.get("preco_mensal")
+        limite = dados.get("limite_usos", 10)
+
+        if not nome or preco is None:
+            return jsonify(
+                {"erro": "nome_plano e preco_mensal obrigatórios"}
+            ), 400
+
+        plano = Assinatura(
+            nome_plano=nome,
+            descricao=dados.get("descricao", ""),
+            preco_mensal=Decimal(str(preco)),
+            limite_usos=int(limite),
+        )
+        db.session.add(plano)
+        db.session.commit()
+
+        registrar_log(
+            "criar", "assinatura", plano.id_assinatura,
+            f"Plano: {nome}",
+        )
+        return jsonify(plano.to_dict()), 201
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
+@app.route("/api/assinaturas/assinar", methods=["POST"])
+@api_login_required
+def assinar_plano():
+    """Vincula cliente a um plano de assinatura."""
+    try:
+        dados = request.get_json(silent=True) or {}
+        id_plano = dados.get("id_assinatura")
+        id_cli = dados.get("id_cliente")
+
+        if not id_plano or not id_cli:
+            return jsonify(
+                {"erro": "id_assinatura e id_cliente obrigatórios"}
+            ), 400
+
+        plano = Assinatura.query.get(id_plano)
+        if not plano or not plano.ativo:
+            return jsonify(
+                {"erro": "Plano não encontrado ou inativo"}
+            ), 404
+
+        cliente = Cliente.query.get(id_cli)
+        if not cliente or not cliente.ativo:
+            return jsonify(
+                {"erro": "Cliente não encontrado"}
+            ), 404
+
+        from datetime import date as date_type
+        hoje = date_type.today()
+        fim = hoje + timedelta(days=30)
+
+        assinatura = AssinaturaCliente(
+            id_assinatura=id_plano,
+            id_cliente=id_cli,
+            data_inicio=hoje,
+            data_fim=fim,
+        )
+        db.session.add(assinatura)
+        db.session.commit()
+
+        return jsonify(assinatura.to_dict()), 201
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
+@app.route("/api/assinaturas/<int:acid>/usar", methods=["POST"])
+@api_login_required
+def usar_assinatura(acid):
+    """Registra uso de uma assinatura ativa."""
+    try:
+        assi = AssinaturaCliente.query.get(acid)
+        if not assi:
+            return jsonify(
+                {"erro": "Assinatura não encontrada"}
+            ), 404
+        if assi.status != "ativa":
+            return jsonify(
+                {"erro": "Assinatura não está ativa"}
+            ), 400
+        if assi.usos_restantes <= 0:
+            return jsonify(
+                {"erro": "Limite de usos atingido"}
+            ), 400
+
+        from datetime import date as date_type
+        if assi.data_fim < date_type.today():
+            assi.status = "expirada"
+            db.session.commit()
+            return jsonify(
+                {"erro": "Assinatura expirada"}
+            ), 400
+
+        assi.usos_realizados += 1
+        db.session.commit()
+
+        return jsonify({
+            "mensagem": "Uso registrado",
+            "usos_restantes": assi.usos_restantes,
+            "assinatura": assi.to_dict(),
+        })
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
+@app.route(
+    "/api/clientes/<int:id_cli>/assinaturas", methods=["GET"]
+)
+@api_login_required
+def assinaturas_cliente(id_cli):
+    """Lista assinaturas de um cliente."""
+    assinaturas = AssinaturaCliente.query.filter_by(
+        id_cliente=id_cli
+    ).order_by(AssinaturaCliente.data_inicio.desc()).all()
+    return jsonify([a.to_dict() for a in assinaturas])
+
+
+# =============================================================================
+# FEATURE #1 — NOTIFICAÇÕES POR EMAIL (esqueleto)
+# =============================================================================
+
+
+@app.route("/api/notificacoes/email", methods=["POST"])
+@api_admin_required
+def enviar_notificacao_email():
+    """Endpoint para envio de notificações por email.
+
+    Em produção, configurar SMTP (SendGrid, AWS SES, etc).
+    Aqui simula o envio e registra no log.
+    """
+    try:
+        dados = request.get_json(silent=True) or {}
+        destinatario = dados.get("email", "").strip()
+        assunto = dados.get("assunto", "").strip()
+        corpo = dados.get("corpo", "").strip()
+
+        if not destinatario or not assunto or not corpo:
+            return jsonify(
+                {"erro": "email, assunto e corpo obrigatórios"}
+            ), 400
+
+        # Validação de email simples
+        if "@" not in destinatario or "." not in destinatario:
+            return jsonify(
+                {"erro": "Email inválido"}
+            ), 400
+
+        # Verificar se SMTP configurado
+        smtp_host = os.environ.get("SMTP_HOST")
+        if smtp_host:
+            import smtplib
+            from email.mime.text import MIMEText
+            msg = MIMEText(corpo, "html", "utf-8")
+            msg["Subject"] = assunto
+            msg["From"] = os.environ.get(
+                "SMTP_FROM", "noreply@acaiteria.com"
+            )
+            msg["To"] = destinatario
+            try:
+                with smtplib.SMTP(
+                    smtp_host,
+                    int(os.environ.get("SMTP_PORT", "587")),
+                ) as server:
+                    server.starttls()
+                    server.login(
+                        os.environ.get("SMTP_USER", ""),
+                        os.environ.get("SMTP_PASS", ""),
+                    )
+                    server.send_message(msg)
+                logger.info("Email enviado para %s", destinatario)
+            except Exception as exc:
+                logger.error("Erro ao enviar email: %s", exc)
+                return jsonify({
+                    "erro": "Falha ao enviar email",
+                    "detalhe": str(exc),
+                }), 500
+        else:
+            logger.info(
+                "Email simulado para %s: %s", destinatario, assunto
+            )
+
+        registrar_log(
+            "enviar", "notificacao",
+            None, f"Email → {destinatario}: {assunto}",
+        )
+
+        return jsonify({
+            "mensagem": "Notificação enviada" if smtp_host
+            else "Notificação simulada (SMTP não configurado)",
+            "destinatario": destinatario,
+            "assunto": assunto,
+        })
+    except Exception as e:
+        return _erro_interno(e)
+
+
+# =============================================================================
+# FEATURE #3 — NFC-e (NOTA FISCAL CONSUMIDOR SIMPLIFICADA)
+# =============================================================================
+
+
+@app.route("/api/vendas/<int:vid>/nfce", methods=["GET"])
+@api_login_required
+def gerar_nfce(vid):
+    """Gera cupom fiscal simplificado (NFC-e simulada) em PDF."""
+    try:
+        venda = Venda.query.options(
+            joinedload(Venda.itens).joinedload(ItemVenda.produto)
+        ).get(vid)
+        if not venda:
+            return jsonify(
+                {"erro": "Venda não encontrada"}
+            ), 404
+
+        from reportlab.lib.pagesizes import mm
+        from reportlab.pdfgen import canvas
+
+        buf = io.BytesIO()
+        # Cupom em papel 80mm x comprimento variável
+        largura = 80 * mm
+        n_itens = len(venda.itens)
+        altura = (180 + n_itens * 20) * mm
+
+        c = canvas.Canvas(buf, pagesize=(largura, altura))
+        y = altura - 15 * mm
+
+        # Cabeçalho
+        c.setFont("Helvetica-Bold", 10)
+        c.drawCentredString(
+            largura / 2, y, "COMBINA ACAI LTDA"
+        )
+        y -= 4 * mm
+        c.setFont("Helvetica", 7)
+        cnpj_loja = os.environ.get(
+            "CNPJ_LOJA", "00.000.000/0001-00"
+        )
+        c.drawCentredString(
+            largura / 2, y, f"CNPJ: {cnpj_loja}"
+        )
+        y -= 3 * mm
+        c.drawCentredString(
+            largura / 2, y,
+            "DOCUMENTO AUXILIAR DE VENDA - NFC-e",
+        )
+        y -= 5 * mm
+        c.line(5 * mm, y, largura - 5 * mm, y)
+        y -= 5 * mm
+
+        # Itens
+        c.setFont("Helvetica", 7)
+        for item in venda.itens:
+            nome = (
+                item.produto.nome_produto if item.produto
+                else "Produto"
+            )
+            linha = (
+                f"{item.quantidade}x {nome[:25]} "
+                f"R${float(item.subtotal):.2f}"
+            )
+            c.drawString(5 * mm, y, linha)
+            y -= 4 * mm
+
+        # Totais
+        y -= 2 * mm
+        c.line(5 * mm, y, largura - 5 * mm, y)
+        y -= 5 * mm
+        c.setFont("Helvetica-Bold", 9)
+        c.drawString(
+            5 * mm, y,
+            f"TOTAL: R$ {float(venda.valor_total):.2f}",
+        )
+        y -= 4 * mm
+        c.setFont("Helvetica", 7)
+        c.drawString(
+            5 * mm, y,
+            f"Pagamento: {venda.forma_pagamento or '-'}",
+        )
+        y -= 3 * mm
+        c.drawString(
+            5 * mm, y,
+            (
+                f"Data: "
+                f"{venda.data_venda.strftime('%d/%m/%Y %H:%M')}"
+                if venda.data_venda
+                else "Data: -"
+            ),
+        )
+        y -= 5 * mm
+        c.line(5 * mm, y, largura - 5 * mm, y)
+        y -= 4 * mm
+        c.setFont("Helvetica", 6)
+        c.drawCentredString(
+            largura / 2, y,
+            f"Venda #{venda.id_venda} | Obrigado pela preferencia!",
+        )
+
+        c.save()
+        buf.seek(0)
+
+        return send_file(
+            buf, mimetype="application/pdf",
+            as_attachment=True,
+            download_name=f"nfce_venda_{vid}.pdf",
+        )
+    except Exception as e:
+        return _erro_interno(e)
+
+
+# =============================================================================
+# FEATURE #5 — PAINEL DO CLIENTE ENHANCED (favoritos + reordenar)
+# =============================================================================
+
+
+@app.route("/api/cliente/favoritos", methods=["GET"])
+def cliente_favoritos():
+    """Retorna produtos mais comprados pelo cliente logado."""
+    id_cli = session.get("cliente_id")
+    if not id_cli:
+        return jsonify({"erro": "Não autenticado"}), 401
+
+    try:
+        # Top 5 produtos mais comprados pelo cliente
+        from sqlalchemy import func
+        top = (
+            db.session.query(
+                Produto.id_produto,
+                Produto.nome_produto,
+                Produto.preco,
+                Produto.foto_url,
+                func.sum(ItemVenda.quantidade).label("total_qtd"),
+            )
+            .join(ItemVenda, ItemVenda.id_produto == Produto.id_produto)
+            .join(Venda, Venda.id_venda == ItemVenda.id_venda)
+            .filter(Venda.id_cliente == id_cli)
+            .filter(Venda.status_pagamento != "Cancelado")
+            .group_by(
+                Produto.id_produto, Produto.nome_produto,
+                Produto.preco, Produto.foto_url,
+            )
+            .order_by(func.sum(ItemVenda.quantidade).desc())
+            .limit(5)
+            .all()
+        )
+        return jsonify([
+            {
+                "id_produto": r.id_produto,
+                "nome_produto": r.nome_produto,
+                "preco": float(r.preco),
+                "foto_url": r.foto_url,
+                "total_comprado": int(r.total_qtd),
+            }
+            for r in top
+        ])
+    except Exception as e:
+        return _erro_interno(e)
+
+
+@app.route("/api/cliente/reordenar/<int:vid>", methods=["POST"])
+def cliente_reordenar(vid):
+    """Cria nova venda replicando itens de uma venda anterior."""
+    id_cli = session.get("cliente_id")
+    if not id_cli:
+        return jsonify({"erro": "Não autenticado"}), 401
+
+    try:
+        venda_anterior = Venda.query.options(
+            joinedload(Venda.itens)
+        ).get(vid)
+        if not venda_anterior or venda_anterior.id_cliente != id_cli:
+            return jsonify(
+                {"erro": "Venda não encontrada"}
+            ), 404
+
+        # Verificar LGPD
+        cliente = Cliente.query.get(id_cli)
+        if not cliente or not cliente.consentimento_lgpd:
+            return jsonify(
+                {"erro": "Consentimento LGPD necessário"}
+            ), 403
+
+        # Criar nova venda com os mesmos itens
+        nova = Venda(
+            id_cliente=id_cli,
+            valor_total=0,
+            forma_pagamento="PIX",
+            status_pagamento="Pendente",
+            status_pedido="Recebido",
+        )
+        total = Decimal("0")
+        for item in venda_anterior.itens:
+            prod = Produto.query.get(item.id_produto)
+            if not prod or not prod.ativo:
+                continue
+            preco = (
+                prod.preco_promocional
+                if prod.preco_promocional else prod.preco
+            )
+            subtotal = preco * item.quantidade
+            total += subtotal
+            nova.itens.append(ItemVenda(
+                id_produto=item.id_produto,
+                quantidade=item.quantidade,
+                preco_unitario=preco,
+                subtotal=subtotal,
+            ))
+
+        if not nova.itens:
+            return jsonify(
+                {"erro": "Nenhum produto disponível para reordenar"}
+            ), 400
+
+        nova.valor_total = total
+        db.session.add(nova)
+        db.session.commit()
+
+        return jsonify({
+            "mensagem": "Pedido refeito com sucesso",
+            "venda": nova.to_dict(),
+        }), 201
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
+# =============================================================================
+# FEATURE #19 — MULTI-LOJA (CRUD de lojas)
+# =============================================================================
+
+
+@app.route("/api/lojas", methods=["GET"])
+@api_login_required
+def listar_lojas():
+    """Lista todas as lojas/unidades."""
+    lojas = Loja.query.filter_by(ativa=True).all()
+    return jsonify([lj.to_dict() for lj in lojas])
+
+
+@app.route("/api/lojas", methods=["POST"])
+@api_admin_required
+def criar_loja():
+    """Cria nova unidade/loja."""
+    try:
+        dados = request.get_json(silent=True) or {}
+        nome = dados.get("nome", "").strip()
+        if not nome:
+            return jsonify({"erro": "nome obrigatório"}), 400
+
+        loja = Loja(
+            nome=nome,
+            endereco=dados.get("endereco"),
+            telefone=dados.get("telefone"),
+            cnpj=dados.get("cnpj"),
+        )
+        db.session.add(loja)
+        db.session.commit()
+
+        registrar_log(
+            "criar", "loja", loja.id_loja, f"Loja: {nome}"
+        )
+        return jsonify(loja.to_dict()), 201
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
+@app.route("/api/lojas/<int:lid>", methods=["PUT"])
+@api_admin_required
+def atualizar_loja(lid):
+    """Atualiza dados de uma loja."""
+    try:
+        loja = Loja.query.get(lid)
+        if not loja:
+            return jsonify({"erro": "Loja não encontrada"}), 404
+
+        dados = request.get_json(silent=True) or {}
+        if "nome" in dados:
+            loja.nome = dados["nome"].strip()
+        if "endereco" in dados:
+            loja.endereco = dados["endereco"]
+        if "telefone" in dados:
+            loja.telefone = dados["telefone"]
+        if "cnpj" in dados:
+            loja.cnpj = dados["cnpj"]
+        if "ativa" in dados:
+            loja.ativa = bool(dados["ativa"])
+
+        db.session.commit()
+        return jsonify(loja.to_dict())
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
+@app.route("/api/lojas/<int:lid>", methods=["DELETE"])
+@api_admin_required
+def desativar_loja(lid):
+    """Desativa uma loja (soft delete)."""
+    loja = Loja.query.get(lid)
+    if not loja:
+        return jsonify({"erro": "Loja não encontrada"}), 404
+    loja.ativa = False
+    db.session.commit()
+    return jsonify({"mensagem": "Loja desativada"})
 
 
 # =============================================================================
