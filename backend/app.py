@@ -89,7 +89,8 @@ _secret = os.environ.get("SECRET_KEY", "")
 if not _secret:
     if os.environ.get("FLASK_ENV") == "production":
         raise RuntimeError("SECRET_KEY obrigatória em produção!")
-    _secret = secrets.token_urlsafe(32)
+    # Dev/test: chave fixa para não invalidar sessão a cada restart
+    _secret = "dev-only-insecure-key-do-not-use-in-prod"
 app.config["SECRET_KEY"] = _secret
 
 # Sessão permanente — dura 7 dias
@@ -104,6 +105,18 @@ if os.environ.get("FLASK_ENV") == "production":
     # Render termina TLS no proxy; confiar no header X-Forwarded-Proto
     from werkzeug.middleware.proxy_fix import ProxyFix
     app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+
+
+# --- Helpers portáveis para comparação de datas (SQLite + PostgreSQL) ---
+def _dia_inicio(d):
+    """Retorna datetime no início do dia (00:00:00) — portável."""
+    return datetime.combine(d, datetime.min.time())
+
+
+def _dia_fim(d):
+    """Retorna datetime no fim do dia (23:59:59.999999) — portável."""
+    return datetime.combine(d, datetime.max.time())
+
 
 # Desabilitar Swagger em produção
 _doc_path = (
@@ -386,6 +399,13 @@ class ProdutoCreateSchema(BaseModel):
     volume: str | None = None
     estoque_atual: int | None = 0
     estoque_minimo: int | None = 0
+
+    @field_validator("preco")
+    @classmethod
+    def preco_positivo(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("Preço deve ser maior que zero")
+        return value
 
 
 class VendaItemSchema(BaseModel):
@@ -1886,7 +1906,7 @@ def dashboard_graficos():
                     "total"
                 ),
             )
-            .filter(db.func.date(Venda.data_venda) >= inicio)
+            .filter(Venda.data_venda >= _dia_inicio(inicio))
             .group_by(db.func.date(Venda.data_venda))
             .order_by(db.func.date(Venda.data_venda))
             .all()
@@ -1971,7 +1991,8 @@ def relatorio_dia_atual():
         hoje = datetime.now(timezone.utc).date()
 
         vendas_hoje = Venda.query.filter(
-            db.func.date(Venda.data_venda) == hoje
+            Venda.data_venda >= _dia_inicio(hoje),
+            Venda.data_venda <= _dia_fim(hoje),
         ).all()
 
         total_vendas = len(vendas_hoje)
@@ -2037,7 +2058,8 @@ def relatorio_por_data():
             joinedload(Venda.cliente),
             joinedload(Venda.itens).joinedload(ItemVenda.produto),
         ).filter(
-            db.func.date(Venda.data_venda) == data_filtro
+            Venda.data_venda >= _dia_inicio(data_filtro),
+            Venda.data_venda <= _dia_fim(data_filtro),
         ).all()
 
         total_vendas = len(vendas_dia)
@@ -2302,7 +2324,10 @@ def exportar_relatorio_pdf():
 
         # Buscar vendas do dia
         vendas = (
-            Venda.query.filter(db.func.date(Venda.data_venda) == data_ref)
+            Venda.query.filter(
+                Venda.data_venda >= _dia_inicio(data_ref),
+                Venda.data_venda <= _dia_fim(data_ref),
+            )
             .order_by(Venda.data_venda)
             .all()
         )
@@ -5667,7 +5692,8 @@ def dashboard_kpi():
 
         # Vendas de hoje
         vendas_hoje = Venda.query.filter(
-            db.func.date(Venda.data_venda) == hoje
+            Venda.data_venda >= _dia_inicio(hoje),
+            Venda.data_venda <= _dia_fim(hoje),
         ).all()
         fat_hoje = sum(float(v.valor_total) for v in vendas_hoje)
         qtd_hoje = len(vendas_hoje)
@@ -5677,13 +5703,13 @@ def dashboard_kpi():
 
         # Vendas da semana
         vendas_semana = Venda.query.filter(
-            db.func.date(Venda.data_venda) >= inicio_semana
+            Venda.data_venda >= _dia_inicio(inicio_semana)
         ).all()
         fat_semana = sum(float(v.valor_total) for v in vendas_semana)
 
         # Vendas do mês
         vendas_mes = Venda.query.filter(
-            db.func.date(Venda.data_venda) >= inicio_mes
+            Venda.data_venda >= _dia_inicio(inicio_mes)
         ).all()
         fat_mes = sum(float(v.valor_total) for v in vendas_mes)
 
@@ -5700,7 +5726,8 @@ def dashboard_kpi():
                 db.func.sum(Venda.valor_total).label("total"),
             )
             .join(Venda)
-            .filter(db.func.date(Venda.data_venda) == hoje)
+            .filter(Venda.data_venda >= _dia_inicio(hoje))
+            .filter(Venda.data_venda <= _dia_fim(hoje))
             .group_by(Cliente.id_cliente, Cliente.nome)
             .order_by(db.func.sum(Venda.valor_total).desc())
             .limit(3)
@@ -5715,7 +5742,8 @@ def dashboard_kpi():
             )
             .join(ItemVenda)
             .join(Venda)
-            .filter(db.func.date(Venda.data_venda) == hoje)
+            .filter(Venda.data_venda >= _dia_inicio(hoje))
+            .filter(Venda.data_venda <= _dia_fim(hoje))
             .group_by(Produto.id_produto, Produto.nome_produto)
             .order_by(db.func.sum(ItemVenda.quantidade).desc())
             .limit(3)
@@ -5773,11 +5801,17 @@ def relatorio_vendas_filtradas():
         data_fim = request.args.get("data_fim")
         if data_inicio:
             query = query.filter(
-                db.func.date(Venda.data_venda) >= data_inicio
+                Venda.data_venda >= _dia_inicio(
+                    datetime.strptime(data_inicio, "%Y-%m-%d").date()
+                ) if isinstance(data_inicio, str) else
+                Venda.data_venda >= _dia_inicio(data_inicio)
             )
         if data_fim:
             query = query.filter(
-                db.func.date(Venda.data_venda) <= data_fim
+                Venda.data_venda <= _dia_fim(
+                    datetime.strptime(data_fim, "%Y-%m-%d").date()
+                ) if isinstance(data_fim, str) else
+                Venda.data_venda <= _dia_fim(data_fim)
             )
 
         # Filtro por forma de pagamento
@@ -6155,11 +6189,11 @@ def resumo_financeiro():
         )
         if data_inicio:
             q_vendas = q_vendas.filter(
-                db.func.date(Venda.data_venda) >= data_inicio
+                Venda.data_venda >= data_inicio
             )
         if data_fim:
             q_vendas = q_vendas.filter(
-                db.func.date(Venda.data_venda) <= data_fim
+                Venda.data_venda <= data_fim
             )
         receitas_vendas = float(
             q_vendas.with_entities(
@@ -6173,11 +6207,11 @@ def resumo_financeiro():
         )
         if data_inicio:
             q_compras = q_compras.filter(
-                db.func.date(CompraEstoque.data_compra) >= data_inicio
+                CompraEstoque.data_compra >= data_inicio
             )
         if data_fim:
             q_compras = q_compras.filter(
-                db.func.date(CompraEstoque.data_compra) <= data_fim
+                CompraEstoque.data_compra <= data_fim
             )
         despesas_compras = float(
             q_compras.with_entities(

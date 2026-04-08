@@ -1429,3 +1429,31 @@ img[data-src][src] { opacity: 1; }
     animation: pageIn .3s ease;
 }
 @keyframes pageIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ==========================================================================
+   DASHBOARD MOBILE RESPONSIVE ENHANCEMENTS
+   ========================================================================== */
+@media (max-width: 600px) {
+    .container { padding: .5rem; }
+    .hero { padding: 1.5rem 1rem; }
+    .hero h1 { font-size: 1.5rem; }
+    .stats-grid { grid-template-columns: 1fr 1fr; gap: .75rem; }
+    .stat-card { padding: 1rem; }
+    .stat-card .stat-value { font-size: 1.3rem; }
+    .quick-actions { padding: 1rem; }
+    .action-buttons { grid-template-columns: 1fr 1fr; gap: .5rem; }
+    .action-btn { padding: .75rem .5rem; font-size: .85rem; }
+    .chart-container { padding: 1rem; }
+    .table { font-size: .8rem; }
+    .table th, .table td { padding: .5rem .4rem; }
+    .card { padding: 1rem; margin-bottom: 1rem; }
+    h2 { font-size: 1.2rem; }
+    .form-group { margin-bottom: .75rem; }
+    .modal-box { width: 95vw; max-width: 95vw; margin: 1rem; padding: 1rem; }
+}
+
+@media (max-width: 400px) {
+    .stats-grid { grid-template-columns: 1fr; }
+    .action-buttons { grid-template-columns: 1fr; }
+    .hero h1 { font-size: 1.25rem; }
+}

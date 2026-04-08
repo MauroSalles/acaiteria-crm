@@ -4,15 +4,10 @@ Webhooks, Upload de Foto, Agendamento, Multi-Loja, NFC-e,
 Cursor Pagination, API Versioning, OpenAPI, Email, Painel Cliente.
 """
 from decimal import Decimal
-from datetime import date, timedelta
-import json
 import pyotp
 
 from backend.models import (
-    db, Cliente, Produto, Venda, ItemVenda, Usuario,
-    TwoFactorSecret, ComboKit, ComboKitItem,
-    Indicacao, Assinatura, AssinaturaCliente,
-    WebhookConfig, Loja,
+    db, Cliente, Produto, Venda, ItemVenda,
 )
 
 

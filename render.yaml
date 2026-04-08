@@ -19,8 +19,8 @@ services:
           name: acaiteria-db
           property: connectionString
       - key: SECRET_KEY
-        generateValue: true   # ATENÇÃO: após o 1º deploy, fixe o valor no dashboard Render
-                               # para evitar invalidação de sessões a cada restart
+        sync: false    # IMPORTANTE: definir valor fixo no dashboard Render
+                       # generateValue regenera a cada redeploy → invalida sessões
       - key: FLASK_ENV
         value: production
       - key: PORT

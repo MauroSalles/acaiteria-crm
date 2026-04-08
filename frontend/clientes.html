@@ -186,6 +186,7 @@
                 });
 
                 // Info de paginação
+                const paginacaoEl = document.getElementById('paginacao');
                 if (dados.total_paginas > 1) {
                     let paginacao = '<div style="margin-top: 1rem; text-align: center;">';
                     if (paginaAtual > 1)
@@ -195,7 +196,6 @@
                         paginacao += `<button class="btn btn-secondary" onclick="carregarClientes(${paginaAtual + 1})" style="margin: 0 0.25rem;">Próxima ▶</button>`;
                     paginacao += '</div>';
 
-                    const paginacaoEl = document.getElementById('paginacao');
                     if (paginacaoEl) {
                         paginacaoEl.innerHTML = paginacao;
                     } else {
@@ -204,6 +204,8 @@
                         div.innerHTML = paginacao;
                         tbody.parentElement.parentElement.appendChild(div);
                     }
+                } else if (paginacaoEl) {
+                    paginacaoEl.innerHTML = '';
                 }
             } catch (erro) {
                 document.querySelector('#tabela-clientes tbody').innerHTML = 

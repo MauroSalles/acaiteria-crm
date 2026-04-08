@@ -120,6 +120,37 @@ function removerToast(toast) {
     setTimeout(() => toast.remove(), 500); // fallback
 }
 
+// ---------- FETCH COM RETRY + EXPONENTIAL BACKOFF ----------
+/**
+ * fetch() com retry automático e exponential backoff.
+ * @param {string} url
+ * @param {object} opts      - opções do fetch (method, headers, body…)
+ * @param {number} retries   - tentativas extras (padrão 2 → até 3 tentativas)
+ * @param {number} baseDelay - delay base em ms (padrão 500)
+ * @returns {Promise<Response>}
+ */
+function fetchRetry(url, opts, retries, baseDelay) {
+    if (retries  === undefined) retries  = 2;
+    if (baseDelay === undefined) baseDelay = 500;
+    return fetch(url, opts).then(function(resp) {
+        if (resp.ok || retries <= 0 || resp.status < 500) return resp;
+        return new Promise(function(resolve) {
+            var delay = baseDelay * Math.pow(2, 2 - retries);
+            setTimeout(function() {
+                resolve(fetchRetry(url, opts, retries - 1, baseDelay));
+            }, delay);
+        });
+    }).catch(function(err) {
+        if (retries <= 0) throw err;
+        return new Promise(function(resolve, reject) {
+            var delay = baseDelay * Math.pow(2, 2 - retries);
+            setTimeout(function() {
+                fetchRetry(url, opts, retries - 1, baseDelay).then(resolve, reject);
+            }, delay);
+        });
+    });
+}
+
 // Formatador de moeda
 function formatarMoeda(valor) {
     return new Intl.NumberFormat('pt-BR', {
