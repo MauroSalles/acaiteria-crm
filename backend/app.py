@@ -109,13 +109,13 @@ if os.environ.get("FLASK_ENV") == "production":
 
 # --- Helpers portáveis para comparação de datas (SQLite + PostgreSQL) ---
 def _dia_inicio(d):
-    """Retorna datetime no início do dia (00:00:00) — portável."""
-    return datetime.combine(d, datetime.min.time())
+    """Retorna datetime no início do dia (00:00:00 UTC) — portável."""
+    return datetime.combine(d, datetime.min.time(), tzinfo=timezone.utc)
 
 
 def _dia_fim(d):
-    """Retorna datetime no fim do dia (23:59:59.999999) — portável."""
-    return datetime.combine(d, datetime.max.time())
+    """Retorna datetime no fim do dia (23:59:59.999999 UTC) — portável."""
+    return datetime.combine(d, datetime.max.time(), tzinfo=timezone.utc)
 
 
 # Desabilitar Swagger em produção
@@ -248,6 +248,7 @@ with app.app_context():
         ("venda", "status_pedido", "VARCHAR(30) DEFAULT 'Recebido'"),
         ("venda", "motivo_cancelamento", "TEXT"),
         ("produto", "preco_promocional", "DECIMAL(10,2)"),
+        ("venda", "desconto_aplicado", "DECIMAL(10,2) DEFAULT 0"),
     ]
     # Colunas vindas de dict interno – nunca de input externo
     _sql_map = {
@@ -262,7 +263,7 @@ with app.app_context():
                     )
                 ))
             except Exception:
-                pass  # coluna já existe — OK
+                pass  # coluna já existe — OK (tanto SQLite como PostgreSQL)
 
     # Auto-criação de índices para colunas frequentemente filtradas
     _indices = [
@@ -596,11 +597,19 @@ def registrar_log(acao, entidade, id_entidade=None, detalhes=None):
 @health_ns.route("/health")
 class HealthResource(Resource):
     def get(self):
+        db_ok = True
+        try:
+            db.session.execute(db.text("SELECT 1"))
+        except Exception:
+            db_ok = False
+        status = "ok" if db_ok else "degraded"
+        code = 200 if db_ok else 503
         return {
-            "status": "ok",
+            "status": status,
             "service": "acaiteria-crm",
+            "database": "connected" if db_ok else "unavailable",
             "timestamp": datetime.now(timezone.utc).isoformat(),
-        }, 200
+        }, code
 
 
 # =============================================================================
@@ -731,6 +740,57 @@ def index():
             usuario_nome=session.get("usuario_nome", ""),
             papel=session.get("papel", ""),
         )
+
+
+# =============================================================================
+# ROTAS - DASHBOARD KPI (API JSON)
+# =============================================================================
+
+
+@app.route("/api/dashboard/kpi", methods=["GET"])
+@limiter.limit("30 per minute")
+@api_login_required
+def dashboard_kpi():
+    """Retorna KPIs do dashboard em JSON (para consumo por frontend SPA)."""
+    try:
+        total_clientes = Cliente.query.filter_by(ativo=True).count()
+        total_vendas = Venda.query.count()
+        faturamento_total = (
+            db.session.query(db.func.sum(Venda.valor_total)).scalar() or 0
+        )
+        vendas_semana = Venda.query.filter(
+            Venda.data_venda >= datetime.now(timezone.utc) - timedelta(days=7)
+        ).count()
+        clientes_consentimento = Cliente.query.filter_by(
+            ativo=True, consentimento_lgpd=True
+        ).count()
+        ticket_medio = (
+            float(faturamento_total / total_vendas)
+            if total_vendas > 0 else 0
+        )
+        produtos_ativos = Produto.query.filter_by(ativo=True).count()
+        estoque_baixo = Produto.query.filter(
+            Produto.ativo.is_(True),
+            Produto.estoque_minimo > 0,
+            Produto.estoque_atual <= Produto.estoque_minimo,
+        ).count()
+
+        return jsonify({
+            "total_clientes": total_clientes,
+            "total_vendas": total_vendas,
+            "faturamento_total": float(faturamento_total),
+            "vendas_semana": vendas_semana,
+            "clientes_consentimento": clientes_consentimento,
+            "taxa_consentimento": round(
+                (clientes_consentimento / total_clientes * 100)
+                if total_clientes > 0 else 0, 2
+            ),
+            "ticket_medio": round(ticket_medio, 2),
+            "produtos_ativos": produtos_ativos,
+            "estoque_baixo": estoque_baixo,
+        })
+    except Exception as e:
+        return _erro_interno(e)
 
 
 # =============================================================================
@@ -1555,6 +1615,7 @@ def criar_venda():
         ).quantize(Decimal("0.01"))
 
         venda.valor_total = valor_total
+        venda.desconto_aplicado = desconto_valor.quantize(Decimal("0.01"))
 
         # Criar pagamento
         pagamento = Pagamento(
@@ -1565,15 +1626,18 @@ def criar_venda():
         venda.pagamento = pagamento
         venda.status_pagamento = "Concluído"
 
-        # Acumular pontos de fidelidade (1 ponto por R$1 gasto)
+        # Acumular pontos de fidelidade (1 ponto por R$1 gasto, cap 999999)
         pontos_ganhos = int(valor_total)
         if pontos_ganhos > 0:
-            cliente.pontos_fidelidade = (
-                cliente.pontos_fidelidade or 0
-            ) + pontos_ganhos
+            cliente.pontos_fidelidade = min(
+                999999, (cliente.pontos_fidelidade or 0) + pontos_ganhos
+            )
 
         db.session.add(venda)
         db.session.commit()
+
+        # Invalidar cache vitrine (estoque atualizado)
+        _invalidar_cache_vitrine()
 
         # Verificar badges de gamificação
         novos_badges = []
@@ -2073,7 +2137,7 @@ def relatorio_por_data():
             if (v.status_pagamento or "") == "Cancelado"
         )
         total_descontos = sum(
-            v.desconto_percentual or 0 for v in vendas_dia
+            float(v.desconto_aplicado or 0) for v in vendas_dia
         )
         vendas_ativas = [
             v for v in vendas_dia
@@ -2775,7 +2839,16 @@ def vitrine_produtos():
                 "categoria": p.categoria,
                 "descricao": p.descricao,
                 "preco": float(p.preco),
+                "preco_promocional": (
+                    float(p.preco_promocional)
+                    if p.preco_promocional else None
+                ),
                 "volume": p.volume,
+                "foto_url": p.foto_url,
+                "estoque_disponivel": (p.estoque_atual or 0) > 0 if (
+                    (p.estoque_atual or 0) > 0
+                    or (p.estoque_minimo or 0) > 0
+                ) else True,
             }
             for p in produtos
         ])
@@ -3169,12 +3242,49 @@ def cliente_painel():
 
 @app.route("/cliente/logout")
 def cliente_logout():
-    """Logout do cliente — preserva sessão admin se houver."""
-    session.pop("cliente_id", None)
-    session.pop("cliente_nome", None)
-    if session.get("tipo_usuario") == "cliente":
-        session.pop("tipo_usuario", None)
+    """Logout do cliente — limpa sessão completamente."""
+    session.clear()
     return redirect("/vitrine")
+
+
+@app.route("/api/cliente/perfil", methods=["GET"])
+@limiter.limit("30 per minute")
+@cliente_login_required
+def cliente_perfil_api():
+    """API — perfil do cliente logado (pontos, badges, resumo)."""
+    try:
+        cliente = db.session.get(Cliente, session["cliente_id"])
+        if not cliente or not cliente.ativo:
+            return jsonify({"erro": "Cliente não encontrado"}), 404
+
+        total_compras = Venda.query.filter_by(
+            id_cliente=cliente.id_cliente
+        ).count()
+        total_gasto = float(
+            db.session.query(
+                db.func.coalesce(db.func.sum(Venda.valor_total), 0)
+            ).filter(Venda.id_cliente == cliente.id_cliente).scalar()
+        )
+        badges = BadgeCliente.query.filter_by(
+            id_cliente=cliente.id_cliente
+        ).order_by(BadgeCliente.data_conquista).all()
+
+        return jsonify({
+            "id_cliente": cliente.id_cliente,
+            "nome": cliente.nome,
+            "email": cliente.email,
+            "telefone": cliente.telefone,
+            "pontos_fidelidade": cliente.pontos_fidelidade or 0,
+            "total_compras": total_compras,
+            "total_gasto": round(total_gasto, 2),
+            "badges": [b.to_dict() for b in badges],
+            "membro_desde": (
+                cliente.data_cadastro.isoformat()
+                if cliente.data_cadastro else None
+            ),
+        })
+    except Exception as e:
+        return _erro_interno(e)
 
 
 @app.route("/api/cliente/carrinho/checkout", methods=["POST"])
@@ -3307,13 +3417,17 @@ def cliente_checkout():
         )
         db.session.add(pagamento)
 
-        # 1 ponto por real gasto
+        # 1 ponto por real gasto (cap 999999)
         pontos_ganhos = int(valor_total)
-        cliente.pontos_fidelidade = (
-            (cliente.pontos_fidelidade or 0) + pontos_ganhos
+        cliente.pontos_fidelidade = min(
+            999999, (cliente.pontos_fidelidade or 0) + pontos_ganhos
         )
 
         db.session.commit()
+
+        # Invalidar cache vitrine (estoque atualizado)
+        _invalidar_cache_vitrine()
+
         registrar_log(
             "criar", "venda", venda.id_venda,
             f"Pedido online cliente {cliente.nome}: "
@@ -5257,7 +5371,7 @@ def _construir_matriz_compras():
     vendas = (
         Venda.query.options(joinedload(Venda.itens))
         .order_by(Venda.data_venda.desc())
-        .limit(5000)
+        .limit(2000)
         .all()
     )
     # {id_cliente: {id_produto: quantidade_total}}
@@ -5705,116 +5819,6 @@ def ia_stats():
                     if total_fb > 0 else 0, 3
                 ),
             },
-        })
-    except Exception as e:
-        return _erro_interno(e)
-
-
-# =============================================================================
-# ROTAS - DASHBOARD KPI EM TEMPO REAL
-# =============================================================================
-
-
-@app.route("/api/dashboard/kpi", methods=["GET"])
-@api_login_required
-@cache.cached(timeout=60, key_prefix="dashboard_kpi")
-def dashboard_kpi():
-    """KPIs operacionais em tempo real para o dashboard."""
-    try:
-        agora = datetime.now(timezone.utc)
-        hoje = agora.date()
-        inicio_semana = hoje - timedelta(days=hoje.weekday())
-        inicio_mes = hoje.replace(day=1)
-
-        # Vendas de hoje
-        vendas_hoje = Venda.query.filter(
-            Venda.data_venda >= _dia_inicio(hoje),
-            Venda.data_venda <= _dia_fim(hoje),
-        ).all()
-        fat_hoje = sum(float(v.valor_total) for v in vendas_hoje)
-        qtd_hoje = len(vendas_hoje)
-        ticket_medio_hoje = (
-            fat_hoje / qtd_hoje if qtd_hoje > 0 else 0
-        )
-
-        # Vendas da semana
-        vendas_semana = Venda.query.filter(
-            Venda.data_venda >= _dia_inicio(inicio_semana)
-        ).all()
-        fat_semana = sum(float(v.valor_total) for v in vendas_semana)
-
-        # Vendas do mês
-        vendas_mes = Venda.query.filter(
-            Venda.data_venda >= _dia_inicio(inicio_mes)
-        ).all()
-        fat_mes = sum(float(v.valor_total) for v in vendas_mes)
-
-        # Pedidos em andamento (não entregues nem cancelados)
-        pedidos_ativos = Venda.query.filter(
-            Venda.status_pedido.in_(["Recebido", "Preparando", "Pronto"])
-        ).count()
-
-        # Top 3 clientes do dia
-        top_clientes_dia = (
-            db.session.query(
-                Cliente.nome,
-                db.func.count(Venda.id_venda).label("qtd"),
-                db.func.sum(Venda.valor_total).label("total"),
-            )
-            .join(Venda)
-            .filter(Venda.data_venda >= _dia_inicio(hoje))
-            .filter(Venda.data_venda <= _dia_fim(hoje))
-            .group_by(Cliente.id_cliente, Cliente.nome)
-            .order_by(db.func.sum(Venda.valor_total).desc())
-            .limit(3)
-            .all()
-        )
-
-        # Top 3 produtos do dia
-        top_produtos_dia = (
-            db.session.query(
-                Produto.nome_produto,
-                db.func.sum(ItemVenda.quantidade).label("qtd"),
-            )
-            .join(ItemVenda)
-            .join(Venda)
-            .filter(Venda.data_venda >= _dia_inicio(hoje))
-            .filter(Venda.data_venda <= _dia_fim(hoje))
-            .group_by(Produto.id_produto, Produto.nome_produto)
-            .order_by(db.func.sum(ItemVenda.quantidade).desc())
-            .limit(3)
-            .all()
-        )
-
-        # Alertas de estoque crítico (abaixo do mínimo)
-        estoque_critico = Produto.query.filter(
-            Produto.ativo == True,  # noqa: E712
-            Produto.estoque_atual <= Produto.estoque_minimo,
-            (Produto.estoque_minimo > 0) | (Produto.estoque_atual > 0),
-        ).count()
-
-        return jsonify({
-            "hoje": {
-                "faturamento": round(fat_hoje, 2),
-                "vendas": qtd_hoje,
-                "ticket_medio": round(ticket_medio_hoje, 2),
-            },
-            "semana": {"faturamento": round(fat_semana, 2)},
-            "mes": {"faturamento": round(fat_mes, 2)},
-            "pedidos_ativos": pedidos_ativos,
-            "estoque_critico": estoque_critico,
-            "top_clientes_dia": [
-                {
-                    "nome": c.nome,
-                    "vendas": c.qtd,
-                    "total": float(c.total),
-                }
-                for c in top_clientes_dia
-            ],
-            "top_produtos_dia": [
-                {"produto": p.nome_produto, "quantidade": int(p.qtd)}
-                for p in top_produtos_dia
-            ],
         })
     except Exception as e:
         return _erro_interno(e)
@@ -6350,17 +6354,18 @@ BADGES_DEFINICAO = {
 
 
 def _verificar_badges(id_cliente):
-    """Verifica e concede badges ao cliente (2 queries em vez de N)."""
-    # Pre-calcular tudo em 2 queries
+    """Verifica e concede badges ao cliente (3 queries em vez de N)."""
+    cliente = db.session.get(Cliente, id_cliente)
+    if not cliente:
+        return []
+
     stats = db.session.query(
         db.func.count(Venda.id_venda),
         db.func.coalesce(db.func.sum(Venda.valor_total), 0),
     ).filter(Venda.id_cliente == id_cliente).first()
     total_vendas = stats[0]
     total_gasto = float(stats[1])
-
-    cliente = db.session.get(Cliente, id_cliente)
-    pontos = (cliente.pontos_fidelidade or 0) if cliente else 0
+    pontos = cliente.pontos_fidelidade or 0
 
     badges_existentes = {
         row[0]

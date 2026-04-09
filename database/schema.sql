@@ -139,6 +139,7 @@ CREATE TABLE venda (
     status_pedido VARCHAR(30) DEFAULT 'Recebido',
     observacoes TEXT,
     motivo_cancelamento TEXT,
+    desconto_aplicado DECIMAL(10, 2) DEFAULT 0,
     data_agendamento DATETIME,
     recibo_gerado BOOLEAN DEFAULT 0,
     data_atualizacao DATETIME DEFAULT CURRENT_TIMESTAMP

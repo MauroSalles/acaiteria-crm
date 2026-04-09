@@ -44,5 +44,7 @@ CMD gunicorn backend.app:app \
     --threads 4 \
     --timeout 120 \
     --preload \
+    --max-requests 1000 \
+    --max-requests-jitter 100 \
     --access-logfile - \
     --error-logfile -

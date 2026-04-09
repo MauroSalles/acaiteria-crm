@@ -243,6 +243,9 @@ class Venda(db.Model):
     )  # Recebido | Preparando | Pronto | Entregue | Cancelado
     observacoes = db.Column(db.Text)
     motivo_cancelamento = db.Column(db.Text)
+    desconto_aplicado = db.Column(
+        db.DECIMAL(10, 2), default=0
+    )  # valor total de desconto aplicado (R$)
     data_agendamento = db.Column(db.DateTime, nullable=True)
     recibo_gerado = db.Column(db.Boolean, default=False)
     data_atualizacao = db.Column(
@@ -273,6 +276,7 @@ class Venda(db.Model):
                 self.data_venda.isoformat() if self.data_venda else None
             ),
             "valor_total": float(self.valor_total),
+            "desconto_aplicado": float(self.desconto_aplicado or 0),
             "forma_pagamento": self.forma_pagamento,
             "status_pagamento": self.status_pagamento,
             "status_pedido": self.status_pedido or "Recebido",

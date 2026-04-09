@@ -68,11 +68,11 @@ class TestDashboardKPI:
         resp = client.get("/api/dashboard/kpi")
         assert resp.status_code == 200
         d = resp.get_json()
-        assert d["hoje"]["faturamento"] == 0
-        assert d["hoje"]["vendas"] == 0
-        assert d["hoje"]["ticket_medio"] == 0
-        assert d["pedidos_ativos"] == 0
-        assert "estoque_critico" in d
+        assert d["total_vendas"] == 0
+        assert d["faturamento_total"] == 0
+        assert d["ticket_medio"] == 0
+        assert "estoque_baixo" in d
+        assert "produtos_ativos" in d
 
     def test_kpi_com_vendas(self, client, app):
         with app.app_context():
@@ -83,9 +83,9 @@ class TestDashboardKPI:
         resp = client.get("/api/dashboard/kpi")
         assert resp.status_code == 200
         d = resp.get_json()
-        assert d["hoje"]["faturamento"] == 30.0
-        assert d["hoje"]["vendas"] == 1
-        assert d["hoje"]["ticket_medio"] == 30.0
+        assert d["faturamento_total"] == 30.0
+        assert d["total_vendas"] == 1
+        assert d["ticket_medio"] == 30.0
 
     def test_kpi_requer_auth(self, unauthenticated_client):
         resp = unauthenticated_client.get("/api/dashboard/kpi")
