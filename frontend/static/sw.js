@@ -1,4 +1,4 @@
-const CACHE_NAME = 'acai-crm-v17';
+const CACHE_NAME = 'acai-crm-v18';
 const SYNC_QUEUE = 'acai-sync-queue';
 const STATIC_ASSETS = [
   '/static/estilos.css',
@@ -59,10 +59,15 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        // Só cachear respostas bem-sucedidas que não sejam redirects
-        // e que não sejam a página de login (evita cachear login como '/')
+        // Só cachear assets estáticos e páginas públicas
+        // Evita servir HTML autenticado do cache após logout
+        const url = event.request.url;
+        const isStatic = url.includes('/static/');
+        const isPublic = url.includes('/offline') || url.includes('/vitrine')
+            || url.includes('/politica');
         if (response.ok && !response.redirected
-            && !event.request.url.includes('/login')) {
+            && !url.includes('/login')
+            && (isStatic || isPublic)) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
         }

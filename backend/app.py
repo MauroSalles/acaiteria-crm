@@ -262,7 +262,7 @@ with app.app_context():
                     )
                 ))
             except Exception:
-                pass  # coluna já existe — ignorar
+                pass  # coluna já existe — OK
 
     # Auto-criação de índices para colunas frequentemente filtradas
     _indices = [
@@ -281,7 +281,7 @@ with app.app_context():
                     )
                 ))
             except Exception:
-                pass  # índice já existe — ignorar
+                pass  # índice já existe — OK
 
 # Configurar logging estruturado
 logging.basicConfig(
@@ -329,10 +329,10 @@ def adicionar_headers_seguranca(response):
         response.headers["Strict-Transport-Security"] = (
             "max-age=31536000; includeSubDomains"
         )
-    # Cache-Control para assets estáticos (1 hora)
+    # Cache-Control para assets estáticos (1 semana, SW gerencia invalidação)
     if request.path.startswith("/static/"):
         response.headers["Cache-Control"] = (
-            "public, max-age=3600, stale-while-revalidate=86400"
+            "public, max-age=604800, stale-while-revalidate=86400"
         )
     return response
 
@@ -1350,6 +1350,10 @@ def listar_vendas():
         if forma:
             query = query.filter(Venda.forma_pagamento.ilike(f"%{forma}%"))
 
+        # Paginação — count ANTES do joinedload (evita JOIN overhead)
+        pagina, por_pagina = get_pagination_params()
+        total = query.count()
+
         # Eager-load: evita N+1 ao serializar
         query = query.options(
             joinedload(Venda.cliente),
@@ -1357,10 +1361,6 @@ def listar_vendas():
             joinedload(Venda.itens).joinedload(ItemVenda.complementos)
             .joinedload(ItemVendaComplemento.complemento),
         )
-
-        # Paginação
-        pagina, por_pagina = get_pagination_params()
-        total = query.count()
 
         vendas = (
             query.order_by(Venda.data_venda.desc())
@@ -1552,7 +1552,7 @@ def criar_venda():
 
         valor_total = max(
             valor_total - desconto_valor + taxa, Decimal("0.00")
-        )
+        ).quantize(Decimal("0.01"))
 
         venda.valor_total = valor_total
 
@@ -5311,9 +5311,16 @@ def ia_recomendacoes(id_cliente):
                 .all()
             )
             produtos_rec = []
+            pids_top = [pid for pid, _ in top]
+            prods_map = {
+                p.id_produto: p
+                for p in Produto.query.filter(
+                    Produto.id_produto.in_(pids_top), Produto.ativo.is_(True)
+                ).all()
+            } if pids_top else {}
             for pid, total in top:
-                p = db.session.get(Produto, pid)
-                if p and p.ativo:
+                p = prods_map.get(pid)
+                if p:
                     produtos_rec.append({
                         **p.to_dict(),
                         "score": 1.0,
@@ -5344,14 +5351,21 @@ def ia_recomendacoes(id_cliente):
                 if pid not in compras_alvo:
                     scores[pid] = scores.get(pid, 0) + sim * qtd
 
-        # Ordenar e pegar top-5
+        # Ordenar e pegar top-5 — bulk load (evita N+1)
         ranking = sorted(scores.items(), key=lambda x: x[1], reverse=True)
         max_score = ranking[0][1] if ranking else 1
+        top5_pids = [pid for pid, _ in ranking[:5]]
+        prods_map = {
+            p.id_produto: p
+            for p in Produto.query.filter(
+                Produto.id_produto.in_(top5_pids), Produto.ativo.is_(True)
+            ).all()
+        } if top5_pids else {}
 
         produtos_rec = []
         for pid, score in ranking[:5]:
-            p = db.session.get(Produto, pid)
-            if p and p.ativo:
+            p = prods_map.get(pid)
+            if p:
                 produtos_rec.append({
                     **p.to_dict(),
                     "score": round(score / max_score, 3),
@@ -6294,78 +6308,63 @@ def categorias_financeiro():
 
 
 # Definição de badges disponíveis
+# check(total_vendas, total_gasto, pontos) — SEM queries inline
 BADGES_DEFINICAO = {
     "primeira_compra": {
         "nome": "Primeira Compra",
         "descricao": "Fez o primeiro pedido!",
         "icone": "🎉",
-        "check": lambda c, v: v >= 1,
+        "check": lambda v, g, p: v >= 1,
     },
     "fiel_10": {
         "nome": "Cliente Fiel",
         "descricao": "Completou 10 compras",
         "icone": "🏆",
-        "check": lambda c, v: v >= 10,
+        "check": lambda v, g, p: v >= 10,
     },
     "fiel_50": {
         "nome": "Super Fiel",
         "descricao": "Completou 50 compras!",
         "icone": "💎",
-        "check": lambda c, v: v >= 50,
+        "check": lambda v, g, p: v >= 50,
     },
     "gastador_100": {
         "nome": "Gastador",
         "descricao": "Gastou mais de R$100 no total",
         "icone": "💰",
-        "check": lambda c, v: (
-            float(
-                db.session.query(
-                    db.func.coalesce(db.func.sum(Venda.valor_total), 0)
-                )
-                .filter(Venda.id_cliente == c)
-                .scalar()
-            )
-            >= 100
-        ),
+        "check": lambda v, g, p: g >= 100,
     },
     "gastador_500": {
         "nome": "VIP",
         "descricao": "Gastou mais de R$500 — você é VIP!",
         "icone": "👑",
-        "check": lambda c, v: (
-            float(
-                db.session.query(
-                    db.func.coalesce(db.func.sum(Venda.valor_total), 0)
-                )
-                .filter(Venda.id_cliente == c)
-                .scalar()
-            )
-            >= 500
-        ),
+        "check": lambda v, g, p: g >= 500,
     },
     "pontos_100": {
         "nome": "Colecionador",
         "descricao": "Acumulou 100 pontos de fidelidade",
         "icone": "🌟",
-        "check": lambda c, v: (
-            (
-                db.session.get(Cliente, c).pontos_fidelidade or 0
-            )
-            >= 100
-        ),
+        "check": lambda v, g, p: p >= 100,
     },
 }
 
 
 def _verificar_badges(id_cliente):
-    """Verifica e concede badges ao cliente."""
-    total_vendas = Venda.query.filter_by(
-        id_cliente=id_cliente
-    ).count()
+    """Verifica e concede badges ao cliente (2 queries em vez de N)."""
+    # Pre-calcular tudo em 2 queries
+    stats = db.session.query(
+        db.func.count(Venda.id_venda),
+        db.func.coalesce(db.func.sum(Venda.valor_total), 0),
+    ).filter(Venda.id_cliente == id_cliente).first()
+    total_vendas = stats[0]
+    total_gasto = float(stats[1])
+
+    cliente = db.session.get(Cliente, id_cliente)
+    pontos = (cliente.pontos_fidelidade or 0) if cliente else 0
 
     badges_existentes = {
-        b.codigo
-        for b in BadgeCliente.query.filter_by(
+        row[0]
+        for row in db.session.query(BadgeCliente.codigo).filter_by(
             id_cliente=id_cliente
         ).all()
     }
@@ -6373,7 +6372,7 @@ def _verificar_badges(id_cliente):
     novos = []
     for codigo, defn in BADGES_DEFINICAO.items():
         if codigo not in badges_existentes:
-            if defn["check"](id_cliente, total_vendas):
+            if defn["check"](total_vendas, total_gasto, pontos):
                 badge = BadgeCliente(
                     id_cliente=id_cliente,
                     codigo=codigo,
@@ -6922,7 +6921,7 @@ def upload_foto_produto(pid):
 
 def _disparar_webhooks(evento, payload):
     """Dispara webhooks para o evento especificado (fire-and-forget)."""
-    import threading
+    from concurrent.futures import ThreadPoolExecutor
     import urllib.request
     import json as _json
 
@@ -6932,30 +6931,27 @@ def _disparar_webhooks(evento, payload):
     if not hooks:
         return
 
-    for hook in hooks:
-        def _send(url, data, secret):
-            try:
-                body = _json.dumps(data).encode("utf-8")
-                req = urllib.request.Request(
-                    url, data=body,
-                    headers={"Content-Type": "application/json"},
-                )
-                if secret:
-                    import hashlib
-                    import hmac
-                    sig = hmac.new(
-                        secret.encode(), body, hashlib.sha256
-                    ).hexdigest()
-                    req.add_header("X-Webhook-Signature", sig)
-                urllib.request.urlopen(req, timeout=10)
-            except Exception as exc:
-                logger.warning("Webhook falhou: %s — %s", url, exc)
+    def _send(url, data, secret):
+        try:
+            body = _json.dumps(data).encode("utf-8")
+            req = urllib.request.Request(
+                url, data=body,
+                headers={"Content-Type": "application/json"},
+            )
+            if secret:
+                import hashlib
+                import hmac
+                sig = hmac.new(
+                    secret.encode(), body, hashlib.sha256
+                ).hexdigest()
+                req.add_header("X-Webhook-Signature", sig)
+            urllib.request.urlopen(req, timeout=10)
+        except Exception as exc:
+            logger.warning("Webhook falhou: %s — %s", url, exc)
 
-        threading.Thread(
-            target=_send,
-            args=(hook.url, payload, hook.secret),
-            daemon=True,
-        ).start()
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        for hook in hooks:
+            pool.submit(_send, hook.url, payload, hook.secret)
 
 
 @app.route("/api/webhooks", methods=["GET"])
@@ -7544,8 +7540,8 @@ def enviar_notificacao_email():
                 {"erro": "email, assunto e corpo obrigatórios"}
             ), 400
 
-        # Validação de email simples
-        if "@" not in destinatario or "." not in destinatario:
+        # Validação de email
+        if not _email_valido(destinatario):
             return jsonify(
                 {"erro": "Email inválido"}
             ), 400
