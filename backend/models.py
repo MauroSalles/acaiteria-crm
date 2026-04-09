@@ -541,7 +541,7 @@ class Fornecedor(db.Model):
     nome = db.Column(db.String(200), nullable=False)
     cnpj = db.Column(db.String(18), unique=True)
     telefone = db.Column(db.String(20))
-    email = db.Column(db.String(150))
+    email = db.Column(db.String(150), index=True)
     endereco = db.Column(db.Text)
     observacoes = db.Column(db.Text)
     ativo = db.Column(db.Boolean, default=True)

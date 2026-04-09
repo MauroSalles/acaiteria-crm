@@ -232,7 +232,8 @@ function atualizarInfoCompSelecionados() {
         const c = complementosDisponiveis.find(x => x.id_complemento === id);
         return t + (c ? (c.preco_adicional || 0) : 0);
     }, 0);
-    el.innerHTML = `🥣 <strong>${nomes.length}</strong> selecionado(s): ${nomes.join(', ')}` +
+    const nomesEsc = nomes.map(n => escapeHtml(n)).join(', ');
+    el.innerHTML = `🥣 <strong>${nomes.length}</strong> selecionado(s): ${nomesEsc}` +
         (totalComp > 0 ? ` — <strong>+${formatarMoeda(totalComp)}</strong>/un` : '');
 }
 
@@ -417,7 +418,7 @@ async function validarCupomVenda() {
 
         infoDiv.style.display = 'block';
         infoDiv.style.background = '#e8f5e9';
-        infoDiv.innerHTML = `✅ Cupom <strong>${resp.codigo}</strong> aplicado! Desconto: <strong>${formatarMoeda(resp.desconto_calculado)}</strong>`;
+        infoDiv.innerHTML = `✅ Cupom <strong>${escapeHtml(String(resp.codigo || codigo))}</strong> aplicado! Desconto: <strong>${formatarMoeda(resp.desconto_calculado)}</strong>`;
         codigoInput.readOnly = true;
         document.getElementById('btn-aplicar-cupom').textContent = '❌ Remover';
         document.getElementById('btn-aplicar-cupom').onclick = removerCupom;
@@ -428,7 +429,7 @@ async function validarCupomVenda() {
         cupomAplicado = null;
         infoDiv.style.display = 'block';
         infoDiv.style.background = '#ffebee';
-        infoDiv.innerHTML = `❌ ${erro.message || 'Cupom inválido'}`;
+        infoDiv.innerHTML = `❌ ${escapeHtml(erro.message || 'Cupom inválido')}`;
     }
 }
 

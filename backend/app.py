@@ -164,7 +164,14 @@ import pyotp  # noqa: E402
 # --- WebSocket (#22) — opcional, não quebra se não instalado ---
 try:
     from flask_socketio import SocketIO, emit  # noqa: F401
-    socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+    socketio = SocketIO(
+        app,
+        cors_allowed_origins=os.environ.get(
+            "SOCKETIO_ORIGINS",
+            "https://acaiteria-crm.onrender.com"
+        ).split(","),
+        async_mode="threading",
+    )
 
     @socketio.on("connect")
     def _ws_connect():
@@ -197,6 +204,27 @@ def _csrf_protect_forms():
         and not request.path.startswith("/api/")
     ):
         csrf.protect()
+
+
+# Idle timeout — encerra sessão após 30 min de inatividade
+_SESSION_IDLE_MINUTES = 30
+
+
+@app.before_request
+def _check_session_idle():
+    """Invalida sessão se inativa por mais de _SESSION_IDLE_MINUTES."""
+    if request.path.startswith("/static"):
+        return
+    now_ts = datetime.now(timezone.utc).timestamp()
+    last = session.get("_last_active")
+    if last and (now_ts - last) > _SESSION_IDLE_MINUTES * 60:
+        usuario_id = session.get("usuario_id")
+        session.clear()
+        if request.path.startswith("/api/"):
+            return  # próximo decorator cuidará do 401
+        if usuario_id:
+            return redirect("/login")
+    session["_last_active"] = now_ts
 
 
 # Configuração do banco de dados
@@ -272,6 +300,7 @@ with app.app_context():
         ("idx_venda_status_pedido", "venda", "status_pedido"),
         ("idx_venda_data_venda", "venda", "data_venda"),
         ("idx_venda_id_cliente", "venda", "id_cliente"),
+        ("idx_fornecedor_email", "fornecedor", "email"),
     ]
     with db.engine.begin() as conn:
         for idx_name, tabela, coluna in _indices:
@@ -1324,6 +1353,70 @@ def deletar_produto(id_produto):
         return _erro_interno(e)
 
 
+@app.route("/api/produtos/bulk-update", methods=["PATCH"])
+@limiter.limit("10 per minute")
+@api_admin_required
+def bulk_update_produtos():
+    """Atualização em lote de produtos (admin). Max 100 por request.
+
+    Body: {"itens": [{"id_produto": 1, "preco": 15.0, "estoque_atual": 50}, ...]}
+    Campos permitidos: preco, estoque_atual, estoque_minimo, ativo.
+    """
+    try:
+        dados = request.get_json(silent=True) or {}
+        itens = dados.get("itens")
+        if not itens or not isinstance(itens, list):
+            return jsonify({"erro": "Campo 'itens' obrigatório"}), 400
+        if len(itens) > 100:
+            return jsonify({"erro": "Máximo 100 itens por lote"}), 400
+
+        _campos_permitidos = {"preco", "estoque_atual", "estoque_minimo", "ativo"}
+        atualizados = []
+        erros = []
+
+        for item in itens:
+            pid = item.get("id_produto")
+            if not pid:
+                erros.append({"erro": "id_produto ausente", "item": item})
+                continue
+            produto = db.session.get(Produto, pid)
+            if not produto:
+                erros.append({"id_produto": pid, "erro": "não encontrado"})
+                continue
+            campos_atualizados = []
+            for campo in _campos_permitidos:
+                if campo in item and item[campo] is not None:
+                    if campo == "preco":
+                        produto.preco = Decimal(str(item["preco"]))
+                    elif campo == "estoque_atual":
+                        produto.estoque_atual = max(0, int(item["estoque_atual"]))
+                    elif campo == "estoque_minimo":
+                        produto.estoque_minimo = max(0, int(item["estoque_minimo"]))
+                    elif campo == "ativo":
+                        produto.ativo = bool(item["ativo"])
+                    campos_atualizados.append(campo)
+            if campos_atualizados:
+                atualizados.append({
+                    "id_produto": pid,
+                    "campos": campos_atualizados,
+                })
+
+        db.session.commit()
+        _invalidar_cache_vitrine()
+        registrar_log(
+            "editar", "produto", None,
+            f"Bulk update: {len(atualizados)} produtos atualizados",
+        )
+        return jsonify({
+            "atualizados": atualizados,
+            "erros": erros,
+            "total_atualizados": len(atualizados),
+        })
+    except Exception as e:
+        db.session.rollback()
+        return _erro_interno(e)
+
+
 # =============================================================================
 # ROTAS - HISTÓRICO DE AÇÕES (AUDIT LOG)
 # =============================================================================
@@ -1357,6 +1450,74 @@ def listar_logs():
                 "por_pagina": por_pagina,
                 "total_paginas": (total + por_pagina - 1) // por_pagina,
             }
+        )
+    except Exception as e:
+        return _erro_interno(e)
+
+
+@app.route("/api/logs/export-csv", methods=["GET"])
+@limiter.limit("10 per minute")
+@api_admin_required
+def exportar_logs_csv():
+    """Exportar audit log como CSV (admin, max 10.000 registros)."""
+    try:
+        entidade = request.args.get("entidade")
+        acao = request.args.get("acao")
+        data_inicio = request.args.get("data_inicio")
+        data_fim = request.args.get("data_fim")
+
+        query = LogAcao.query.order_by(LogAcao.data_hora.desc())
+        if entidade:
+            query = query.filter(LogAcao.entidade == entidade)
+        if acao:
+            query = query.filter(LogAcao.acao == acao)
+        if data_inicio:
+            try:
+                dt = datetime.strptime(data_inicio, "%Y-%m-%d").date()
+                query = query.filter(
+                    LogAcao.data_hora >= _dia_inicio(dt)
+                )
+            except ValueError:
+                pass
+        if data_fim:
+            try:
+                dt = datetime.strptime(data_fim, "%Y-%m-%d").date()
+                query = query.filter(
+                    LogAcao.data_hora <= _dia_fim(dt)
+                )
+            except ValueError:
+                pass
+
+        logs = query.limit(10000).all()
+
+        import io
+        import csv as _csv
+        buf = io.StringIO()
+        writer = _csv.writer(buf)
+        writer.writerow([
+            "id", "data_hora", "acao", "entidade",
+            "id_entidade", "id_usuario", "detalhes",
+        ])
+        for entry in logs:
+            writer.writerow([
+                entry.id_log,
+                entry.data_hora.isoformat() if entry.data_hora else "",
+                entry.acao or "",
+                entry.entidade or "",
+                entry.id_entidade or "",
+                entry.id_usuario or "",
+                (entry.detalhes or "").replace("\n", " "),
+            ])
+        output = buf.getvalue()
+        buf.close()
+
+        return app.response_class(
+            output,
+            mimetype="text/csv",
+            headers={
+                "Content-Disposition":
+                    "attachment; filename=audit_log.csv"
+            },
         )
     except Exception as e:
         return _erro_interno(e)
@@ -1627,7 +1788,7 @@ def criar_venda():
         venda.status_pagamento = "Concluído"
 
         # Acumular pontos de fidelidade (1 ponto por R$1 gasto, cap 999999)
-        pontos_ganhos = int(valor_total)
+        pontos_ganhos = round(float(valor_total))
         if pontos_ganhos > 0:
             cliente.pontos_fidelidade = min(
                 999999, (cliente.pontos_fidelidade or 0) + pontos_ganhos
@@ -2831,7 +2992,7 @@ def vitrine_produtos():
         query = Produto.query.filter_by(ativo=True)
         if categoria:
             query = query.filter(Produto.categoria.ilike(f"%{categoria}%"))
-        produtos = query.order_by(Produto.nome_produto).all()
+        produtos = query.order_by(Produto.nome_produto).limit(500).all()
         return jsonify([
             {
                 "id_produto": p.id_produto,
@@ -3418,7 +3579,7 @@ def cliente_checkout():
         db.session.add(pagamento)
 
         # 1 ponto por real gasto (cap 999999)
-        pontos_ganhos = int(valor_total)
+        pontos_ganhos = round(float(valor_total))
         cliente.pontos_fidelidade = min(
             999999, (cliente.pontos_fidelidade or 0) + pontos_ganhos
         )
@@ -4518,6 +4679,7 @@ def desativar_cupom(cid):
 
 
 @app.route("/api/cupons/validar", methods=["POST"])
+@limiter.limit("20 per minute")
 @api_login_required
 def validar_cupom():
     """Validar cupom no checkout."""
