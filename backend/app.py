@@ -668,17 +668,30 @@ def login():
             if tf:
                 codigo_2fa = request.form.get("codigo_2fa", "").strip()
                 if not codigo_2fa:
+                    # Guardar credenciais na session (server-side)
+                    # em vez de expor a senha no HTML
+                    session["_2fa_user_id"] = usuario.id_usuario
+                    session["_2fa_nonce"] = secrets.token_hex(16)
                     return render_template(
                         "login.html", need_2fa=True,
-                        email=email, senha=senha,
+                        email=email,
+                    )
+                # Se veio via session (2FA step 2)
+                if not session.get("_2fa_user_id"):
+                    return render_template(
+                        "login.html",
+                        erro="Sessão 2FA expirada. Tente novamente.",
                     )
                 totp = pyotp.TOTP(tf.secret)
                 if not totp.verify(codigo_2fa, valid_window=1):
                     return render_template(
                         "login.html", need_2fa=True,
-                        email=email, senha=senha,
+                        email=email,
                         erro="Código 2FA inválido.",
                     )
+                # Limpar tokens temporários
+                session.pop("_2fa_user_id", None)
+                session.pop("_2fa_nonce", None)
             # --- fim 2FA ---
             session.permanent = True
             session["usuario_id"] = usuario.id_usuario
@@ -1199,8 +1212,21 @@ def listar_produtos():
         if categoria:
             query = query.filter(Produto.categoria.ilike(f"%{categoria}%"))
 
-        produtos = query.order_by(Produto.nome_produto).all()
-        return jsonify([produto.to_dict() for produto in produtos])
+        pagina, por_pagina = get_pagination_params()
+        total = query.count()
+        produtos = (
+            query.order_by(Produto.nome_produto)
+            .offset((pagina - 1) * por_pagina)
+            .limit(por_pagina)
+            .all()
+        )
+        return jsonify({
+            "itens": [produto.to_dict() for produto in produtos],
+            "total": total,
+            "pagina": pagina,
+            "por_pagina": por_pagina,
+            "paginas": (total + por_pagina - 1) // por_pagina,
+        })
     except Exception as e:
         return _erro_interno(e)
 
@@ -5906,6 +5932,20 @@ def ia_tendencias():
 _ia_feedback_stats = {"positivo": 0, "negativo": 0}
 
 
+def _ia_feedback_from_db():
+    """Conta feedbacks da IA a partir do audit log (persistente)."""
+    try:
+        pos = LogAcao.query.filter_by(
+            entidade="ia_feedback", acao="positivo"
+        ).count()
+        neg = LogAcao.query.filter_by(
+            entidade="ia_feedback", acao="negativo"
+        ).count()
+        return {"positivo": pos, "negativo": neg}
+    except Exception:
+        return _ia_feedback_stats
+
+
 @app.route("/api/suporte/ia-feedback", methods=["POST"])
 @limiter.limit("30 per minute")
 @api_login_required
@@ -5919,17 +5959,21 @@ def ia_feedback():
         if util is None or not isinstance(util, bool):
             return jsonify({"erro": "Campo 'util' (bool) obrigatório"}), 400
 
-        if util:
-            _ia_feedback_stats["positivo"] += 1
-        else:
-            _ia_feedback_stats["negativo"] += 1
+        # Persistir no audit log (sobrevive a restarts)
+        acao = "positivo" if util else "negativo"
+        log = LogAcao(
+            id_usuario=session.get("usuario_id"),
+            acao=acao,
+            entidade="ia_feedback",
+            detalhes=pergunta[:500] if pergunta else None,
+            ip=request.remote_addr,
+        )
+        db.session.add(log)
+        db.session.commit()
 
-        total = (
-            _ia_feedback_stats["positivo"] + _ia_feedback_stats["negativo"]
-        )
-        taxa_sucesso = (
-            _ia_feedback_stats["positivo"] / total if total > 0 else 0
-        )
+        stats = _ia_feedback_from_db()
+        total = stats["positivo"] + stats["negativo"]
+        taxa_sucesso = stats["positivo"] / total if total > 0 else 0
 
         logger.info(
             "IA Feedback: %s | pergunta='%s' | taxa=%.1f%%",
@@ -5941,8 +5985,8 @@ def ia_feedback():
         return jsonify({
             "registrado": True,
             "stats": {
-                "positivo": _ia_feedback_stats["positivo"],
-                "negativo": _ia_feedback_stats["negativo"],
+                "positivo": stats["positivo"],
+                "negativo": stats["negativo"],
                 "taxa_sucesso": round(taxa_sucesso, 3),
             },
         })
@@ -5956,9 +6000,8 @@ def ia_feedback():
 def ia_stats():
     """Estatísticas do motor de IA/ML."""
     try:
-        total_fb = (
-            _ia_feedback_stats["positivo"] + _ia_feedback_stats["negativo"]
-        )
+        fb_stats = _ia_feedback_from_db()
+        total_fb = fb_stats["positivo"] + fb_stats["negativo"]
         return jsonify({
             "engine": {
                 "tipo": "TF-IDF + Cosine Similarity",
@@ -5974,10 +6017,10 @@ def ia_stats():
                 "feedback_loop",
             ],
             "feedback": {
-                **_ia_feedback_stats,
+                **fb_stats,
                 "total": total_fb,
                 "taxa_sucesso": round(
-                    _ia_feedback_stats["positivo"] / total_fb
+                    fb_stats["positivo"] / total_fb
                     if total_fb > 0 else 0, 3
                 ),
             },
@@ -6257,20 +6300,20 @@ def criar_lancamento():
 
 
 @app.route("/api/financeiro/<int:lid>", methods=["GET"])
-@api_login_required
+@api_admin_required
 def obter_lancamento(lid):
     """Obter detalhes de um lançamento financeiro."""
-    lanc = LancamentoFinanceiro.query.get(lid)
+    lanc = db.session.get(LancamentoFinanceiro, lid)
     if not lanc:
         return jsonify({"erro": "Lançamento não encontrado"}), 404
     return jsonify(lanc.to_dict())
 
 
 @app.route("/api/financeiro/<int:lid>", methods=["PUT"])
-@api_login_required
+@api_admin_required
 def atualizar_lancamento(lid):
     """Atualiza um lançamento financeiro existente."""
-    lanc = LancamentoFinanceiro.query.get(lid)
+    lanc = db.session.get(LancamentoFinanceiro, lid)
     if not lanc:
         return jsonify({"erro": "Lançamento não encontrado"}), 404
 
@@ -6332,10 +6375,10 @@ def atualizar_lancamento(lid):
 
 
 @app.route("/api/financeiro/<int:lid>", methods=["DELETE"])
-@api_login_required
+@api_admin_required
 def deletar_lancamento(lid):
     """Cancela (soft delete) um lançamento financeiro."""
-    lanc = LancamentoFinanceiro.query.get(lid)
+    lanc = db.session.get(LancamentoFinanceiro, lid)
     if not lanc:
         return jsonify({"erro": "Lançamento não encontrado"}), 404
 
@@ -6360,8 +6403,30 @@ def deletar_lancamento(lid):
 def resumo_financeiro():
     """Resumo financeiro consolidado (lançamentos + vendas + compras)."""
     try:
-        data_inicio = request.args.get("data_inicio")
-        data_fim = request.args.get("data_fim")
+        data_inicio_str = request.args.get("data_inicio")
+        data_fim_str = request.args.get("data_fim")
+
+        # Converter strings para datetime (portável SQLite + PostgreSQL)
+        data_inicio = None
+        data_fim = None
+        if data_inicio_str:
+            try:
+                data_inicio = _dia_inicio(
+                    datetime.strptime(data_inicio_str, "%Y-%m-%d").date()
+                )
+            except ValueError:
+                return jsonify(
+                    {"erro": "data_inicio inválida. Use YYYY-MM-DD"}
+                ), 400
+        if data_fim_str:
+            try:
+                data_fim = _dia_fim(
+                    datetime.strptime(data_fim_str, "%Y-%m-%d").date()
+                )
+            except ValueError:
+                return jsonify(
+                    {"erro": "data_fim inválida. Use YYYY-MM-DD"}
+                ), 400
 
         # --- Lançamentos manuais ---
         q_lanc = LancamentoFinanceiro.query.filter(
@@ -6859,7 +6924,26 @@ def openapi_export():
 
 def _invalidar_cache_vitrine():
     """Invalida cache de endpoints da vitrine após alteração de produtos."""
-    cache.delete_many("vitrine_produtos", "dashboard_kpi")
+    try:
+        cache.delete("vitrine_produtos")
+        # Limpar todas as variações com query_string
+        # SimpleCache suporta clear() mas não pattern delete;
+        # forçar limpeza completa é seguro com SimpleCache
+        from flask_caching import Cache as _CacheRef  # noqa: F811
+        backend = cache.cache
+        # SimpleCache armazena em dict _cache; remover chaves com prefixo
+        if hasattr(backend, '_cache'):
+            keys_to_del = [
+                k for k in list(backend._cache.keys())
+                if 'vitrine_produtos' in str(k)
+                or 'dashboard_kpi' in str(k)
+            ]
+            for k in keys_to_del:
+                backend._cache.pop(k, None)
+        else:
+            cache.clear()
+    except Exception:
+        pass  # Cache miss is not critical
 
 
 # =============================================================================
@@ -6918,7 +7002,7 @@ def setup_2fa():
     """Gera secret TOTP e URI para configurar no app autenticador."""
     try:
         uid = session.get("usuario_id")
-        usuario = Usuario.query.get(uid)
+        usuario = db.session.get(Usuario, uid)
         if not usuario:
             return jsonify({"erro": "Usuário não encontrado"}), 404
 
@@ -7036,7 +7120,7 @@ def status_2fa():
 def upload_foto_produto(pid):
     """Upload de foto do produto em Base64 (max 500KB)."""
     try:
-        produto = Produto.query.get(pid)
+        produto = db.session.get(Produto, pid)
         if not produto:
             return jsonify({"erro": "Produto não encontrado"}), 404
 
@@ -7168,7 +7252,7 @@ def criar_webhook():
 @api_admin_required
 def deletar_webhook(wid):
     """Remove webhook."""
-    hook = WebhookConfig.query.get(wid)
+    hook = db.session.get(WebhookConfig, wid)
     if not hook:
         return jsonify({"erro": "Webhook não encontrado"}), 404
     db.session.delete(hook)
@@ -7193,7 +7277,7 @@ def listar_combos():
 @api_login_required
 def obter_combo(cid):
     """Obter detalhes de um combo/kit."""
-    combo = ComboKit.query.get(cid)
+    combo = db.session.get(ComboKit, cid)
     if not combo:
         return jsonify({"erro": "Combo não encontrado"}), 404
     return jsonify(combo.to_dict())
@@ -7226,7 +7310,7 @@ def criar_combo():
         for item in itens:
             pid = item.get("id_produto")
             qtd = item.get("quantidade", 1)
-            prod = Produto.query.get(pid)
+            prod = db.session.get(Produto, pid)
             if not prod or not prod.ativo:
                 return jsonify(
                     {"erro": f"Produto {pid} não encontrado ou inativo"}
@@ -7252,7 +7336,7 @@ def criar_combo():
 def atualizar_combo(cid):
     """Atualiza combo/kit."""
     try:
-        combo = ComboKit.query.get(cid)
+        combo = db.session.get(ComboKit, cid)
         if not combo:
             return jsonify({"erro": "Combo não encontrado"}), 404
 
@@ -7277,7 +7361,7 @@ def atualizar_combo(cid):
 @api_admin_required
 def deletar_combo(cid):
     """Desativa combo/kit."""
-    combo = ComboKit.query.get(cid)
+    combo = db.session.get(ComboKit, cid)
     if not combo:
         return jsonify({"erro": "Combo não encontrado"}), 404
     combo.ativo = False
@@ -7294,7 +7378,7 @@ def deletar_combo(cid):
 @api_login_required
 def gerar_codigo_indicacao(id_cliente):
     """Gera ou retorna código de indicação único do cliente."""
-    cliente = Cliente.query.get(id_cliente)
+    cliente = db.session.get(Cliente, id_cliente)
     if not cliente or not cliente.ativo:
         return jsonify({"erro": "Cliente não encontrado"}), 404
 
@@ -7345,8 +7429,8 @@ def validar_indicacao():
                 {"erro": "Código de indicação inválido"}
             ), 404
 
-        indicador = Cliente.query.get(ref.id_cliente_indicador)
-        indicado = Cliente.query.get(id_indicado)
+        indicador = db.session.get(Cliente, ref.id_cliente_indicador)
+        indicado = db.session.get(Cliente, id_indicado)
         if not indicador or not indicado:
             return jsonify(
                 {"erro": "Cliente não encontrado"}
@@ -7411,7 +7495,7 @@ def listar_indicacoes():
 def agendar_pedido(vid):
     """Define data/hora de agendamento para retirada do pedido."""
     try:
-        venda = Venda.query.get(vid)
+        venda = db.session.get(Venda, vid)
         if not venda:
             return jsonify({"erro": "Venda não encontrada"}), 404
 
@@ -7532,7 +7616,7 @@ def criar_plano():
 @api_login_required
 def obter_plano(pid):
     """Obter detalhes de um plano de assinatura."""
-    plano = Assinatura.query.get(pid)
+    plano = db.session.get(Assinatura, pid)
     if not plano:
         return jsonify({"erro": "Plano não encontrado"}), 404
     return jsonify(plano.to_dict())
@@ -7543,7 +7627,7 @@ def obter_plano(pid):
 def atualizar_plano(pid):
     """Atualiza plano de assinatura."""
     try:
-        plano = Assinatura.query.get(pid)
+        plano = db.session.get(Assinatura, pid)
         if not plano:
             return jsonify({"erro": "Plano não encontrado"}), 404
 
@@ -7574,7 +7658,7 @@ def atualizar_plano(pid):
 @api_admin_required
 def desativar_plano(pid):
     """Desativa plano de assinatura (soft delete)."""
-    plano = Assinatura.query.get(pid)
+    plano = db.session.get(Assinatura, pid)
     if not plano:
         return jsonify({"erro": "Plano não encontrado"}), 404
     plano.ativo = False
@@ -7600,13 +7684,13 @@ def assinar_plano():
                 {"erro": "id_assinatura e id_cliente obrigatórios"}
             ), 400
 
-        plano = Assinatura.query.get(id_plano)
+        plano = db.session.get(Assinatura, id_plano)
         if not plano or not plano.ativo:
             return jsonify(
                 {"erro": "Plano não encontrado ou inativo"}
             ), 404
 
-        cliente = Cliente.query.get(id_cli)
+        cliente = db.session.get(Cliente, id_cli)
         if not cliente or not cliente.ativo:
             return jsonify(
                 {"erro": "Cliente não encontrado"}
@@ -7636,7 +7720,7 @@ def assinar_plano():
 def usar_assinatura(acid):
     """Registra uso de uma assinatura ativa."""
     try:
-        assi = AssinaturaCliente.query.get(acid)
+        assi = db.session.get(AssinaturaCliente, acid)
         if not assi:
             return jsonify(
                 {"erro": "Assinatura não encontrada"}
@@ -7940,7 +8024,7 @@ def cliente_reordenar(vid):
             ), 404
 
         # Verificar LGPD
-        cliente = Cliente.query.get(id_cli)
+        cliente = db.session.get(Cliente, id_cli)
         if not cliente or not cliente.consentimento_lgpd:
             return jsonify(
                 {"erro": "Consentimento LGPD necessário"}
@@ -7956,7 +8040,7 @@ def cliente_reordenar(vid):
         )
         total = Decimal("0")
         for item in venda_anterior.itens:
-            prod = Produto.query.get(item.id_produto)
+            prod = db.session.get(Produto, item.id_produto)
             if not prod or not prod.ativo:
                 continue
             preco = (
@@ -8036,7 +8120,7 @@ def criar_loja():
 def atualizar_loja(lid):
     """Atualiza dados de uma loja."""
     try:
-        loja = Loja.query.get(lid)
+        loja = db.session.get(Loja, lid)
         if not loja:
             return jsonify({"erro": "Loja não encontrada"}), 404
 
@@ -8063,7 +8147,7 @@ def atualizar_loja(lid):
 @api_admin_required
 def desativar_loja(lid):
     """Desativa uma loja (soft delete)."""
-    loja = Loja.query.get(lid)
+    loja = db.session.get(Loja, lid)
     if not loja:
         return jsonify({"erro": "Loja não encontrada"}), 404
     loja.ativa = False

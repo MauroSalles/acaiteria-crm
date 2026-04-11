@@ -18,14 +18,18 @@ class TestListarProdutos:
     def test_lista_vazia(self, client):
         resp = client.get('/api/produtos')
         assert resp.status_code == 200
-        assert resp.get_json() == []
+        data = resp.get_json()
+        assert data['itens'] == []
+        assert data['total'] == 0
 
     def test_lista_com_produtos(self, client):
         _criar_produto(client, nome_produto='Açaí 300ml')
         _criar_produto(client, nome_produto='Açaí 700ml')
         resp = client.get('/api/produtos')
         assert resp.status_code == 200
-        assert len(resp.get_json()) == 2
+        data = resp.get_json()
+        assert len(data['itens']) == 2
+        assert data['total'] == 2
 
 
 class TestCriarProduto:
@@ -74,7 +78,7 @@ class TestDeletarProduto:
         assert resp.status_code == 200
 
         # Produto ainda existe mas inativo — não aparece mais na listagem
-        lista = client.get('/api/produtos').get_json()
+        lista = client.get('/api/produtos').get_json()['itens']
         assert all(p['id_produto'] != pid for p in lista)
 
     def test_deletar_produto_inexistente_404(self, client):

@@ -201,7 +201,7 @@ class TestFiltrosAvancados:
             'nome_produto': 'Açaí Premium', 'preco': 30.0, 'categoria': 'Açaí',
         })
         resp = client.get('/api/produtos?busca=tapioca')
-        prods = resp.get_json()
+        prods = resp.get_json()['itens']
         assert len(prods) == 1
         assert prods[0]['nome_produto'] == 'Tapioca Especial'
 
@@ -213,7 +213,7 @@ class TestFiltrosAvancados:
             'nome_produto': 'Açaí Trad', 'preco': 15.0, 'categoria': 'Açaí',
         })
         resp = client.get('/api/produtos?categoria=Complementos')
-        prods = resp.get_json()
+        prods = resp.get_json()['itens']
         assert all(p['categoria'] == 'Complementos' for p in prods)
 
     def test_vendas_paginacao(self, client):
