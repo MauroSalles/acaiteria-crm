@@ -32,13 +32,12 @@ RUN adduser --disabled-password --no-create-home appuser && \
     chown -R appuser:appuser /app
 USER appuser
 
-# Porta padrão (Render/Railway injetam via $PORT)
-EXPOSE 5000
+# Porta fixa para Railway
+EXPOSE 8000
 
-# Render usa healthCheckPath do render.yaml (não precisa de Docker HEALTHCHECK)
 # Free tier = 512 MB RAM → 1 worker + --preload para economizar memória
 CMD gunicorn backend.app:app \
-    --bind 0.0.0.0:${PORT:-5000} \
+    --bind 0.0.0.0:8000 \
     --workers 1 \
     --threads 4 \
     --timeout 120 \
