@@ -26,7 +26,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ backend/
 COPY frontend/ frontend/
 COPY run.py .
-COPY Procfile .
 
 # Criar usuário não-root para segurança
 RUN adduser --disabled-password --no-create-home appuser && \
