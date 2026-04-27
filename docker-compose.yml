@@ -1,6 +1,5 @@
 # =============================================================================
-# docker-compose.yml — AcaiteriaCRM (Desenvolvimento Local com Docker)
-# Sobe a aplicação Flask + PostgreSQL para testes locais
+# docker-compose.yml — AcaiteriaCRM (Configurado com Admin e PIX)
 # =============================================================================
 
 services:
@@ -8,16 +7,16 @@ services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
+    networks:
+      - acaiteria_net
     environment:
-      POSTGRES_USER: acaiteria
-      POSTGRES_PASSWORD: acaiteria123
-      POSTGRES_DB: acaiteria_crm
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U acaiteria -d acaiteria_crm"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -26,16 +25,26 @@ services:
   web:
     build: .
     restart: unless-stopped
+    networks:
+      - acaiteria_net
     ports:
-      - "5000:5000"
+      - "${FLASK_PORT}:${INTERNAL_PORT}"
     environment:
-      - DATABASE_URL=postgresql://acaiteria:acaiteria123@db:5432/acaiteria_crm
-      - SECRET_KEY=docker-dev-secret-key-mude-em-producao
-      - PORT=5000
-      - FLASK_ENV=development
+      - DATABASE_URL=${DATABASE_URL}
+      - SECRET_KEY=${SECRET_KEY}
+      - PORT=${INTERNAL_PORT}
+      - FLASK_ENV=${FLASK_ENV}
+      # --- NOVAS VARIÁVEIS MAPEADAS ---
+      - ADMIN_EMAIL=${ADMIN_EMAIL}
+      - ADMIN_SENHA=${ADMIN_SENHA}
+      - PIX_CHAVE=${PIX_CHAVE}
     depends_on:
       db:
         condition: service_healthy
+
+networks:
+  acaiteria_net:
+    driver: bridge
 
 volumes:
   pgdata:
