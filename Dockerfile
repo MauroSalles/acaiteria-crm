@@ -6,10 +6,12 @@
 FROM python:3.13-slim AS base
 
 # Variáveis de ambiente para Python em container
+# PORT padrão 5000; sobrescrito por render.yaml / docker-compose / Render
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PORT=5000
 
 WORKDIR /app
 
@@ -26,23 +28,16 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ backend/
 COPY frontend/ frontend/
 COPY run.py .
+COPY startup.sh .
 
 # Criar usuário não-root para segurança
 RUN adduser --disabled-password --no-create-home appuser && \
-    chown -R appuser:appuser /app
+    chown -R appuser:appuser /app && \
+    chmod +x /app/startup.sh
 USER appuser
 
-# Porta fixa para Railway
-EXPOSE 8000
+# Porta padrão 5000; sobrescrita em runtime pelo $PORT injetado pelo Render/Railway
+EXPOSE 5000
 
-# Free tier = 512 MB RAM → 1 worker + --preload para economizar memória
-CMD gunicorn backend.app:app \
-    --bind 0.0.0.0:8000 \
-    --workers 1 \
-    --threads 4 \
-    --timeout 120 \
-    --preload \
-    --max-requests 1000 \
-    --max-requests-jitter 100 \
-    --access-logfile - \
-    --error-logfile -
+# Usar startup.sh para inicializar o banco e iniciar gunicorn
+CMD ["/app/startup.sh"]
