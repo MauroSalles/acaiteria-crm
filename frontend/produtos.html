@@ -362,7 +362,10 @@
             const tbody = document.querySelector('#tabela-produtos tbody');
             tbody.innerHTML = '<tr><td colspan="8" class="text-center">⏳ Carregando...</td></tr>';
             try {
-                todosProdutosAdmin = await requisicao('/api/produtos');
+                // 🛠️ CORREÇÃO: acessar data.itens
+                const data = await requisicao('/api/produtos');
+                todosProdutosAdmin = data.itens || data || [];  // ✅ Aqui!
+                
                 // Contadores
                 const acais = todosProdutosAdmin.filter(p => (p.categoria || '').toLowerCase() === 'açaí');
                 const sorvetes = todosProdutosAdmin.filter(p => (p.categoria || '').toLowerCase() === 'sorvete');
@@ -371,6 +374,10 @@
                 document.getElementById('countSorvete').textContent = sorvetes.length;
                 document.getElementById('countTotal').textContent = todosProdutosAdmin.length;
                 document.getElementById('countPromo').textContent = promos.length;
+                
+                document.getElementById('countBaixo').textContent = 
+                    todosProdutosAdmin.filter(p => p.estoque_minimo > 0 && p.estoque_atual <= p.estoque_minimo).length;
+                
                 renderTabelaProdutos();
             } catch (erro) {
                 tbody.innerHTML = '<tr><td colspan="8" class="text-center">Erro ao carregar produtos</td></tr>';
